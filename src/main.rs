@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use dotenvy::dotenv;
 
 #[derive(Parser)]
 #[command(name = "squid")]
@@ -20,6 +21,14 @@ enum Commands {
 }
 
 fn main() {
+    dotenv().ok();
+
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
+
+    println!("Database URL: {}", db_url);
+    println!("API Key: {}", api_key);
+
     let cli = Cli::parse();
 
     match &cli.command {
