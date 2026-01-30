@@ -115,4 +115,4 @@ cargo run -- run <command>
 
 ## License
 
-[Your license here]
+Apache-2.0 License. See `LICENSE` file for details.
