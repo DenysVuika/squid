@@ -8,9 +8,73 @@ use async_openai::{
 };
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
+use futures::StreamExt;
 use log::{debug, error, info};
+use std::io::{self, Write};
 
 mod logger;
+
+async fn ask_llm_streaming(question: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration from environment variables
+    let api_url =
+        std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
+    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
+    let api_model = std::env::var("API_MODEL").unwrap_or_else(|_| "local-model".to_string());
+
+    debug!("Using API URL: {}", api_url);
+    debug!("Using API Model: {}", api_model);
+
+    // Configure the client to use the specified endpoint
+    let config = OpenAIConfig::new()
+        .with_api_base(api_url)
+        .with_api_key(api_key);
+
+    let client = Client::with_config(config);
+
+    // Create the chat completion request
+    let request = CreateChatCompletionRequestArgs::default()
+        .model(api_model)
+        .messages([
+            ChatCompletionRequestSystemMessageArgs::default()
+                .content("You are a helpful assistant.")
+                .build()?
+                .into(),
+            ChatCompletionRequestUserMessageArgs::default()
+                .content(question)
+                .build()?
+                .into(),
+        ])
+        .build()?;
+
+    debug!("Sending streaming request...");
+
+    // Send the request and get the streaming response
+    let mut stream = client.chat().create_stream(request).await?;
+
+    // Lock stdout once before the loop to avoid locking on each iteration
+    let mut lock = io::stdout().lock();
+    writeln!(lock)?;
+
+    // Process the stream
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(response) => {
+                response.choices.iter().for_each(|chat_choice| {
+                    if let Some(ref content) = chat_choice.delta.content {
+                        write!(lock, "{}", content).unwrap();
+                    }
+                });
+            }
+            Err(err) => {
+                writeln!(lock, "error: {err:?}").unwrap();
+            }
+        }
+        lock.flush()?;
+    }
+
+    writeln!(lock)?;
+    Ok(())
+}
 
 async fn ask_llm(question: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Load configuration from environment variables
@@ -80,6 +144,9 @@ enum Commands {
     Ask {
         /// The question to ask
         question: String,
+        /// Stream the response
+        #[arg(short, long)]
+        stream: bool,
     },
 }
 
@@ -106,14 +173,20 @@ async fn main() {
             }
             // Placeholder implementation
         }
-        Commands::Ask { question } => {
+        Commands::Ask { question, stream } => {
             info!("Asking question: {}", question);
-            match ask_llm(question).await {
-                Ok(response) => {
-                    println!("\n{}", response);
-                }
-                Err(e) => {
+            if *stream {
+                if let Err(e) = ask_llm_streaming(question).await {
                     error!("Failed to get response: {}", e);
+                }
+            } else {
+                match ask_llm(question).await {
+                    Ok(response) => {
+                        println!("\n{}", response);
+                    }
+                    Err(e) => {
+                        error!("Failed to get response: {}", e);
+                    }
                 }
             }
         }
