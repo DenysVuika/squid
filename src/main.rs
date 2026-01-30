@@ -13,16 +13,25 @@ use log::{debug, error, info};
 mod logger;
 
 async fn ask_llm(question: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Configure the client to use LM Studio's endpoint
+    // Load configuration from environment variables
+    let api_url =
+        std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
+    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
+    let api_model = std::env::var("API_MODEL").unwrap_or_else(|_| "local-model".to_string());
+
+    debug!("Using API URL: {}", api_url);
+    debug!("Using API Model: {}", api_model);
+
+    // Configure the client to use the specified endpoint
     let config = OpenAIConfig::new()
-        .with_api_base("http://127.0.0.1:1234/v1")
-        .with_api_key("not-needed"); // LM Studio doesn't require a real API key
+        .with_api_base(api_url)
+        .with_api_key(api_key);
 
     let client = Client::with_config(config);
 
     // Create the chat completion request
     let request = CreateChatCompletionRequestArgs::default()
-        .model("local-model") // LM Studio uses whatever model is loaded
+        .model(api_model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
                 .content("You are a helpful assistant.")
@@ -79,11 +88,8 @@ async fn main() {
     dotenv().ok();
     logger::init_logger();
 
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
-
-    println!("Database URL: {}", db_url);
-    println!("API Key: {}", api_key);
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "not-set".to_string());
+    debug!("Database URL: {}", db_url);
 
     let cli = Cli::parse();
 
