@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
+use log::{debug, error, info};
+
+mod logger;
 
 #[derive(Parser)]
 #[command(name = "squid")]
@@ -22,6 +25,7 @@ enum Commands {
 
 fn main() {
     dotenv().ok();
+    logger::init_logger();
 
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
@@ -33,11 +37,17 @@ fn main() {
 
     match &cli.command {
         Commands::Init => {
-            println!("Initializing project...");
+            info!("Initializing project...");
+            debug!("This is a debug message during initialization.");
             // Placeholder implementation
         }
         Commands::Run { command } => {
-            println!("Running command: {}", command);
+            // println!("Running command: {}", command);
+            info!("Running command: {}", command);
+            debug!("This is a debug message while running the command.");
+            if command == "fail" {
+                error!("An error occurred while executing the command.");
+            }
             // Placeholder implementation
         }
     }
