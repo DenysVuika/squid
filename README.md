@@ -159,11 +159,11 @@ cargo run -- run <command>
    API_KEY=not-needed
    ```
 4. Run:
-   ```bash
+  ```bash
    cargo run -- ask -s "Write a hello world program in Rust"
    # Or with a file
    cargo run -- ask -f docs/sample.txt "What is this document about?"
-```
+   ```
 
 ### Using with OpenAI
 
