@@ -15,6 +15,8 @@ use std::path::PathBuf;
 
 mod logger;
 
+const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
+
 async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
