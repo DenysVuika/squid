@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tools available**:
     - `read_file` - Read file contents from the filesystem
     - `write_file` - Write content to files
+  - **Intelligent tool usage**:
+    - Comprehensive system prompt guides LLM on when to use tools
+    - LLM understands natural language requests like "read Cargo.toml" or "analyze main.rs"
+    - Proactive file reading based on context and user questions
   - **Security features**:
     - ✅ User approval required for every tool execution
     - ✅ File write operations show content preview before approval
@@ -47,12 +51,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/REVIEW_GUIDE.md` - Code review usage guide
   - Updated all documentation with new features
 
+- **Prompts and System Messages**:
+  - `src/assets/ask-prompt.md` - Comprehensive system prompt for `ask` command
+  - Detailed guidance on when and how to use tools
+  - Examples and best practices for tool usage
+  - Improves LLM understanding of file-related requests
+
 ### Changed
 
 - Reorganized project structure:
   - Moved all test scripts to `tests/` directory
   - All documentation now in `docs/` directory
-  - Improved project organization and maintainability
+  - Extracted tool logic into `src/tools.rs` module
+  - Better code organization and maintainability
 
 ## [0.2.0]
 

@@ -110,12 +110,14 @@ See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and exa
 
 ### Tool Calling (with Security Approval)
 
-The LLM can automatically use tools when needed. For security, you'll be prompted to approve each tool execution:
+The LLM has been trained to intelligently use tools when needed. It understands when to read or write files based on your questions. For security, you'll be prompted to approve each tool execution:
 
 ```bash
-# LLM can read files during conversation
+# LLM intelligently reads files when you ask about them
 cargo run -- ask "Read the README.md file and summarize it"
-# You'll be prompted: "Allow reading file: README.md? (Y/n)"
+cargo run -- ask "What dependencies are in Cargo.toml?"
+cargo run -- ask "Analyze the main.rs file for me"
+# You'll be prompted: "Allow reading file: [filename]? (Y/n)"
 
 # LLM can write files
 cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
@@ -125,11 +127,12 @@ cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 cargo run -- ask -s "Read Cargo.toml and list all dependencies"
 ```
 
-**Security Features:**
-- ✅ All tool executions require user approval
-- ✅ File write operations show content preview
-- ✅ Press `Y` to allow or `N` to skip
-- ✅ Tool calls are logged for transparency
+**Key Features:**
+- 🤖 **Intelligent tool usage** - LLM understands when to read/write files from natural language
+- 🔒 **Security approval** - All tool executions require user confirmation
+- 📋 **Content preview** - File write operations show what will be written
+- ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
+- 📝 **Full logging** - All tool calls are logged for transparency
 
 ## Documentation
 
@@ -137,9 +140,10 @@ cargo run -- ask -s "Read Cargo.toml and list all dependencies"
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
 - **[Security Approval Guide](docs/SECURITY_APPROVAL.md)** - Quick reference for tool approval feature
 - **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
+- **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
 - **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
-- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](examples/README.md)** - Test files for code review prompts
 

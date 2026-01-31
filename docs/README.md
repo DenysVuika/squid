@@ -36,7 +36,7 @@ New to squid? Start here:
   - Technical details
   - Best practices
 
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 
 ## Resources
 

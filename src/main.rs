@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 mod logger;
 mod tools;
 
+const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
@@ -68,9 +69,7 @@ async fn ask_llm_streaming(
         question.to_string()
     };
 
-    let system_message = system_prompt.unwrap_or(
-        "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
-    );
+    let system_message = system_prompt.unwrap_or(ASK_PROMPT);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessageArgs::default()
@@ -229,9 +228,7 @@ async fn ask_llm(
         question.to_string()
     };
 
-    let system_message = system_prompt.unwrap_or(
-        "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
-    );
+    let system_message = system_prompt.unwrap_or(ASK_PROMPT);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessageArgs::default()
