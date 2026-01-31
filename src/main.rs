@@ -11,10 +11,14 @@ use dotenvy::dotenv;
 use futures::StreamExt;
 use log::{debug, error, info};
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 mod logger;
 
-async fn ask_llm_streaming(question: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn ask_llm_streaming(
+    question: &str,
+    file_content: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration from environment variables
     let api_url =
         std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
@@ -31,16 +35,26 @@ async fn ask_llm_streaming(question: &str) -> Result<(), Box<dyn std::error::Err
 
     let client = Client::with_config(config);
 
+    // Build the user message, including file content if provided
+    let user_message = if let Some(content) = file_content {
+        format!(
+            "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
+            content, question
+        )
+    } else {
+        question.to_string()
+    };
+
     // Create the chat completion request
     let request = CreateChatCompletionRequestArgs::default()
         .model(api_model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant.")
+                .content("You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content.")
                 .build()?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
-                .content(question)
+                .content(user_message)
                 .build()?
                 .into(),
         ])
@@ -76,7 +90,10 @@ async fn ask_llm_streaming(question: &str) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-async fn ask_llm(question: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn ask_llm(
+    question: &str,
+    file_content: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
     // Load configuration from environment variables
     let api_url =
         std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
@@ -93,16 +110,26 @@ async fn ask_llm(question: &str) -> Result<String, Box<dyn std::error::Error>> {
 
     let client = Client::with_config(config);
 
+    // Build the user message, including file content if provided
+    let user_message = if let Some(content) = file_content {
+        format!(
+            "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
+            content, question
+        )
+    } else {
+        question.to_string()
+    };
+
     // Create the chat completion request
     let request = CreateChatCompletionRequestArgs::default()
         .model(api_model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant.")
+                .content("You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content.")
                 .build()?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
-                .content(question)
+                .content(user_message)
                 .build()?
                 .into(),
         ])
@@ -147,6 +174,9 @@ enum Commands {
         /// Stream the response
         #[arg(short, long)]
         stream: bool,
+        /// Optional file to provide context
+        #[arg(short, long)]
+        file: Option<PathBuf>,
     },
 }
 
@@ -173,14 +203,35 @@ async fn main() {
             }
             // Placeholder implementation
         }
-        Commands::Ask { question, stream } => {
+        Commands::Ask {
+            question,
+            stream,
+            file,
+        } => {
             info!("Asking question: {}", question);
+
+            // Read file content if provided
+            let file_content = if let Some(file_path) = file {
+                match std::fs::read_to_string(file_path) {
+                    Ok(content) => {
+                        info!("Read file content ({} bytes)", content.len());
+                        Some(content)
+                    }
+                    Err(e) => {
+                        error!("Failed to read file: {}", e);
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
+
             if *stream {
-                if let Err(e) = ask_llm_streaming(question).await {
+                if let Err(e) = ask_llm_streaming(question, file_content.as_deref()).await {
                     error!("Failed to get response: {}", e);
                 }
             } else {
-                match ask_llm(question).await {
+                match ask_llm(question, file_content.as_deref()).await {
                     Ok(response) => {
                         println!("\n{}", response);
                     }

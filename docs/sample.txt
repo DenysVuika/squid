@@ -1,0 +1,39 @@
+# Sample Document
+
+This is a sample document to test the file reading functionality of the squid CLI.
+
+## About Squid
+
+Squid is a command-line interface tool that allows users to interact with AI language models.
+It supports both streaming and non-streaming responses.
+
+## Key Features
+
+1. **Ask Questions**: Users can ask questions directly to the LLM
+2. **File Context**: Users can provide files for the AI to analyze
+3. **Streaming Support**: Real-time responses with the --stream flag
+4. **Flexible Configuration**: Uses environment variables for API configuration
+
+## Example Usage
+
+```bash
+squid ask "What is the capital of France?"
+squid ask --stream "Explain quantum computing"
+squid ask --file document.txt "Summarize this document"
+```
+
+## Technical Details
+
+- Built with Rust
+- Uses async-openai library
+- Compatible with OpenAI API and LM Studio
+- Supports local and remote AI models
+
+## Fun Facts
+
+- The squid emoji is 🦑
+- Squids have three hearts
+- They can change color rapidly
+- Some species can grow up to 43 feet long
+
+This concludes our sample document.
