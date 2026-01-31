@@ -1,6 +1,9 @@
 [package]
 name = "squid"
 version = "0.2.0"
+description = "An AI-powered command-line tool for code reviews and suggestions."
+authors = ["Denys Vuika <denys.vuika@gmail.com>"]
+license = "Apache-2.0"
 edition = "2024"
 
 [dependencies]

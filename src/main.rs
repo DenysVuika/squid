@@ -152,7 +152,7 @@ async fn ask_llm(
 
 #[derive(Parser)]
 #[command(name = "squid")]
-#[command(about = "A basic CLI application", long_about = None)]
+#[command(about = "squid 🦑: An AI-powered command-line tool for code reviews and suggestions.", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
