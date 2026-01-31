@@ -115,6 +115,17 @@ cargo run -- review examples/example.py
 cargo run -- review examples/example.py --stream
 ```
 
+## Automated Testing
+
+Run all code review examples automatically:
+
+```bash
+# From the project root
+./tests/test-reviews.sh
+```
+
+This will test all example files and show pass/fail results. See **[tests/README.md](../tests/README.md)** for more details.
+
 ## Usage Tips
 
 1. **Stream mode**: Use the `-s` or `--stream` flag to see responses in real-time

@@ -174,6 +174,66 @@ API_MODEL=gpt-4
 API_KEY=sk-your-key-here
 ```
 
+## Tool Calling with Security Approval
+
+The LLM can use tools to read and write files, but all operations require your approval for security:
+
+### Reading Files
+
+```bash
+squid ask "Read the README.md file and summarize it"
+```
+
+**What happens:**
+1. LLM requests to read README.md
+2. You see: `Allow reading file: README.md? (Y/n)`
+3. Press `Y` to approve or `N` to skip
+4. If approved, the file is read and LLM continues
+
+### Writing Files
+
+```bash
+squid ask "Create a hello.txt file with 'Hello, World!'"
+```
+
+**What happens:**
+1. LLM requests to write to hello.txt
+2. You see a preview:
+   ```
+   Allow writing to file: hello.txt?
+   Content preview:
+   Hello, World!
+   ```
+3. Press `Y` to approve or `N` to skip
+4. If approved, the file is written
+
+### Multiple Tool Calls
+
+```bash
+squid ask "Read Cargo.toml, extract all dependencies, and create a deps.txt file with the list"
+```
+
+**What happens:**
+1. First approval: `Allow reading file: Cargo.toml? (Y/n)` → Press `Y`
+2. LLM processes the content
+3. Second approval: `Allow writing to file: deps.txt?` (with content preview) → Press `Y`
+4. Both operations complete successfully
+
+### Streaming with Tools
+
+```bash
+squid ask -s "Read the CHANGELOG.md and tell me what's new in the latest version"
+```
+
+Tool approvals work the same way in streaming mode - you'll be prompted before each tool execution.
+
+### Security Tips
+
+- **Always review file paths** before approving read/write operations
+- **Check content previews** for write operations (shows first 100 bytes)
+- **Press N to skip** any suspicious or unintended operations
+- **All tool calls are logged** - check logs if you need to audit what happened
+
 ## Sample Test
 
 Try this with the included sample file:

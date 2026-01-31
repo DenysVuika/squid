@@ -7,7 +7,8 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
-- 🔧 Tool calling support (file read/write operations)
+- 🔧 Tool calling support (file read/write operations) with security approval
+- 🔒 User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
@@ -107,26 +108,34 @@ The review command automatically selects the appropriate review prompt based on 
 
 See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and examples.
 
-### Tool Calling (Automatic)
+### Tool Calling (with Security Approval)
 
-The LLM can automatically use tools when needed:
+The LLM can automatically use tools when needed. For security, you'll be prompted to approve each tool execution:
 
 ```bash
 # LLM can read files during conversation
 cargo run -- ask "Read the README.md file and summarize it"
+# You'll be prompted: "Allow reading file: README.md? (Y/n)"
 
 # LLM can write files
 cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
+# You'll be prompted with a preview: "Allow writing to file: hello.txt?"
 
 # Works with streaming too
 cargo run -- ask -s "Read Cargo.toml and list all dependencies"
 ```
 
-Tools are invoked automatically - no special configuration needed.
+**Security Features:**
+- ✅ All tool executions require user approval
+- ✅ File write operations show content preview
+- ✅ Press `Y` to allow or `N` to skip
+- ✅ Tool calls are logged for transparency
 
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
+- **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
+- **[Security Approval Guide](docs/SECURITY_APPROVAL.md)** - Quick reference for tool approval feature
 - **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
 - **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
@@ -134,25 +143,24 @@ Tools are invoked automatically - no special configuration needed.
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](examples/README.md)** - Test files for code review prompts
 
-### Testing Code Reviews
+### Testing
 
-Try the code review feature with the provided example files:
+Try the code review and security features with the provided test scripts:
 
 ```bash
-# Test Rust review
+# Test code reviews (automated)
+./tests/test-reviews.sh
+
+# Test security approval (interactive)
+./tests/test-security.sh
+
+# Or test individual examples
 cargo run -- review examples/example.rs
-
-# Test TypeScript with streaming
 cargo run -- review examples/example.ts --stream
-
-# Test HTML accessibility
 cargo run -- review examples/example.html -m "Focus on accessibility"
-
-# Run all tests
-./examples/test-reviews.sh
 ```
 
-See **[examples/README.md](examples/README.md)** for details on each example file.
+See **[tests/README.md](tests/README.md)** for complete testing documentation and **[examples/README.md](examples/README.md)** for details on each example file.
 
 ### Other Commands
 

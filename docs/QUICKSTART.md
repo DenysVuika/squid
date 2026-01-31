@@ -166,6 +166,26 @@ cargo run -- ask -f big_document.md -s "Analyze this thoroughly"
 cargo run -- review large_component.tsx --stream
 ```
 
+### ✅ Tool Calling with Security
+
+The LLM can read and write files when needed - you'll approve each action:
+
+```bash
+# LLM can read files (with your approval)
+cargo run -- ask "Read the README.md and summarize it"
+# You'll see: "Allow reading file: README.md? (Y/n)"
+
+# LLM can write files (with preview and approval)
+cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
+# You'll see the content preview and: "Allow writing to file: hello.txt?"
+```
+
+**Security features:**
+- ✅ Every tool execution requires your approval
+- ✅ File writes show content preview (first 100 bytes)
+- ✅ Press `Y` to allow or `N` to skip
+- ✅ All tool calls are logged
+
 ## 8. Troubleshooting
 
 ### "Failed to read file"
@@ -203,6 +223,10 @@ squid ask -f filename.txt -s "question here"
 squid review src/main.rs
 squid review app.ts -m "Focus on security"
 squid review styles.css --stream
+
+# Tool calling (with approval prompts)
+squid ask "Read README.md and summarize it"
+squid ask "Create a notes.txt file with today's tasks"
 
 # Get help
 squid ask --help

@@ -5,23 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - Next Release (v0.3.0)
 
 ### Added
+
+- **Tool Calling with Security Approval**: LLM can now interact with the file system safely
+  - **Tools available**:
+    - `read_file` - Read file contents from the filesystem
+    - `write_file` - Write content to files
+  - **Security features**:
+    - ✅ User approval required for every tool execution
+    - ✅ File write operations show content preview before approval
+    - ✅ Interactive Y/N prompts for each operation
+    - ✅ All tool calls are logged for transparency and audit
+    - ✅ Default deny - prompts default to "No" for safety
+  - Works with both streaming and non-streaming modes
+  - Works with both `ask` and `review` commands
+  - See `docs/SECURITY.md` and `docs/SECURITY_APPROVAL.md` for details
+
 - **Code Review Command**: New `review` command for AI-powered code reviews
   - Automatically selects appropriate review prompt based on file type
   - Language-specific prompts for Rust, TypeScript/JavaScript, HTML, and CSS
+  - Generic fallback prompt for other file types
   - Optional `-m, --message` flag for focused reviews or specific questions
   - Streaming support with `-s, --stream` flag
-
-- **Tool Calling Support**: LLM can now use tools for file operations
-  - `read_file` - Read contents from filesystem
-  - `write_file` - Write content to files
-  - Works with both streaming and non-streaming modes
-  - Automatic execution with logged results
+  - Example files in `examples/` directory for testing
+  - Test script: `tests/test-reviews.sh`
 
 - **Enhanced `ask` Command**:
   - Added optional `-m, --message` flag for additional context or instructions
+  - Tool calling support (with security approval)
+
+- **Testing Infrastructure**:
+  - `tests/test-security.sh` - Interactive security approval demonstrations
+  - `tests/test-reviews.sh` - Automated code review testing
+  - Comprehensive test documentation in `tests/README.md`
+
+- **Documentation**:
+  - `docs/SECURITY.md` - Comprehensive security features guide
+  - `docs/SECURITY_APPROVAL.md` - Quick reference for tool approval
+  - `docs/REVIEW_GUIDE.md` - Code review usage guide
+  - Updated all documentation with new features
+
+### Changed
+
+- Reorganized project structure:
+  - Moved all test scripts to `tests/` directory
+  - All documentation now in `docs/` directory
+  - Improved project organization and maintainability
 
 ## [0.2.0]
 
@@ -39,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming response support with `--stream` / `-s` flag
 - Environment variable configuration via `.env` file
 - Support for LM Studio local models and OpenAI API
+
+## Summary
+
+- **v0.3.0** (Unreleased): Tool calling with security approval, code reviews, enhanced documentation
+- **v0.2.0**: File context feature
+- **v0.1.0**: Initial release with basic ask command
 
 [Unreleased]: https://github.com/yourusername/squid/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/yourusername/squid/compare/v0.1.0...v0.2.0

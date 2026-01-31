@@ -12,6 +12,7 @@ use async_openai::{
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
+use inquire::Confirm;
 use log::{debug, error, info, warn};
 use serde_json::json;
 use std::io::{self, Write};
@@ -89,58 +90,93 @@ fn get_tools() -> Vec<ChatCompletionTool> {
 async fn call_tool(name: &str, args: &str) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
-    match name {
-        "read_file" => {
-            let args: serde_json::Value = match args.parse() {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Failed to parse tool arguments: {}", e);
-                    return json!({"error": format!("Invalid arguments: {}", e)});
-                }
-            };
+    // Parse arguments first to display them to the user
+    let args: serde_json::Value = match args.parse() {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed to parse tool arguments: {}", e);
+            return json!({"error": format!("Invalid arguments: {}", e)});
+        }
+    };
 
-            let path = args["path"].as_str().unwrap_or("");
-            match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    info!("Successfully read file: {} ({} bytes)", path, content.len());
-                    json!({"content": content})
-                }
-                Err(e) => {
-                    warn!("Failed to read file {}: {}", path, e);
-                    json!({"error": format!("Failed to read file: {}", e)})
-                }
-            }
+    // Ask for user approval
+    let approval_message = match name {
+        "read_file" => {
+            let path = args["path"].as_str().unwrap_or("unknown");
+            format!("Allow reading file: {}?", path)
         }
         "write_file" => {
-            let args: serde_json::Value = match args.parse() {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Failed to parse tool arguments: {}", e);
-                    return json!({"error": format!("Invalid arguments: {}", e)});
-                }
-            };
-
-            let path = args["path"].as_str().unwrap_or("");
+            let path = args["path"].as_str().unwrap_or("unknown");
             let content = args["content"].as_str().unwrap_or("");
+            let preview = if content.len() > 100 {
+                format!("{}... ({} bytes total)", &content[..100], content.len())
+            } else {
+                content.to_string()
+            };
+            format!(
+                "Allow writing to file: {}?\nContent preview:\n{}",
+                path, preview
+            )
+        }
+        _ => format!("Allow executing tool: {}?", name),
+    };
 
-            match std::fs::write(path, content) {
-                Ok(_) => {
-                    info!(
-                        "Successfully wrote file: {} ({} bytes)",
-                        path,
-                        content.len()
-                    );
-                    json!({"success": true, "message": format!("File written successfully: {}", path)})
+    let approved = Confirm::new(&approval_message)
+        .with_default(false)
+        .with_help_message("Press Y to allow, N to skip")
+        .prompt();
+
+    match approved {
+        Ok(true) => {
+            // User approved, proceed with tool execution
+            match name {
+                "read_file" => {
+                    let path = args["path"].as_str().unwrap_or("");
+                    match std::fs::read_to_string(path) {
+                        Ok(content) => {
+                            info!("Successfully read file: {} ({} bytes)", path, content.len());
+                            json!({"content": content})
+                        }
+                        Err(e) => {
+                            warn!("Failed to read file {}: {}", path, e);
+                            json!({"error": format!("Failed to read file: {}", e)})
+                        }
+                    }
                 }
-                Err(e) => {
-                    warn!("Failed to write file {}: {}", path, e);
-                    json!({"error": format!("Failed to write file: {}", e)})
+                "write_file" => {
+                    let path = args["path"].as_str().unwrap_or("");
+                    let content = args["content"].as_str().unwrap_or("");
+
+                    match std::fs::write(path, content) {
+                        Ok(_) => {
+                            info!(
+                                "Successfully wrote file: {} ({} bytes)",
+                                path,
+                                content.len()
+                            );
+                            json!({"success": true, "message": format!("File written successfully: {}", path)})
+                        }
+                        Err(e) => {
+                            warn!("Failed to write file {}: {}", path, e);
+                            json!({"error": format!("Failed to write file: {}", e)})
+                        }
+                    }
+                }
+                _ => {
+                    warn!("Unknown tool called: {}", name);
+                    json!({"error": format!("Unknown tool: {}", name)})
                 }
             }
         }
-        _ => {
-            warn!("Unknown tool called: {}", name);
-            json!({"error": format!("Unknown tool: {}", name)})
+        Ok(false) => {
+            // User declined
+            info!("Tool execution skipped by user: {}", name);
+            json!({"error": "Tool execution declined by user", "skipped": true})
+        }
+        Err(e) => {
+            // Error in prompt (e.g., non-interactive terminal)
+            error!("Failed to get user approval: {}", e);
+            json!({"error": format!("Failed to get user approval: {}", e)})
         }
     }
 }
