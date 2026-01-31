@@ -7,6 +7,7 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
+- 🔧 Tool calling support (file read/write operations)
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
@@ -105,6 +106,23 @@ The review command automatically selects the appropriate review prompt based on 
 - **Other files** - Generic code quality and best practices
 
 See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and examples.
+
+### Tool Calling (Automatic)
+
+The LLM can automatically use tools when needed:
+
+```bash
+# LLM can read files during conversation
+cargo run -- ask "Read the README.md file and summarize it"
+
+# LLM can write files
+cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
+
+# Works with streaming too
+cargo run -- ask -s "Read Cargo.toml and list all dependencies"
+```
+
+Tools are invoked automatically - no special configuration needed.
 
 ## Documentation
 

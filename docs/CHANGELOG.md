@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional `-m, --message` flag for focused reviews or specific questions
   - Streaming support with `-s, --stream` flag
 
+- **Tool Calling Support**: LLM can now use tools for file operations
+  - `read_file` - Read contents from filesystem
+  - `write_file` - Write content to files
+  - Works with both streaming and non-streaming modes
+  - Automatic execution with logged results
+
 - **Enhanced `ask` Command**:
   - Added optional `-m, --message` flag for additional context or instructions
 

@@ -2,14 +2,18 @@ use async_openai::{
     Client,
     config::OpenAIConfig,
     types::{
-        ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
-        CreateChatCompletionRequestArgs,
+        ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessageArgs,
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs, ChatCompletionTool,
+        ChatCompletionToolType, CreateChatCompletionRequestArgs, FinishReason, FunctionCall,
+        FunctionObjectArgs,
     },
 };
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
+use serde_json::json;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -37,12 +41,115 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
     }
 }
 
+fn get_tools() -> Vec<ChatCompletionTool> {
+    vec![
+        ChatCompletionTool {
+            r#type: ChatCompletionToolType::Function,
+            function: FunctionObjectArgs::default()
+                .name("read_file")
+                .description("Read the contents of a file from the filesystem")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "The path to the file to read"
+                        }
+                    },
+                    "required": ["path"]
+                }))
+                .build()
+                .unwrap(),
+        },
+        ChatCompletionTool {
+            r#type: ChatCompletionToolType::Function,
+            function: FunctionObjectArgs::default()
+                .name("write_file")
+                .description("Write content to a file on the filesystem")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "The path to the file to write"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The content to write to the file"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }))
+                .build()
+                .unwrap(),
+        },
+    ]
+}
+
+async fn call_tool(name: &str, args: &str) -> serde_json::Value {
+    info!("Tool call: {} with args: {}", name, args);
+
+    match name {
+        "read_file" => {
+            let args: serde_json::Value = match args.parse() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to parse tool arguments: {}", e);
+                    return json!({"error": format!("Invalid arguments: {}", e)});
+                }
+            };
+
+            let path = args["path"].as_str().unwrap_or("");
+            match std::fs::read_to_string(path) {
+                Ok(content) => {
+                    info!("Successfully read file: {} ({} bytes)", path, content.len());
+                    json!({"content": content})
+                }
+                Err(e) => {
+                    warn!("Failed to read file {}: {}", path, e);
+                    json!({"error": format!("Failed to read file: {}", e)})
+                }
+            }
+        }
+        "write_file" => {
+            let args: serde_json::Value = match args.parse() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to parse tool arguments: {}", e);
+                    return json!({"error": format!("Invalid arguments: {}", e)});
+                }
+            };
+
+            let path = args["path"].as_str().unwrap_or("");
+            let content = args["content"].as_str().unwrap_or("");
+
+            match std::fs::write(path, content) {
+                Ok(_) => {
+                    info!(
+                        "Successfully wrote file: {} ({} bytes)",
+                        path,
+                        content.len()
+                    );
+                    json!({"success": true, "message": format!("File written successfully: {}", path)})
+                }
+                Err(e) => {
+                    warn!("Failed to write file {}: {}", path, e);
+                    json!({"error": format!("Failed to write file: {}", e)})
+                }
+            }
+        }
+        _ => {
+            warn!("Unknown tool called: {}", name);
+            json!({"error": format!("Unknown tool: {}", name)})
+        }
+    }
+}
+
 async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
     system_prompt: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Load configuration from environment variables
     let api_url =
         std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
     let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
@@ -51,14 +158,12 @@ async fn ask_llm_streaming(
     debug!("Using API URL: {}", api_url);
     debug!("Using API Model: {}", api_model);
 
-    // Configure the client to use the specified endpoint
     let config = OpenAIConfig::new()
         .with_api_base(api_url)
         .with_api_key(api_key);
 
     let client = Client::with_config(config);
 
-    // Build the user message, including file content if provided
     let user_message = if let Some(content) = file_content {
         format!(
             "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
@@ -68,50 +173,133 @@ async fn ask_llm_streaming(
         question.to_string()
     };
 
-    // Use custom system prompt or default
     let system_message = system_prompt.unwrap_or(
         "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
     );
 
-    // Create the chat completion request
+    let initial_messages = vec![
+        ChatCompletionRequestSystemMessageArgs::default()
+            .content(system_message)
+            .build()?
+            .into(),
+        ChatCompletionRequestUserMessageArgs::default()
+            .content(user_message)
+            .build()?
+            .into(),
+    ];
+
     let request = CreateChatCompletionRequestArgs::default()
-        .model(api_model)
-        .messages([
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content(system_message)
-                .build()?
-                .into(),
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(user_message)
-                .build()?
-                .into(),
-        ])
+        .model(&api_model)
+        .messages(initial_messages.clone())
+        .tools(get_tools())
         .build()?;
 
     debug!("Sending streaming request...");
 
-    // Send the request and get the streaming response
     let mut stream = client.chat().create_stream(request).await?;
-
-    // Lock stdout once before the loop to avoid locking on each iteration
+    let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
+    let mut execution_handles = Vec::new();
     let mut lock = io::stdout().lock();
     writeln!(lock)?;
 
-    // Process the stream
     while let Some(result) = stream.next().await {
-        match result {
-            Ok(response) => {
-                response.choices.iter().for_each(|chat_choice| {
-                    if let Some(ref content) = chat_choice.delta.content {
-                        write!(lock, "{}", content).unwrap();
-                    }
-                });
+        let response = result?;
+
+        for choice in response.choices {
+            if let Some(content) = &choice.delta.content {
+                write!(lock, "{}", content)?;
             }
-            Err(err) => {
-                writeln!(lock, "error: {err:?}").unwrap();
+
+            if let Some(tool_call_chunks) = choice.delta.tool_calls {
+                for chunk in tool_call_chunks {
+                    let index = chunk.index as usize;
+
+                    while tool_calls.len() <= index {
+                        tool_calls.push(ChatCompletionMessageToolCall {
+                            id: String::new(),
+                            r#type: ChatCompletionToolType::Function,
+                            function: FunctionCall {
+                                name: String::new(),
+                                arguments: String::new(),
+                            },
+                        });
+                    }
+
+                    let tool_call = &mut tool_calls[index];
+                    if let Some(id) = chunk.id {
+                        tool_call.id = id;
+                    }
+                    if let Some(function_chunk) = chunk.function {
+                        if let Some(name) = function_chunk.name {
+                            tool_call.function.name = name;
+                        }
+                        if let Some(arguments) = function_chunk.arguments {
+                            tool_call.function.arguments.push_str(&arguments);
+                        }
+                    }
+                }
+            }
+
+            if matches!(choice.finish_reason, Some(FinishReason::ToolCalls)) {
+                for tool_call in tool_calls.iter() {
+                    let name = tool_call.function.name.clone();
+                    let args = tool_call.function.arguments.clone();
+                    let tool_call_id = tool_call.id.clone();
+
+                    let handle = tokio::spawn(async move {
+                        let result: serde_json::Value = call_tool(&name, &args).await;
+                        (tool_call_id, result)
+                    });
+                    execution_handles.push(handle);
+                }
             }
         }
         lock.flush()?;
+    }
+
+    if !execution_handles.is_empty() {
+        let mut tool_responses = Vec::new();
+        for handle in execution_handles {
+            let (tool_call_id, response) = handle.await?;
+            tool_responses.push((tool_call_id, response));
+        }
+
+        let mut messages: Vec<ChatCompletionRequestMessage> = initial_messages;
+
+        let assistant_tool_calls: Vec<ChatCompletionMessageToolCall> = tool_calls.clone();
+
+        messages.push(
+            ChatCompletionRequestAssistantMessageArgs::default()
+                .tool_calls(assistant_tool_calls)
+                .build()?
+                .into(),
+        );
+
+        for (tool_call_id, response) in tool_responses {
+            messages.push(ChatCompletionRequestMessage::Tool(
+                ChatCompletionRequestToolMessage {
+                    content: response.to_string().into(),
+                    tool_call_id,
+                },
+            ));
+        }
+
+        let follow_up_request = CreateChatCompletionRequestArgs::default()
+            .model(&api_model)
+            .messages(messages)
+            .build()?;
+
+        let mut follow_up_stream = client.chat().create_stream(follow_up_request).await?;
+
+        while let Some(result) = follow_up_stream.next().await {
+            let response = result?;
+            for choice in response.choices {
+                if let Some(content) = &choice.delta.content {
+                    write!(lock, "{}", content)?;
+                }
+            }
+            lock.flush()?;
+        }
     }
 
     writeln!(lock)?;
@@ -123,7 +311,6 @@ async fn ask_llm(
     file_content: Option<&str>,
     system_prompt: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Load configuration from environment variables
     let api_url =
         std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
     let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
@@ -132,14 +319,12 @@ async fn ask_llm(
     debug!("Using API URL: {}", api_url);
     debug!("Using API Model: {}", api_model);
 
-    // Configure the client to use the specified endpoint
     let config = OpenAIConfig::new()
         .with_api_base(api_url)
         .with_api_key(api_key);
 
     let client = Client::with_config(config);
 
-    // Build the user message, including file content if provided
     let user_message = if let Some(content) = file_content {
         format!(
             "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
@@ -149,39 +334,99 @@ async fn ask_llm(
         question.to_string()
     };
 
-    // Use custom system prompt or default
     let system_message = system_prompt.unwrap_or(
         "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
     );
 
-    // Create the chat completion request
+    let initial_messages = vec![
+        ChatCompletionRequestSystemMessageArgs::default()
+            .content(system_message)
+            .build()?
+            .into(),
+        ChatCompletionRequestUserMessageArgs::default()
+            .content(user_message)
+            .build()?
+            .into(),
+    ];
+
     let request = CreateChatCompletionRequestArgs::default()
-        .model(api_model)
-        .messages([
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content(system_message)
-                .build()?
-                .into(),
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(user_message)
-                .build()?
-                .into(),
-        ])
+        .model(&api_model)
+        .messages(initial_messages.clone())
+        .tools(get_tools())
         .build()?;
 
-    debug!("Sending request to LM Studio...");
+    debug!("Sending request...");
 
-    // Send the request and get the response
     let response = client.chat().create(request).await?;
-
-    // Extract the response text
-    let answer = response
+    let response_message = response
         .choices
         .first()
-        .and_then(|choice| choice.message.content.as_ref())
-        .ok_or("No response from LLM")?;
+        .ok_or("No response from LLM")?
+        .message
+        .clone();
 
-    Ok(answer.to_string())
+    if let Some(tool_calls) = response_message.tool_calls {
+        let mut handles = Vec::new();
+        for tool_call in &tool_calls {
+            let name = tool_call.function.name.clone();
+            let args = tool_call.function.arguments.clone();
+            let tool_call_clone = tool_call.clone();
+
+            let handle = tokio::spawn(async move {
+                let result: serde_json::Value = call_tool(&name, &args).await;
+                (tool_call_clone, result)
+            });
+            handles.push(handle);
+        }
+
+        let mut function_responses = Vec::new();
+        for handle in handles {
+            let (tool_call, response_content) = handle.await?;
+            function_responses.push((tool_call, response_content));
+        }
+
+        let mut messages: Vec<ChatCompletionRequestMessage> = initial_messages;
+
+        let assistant_tool_calls: Vec<ChatCompletionMessageToolCall> = function_responses
+            .iter()
+            .map(|(tool_call, _)| tool_call.clone())
+            .collect();
+
+        messages.push(
+            ChatCompletionRequestAssistantMessageArgs::default()
+                .tool_calls(assistant_tool_calls)
+                .build()?
+                .into(),
+        );
+
+        for (tool_call, response_content) in function_responses {
+            messages.push(ChatCompletionRequestMessage::Tool(
+                ChatCompletionRequestToolMessage {
+                    content: response_content.to_string().into(),
+                    tool_call_id: tool_call.id.clone(),
+                },
+            ));
+        }
+
+        let subsequent_request = CreateChatCompletionRequestArgs::default()
+            .model(&api_model)
+            .messages(messages)
+            .build()?;
+
+        let final_response = client.chat().create(subsequent_request).await?;
+
+        let answer = final_response
+            .choices
+            .first()
+            .and_then(|choice| choice.message.content.as_ref())
+            .ok_or("No response from LLM")?;
+
+        return Ok(answer.to_string());
+    }
+
+    let answer = response_message.content.ok_or("No response from LLM")?;
+
+    Ok(answer)
 }
 
 #[derive(Parser)]
@@ -241,7 +486,6 @@ async fn main() {
     match &cli.command {
         Commands::Init => {
             info!("Initializing project...");
-            // Placeholder implementation
         }
         Commands::Run { command } => {
             info!("Running command: {}", command);
@@ -249,7 +493,6 @@ async fn main() {
             if command == "fail" {
                 error!("An error occurred while executing the command.");
             }
-            // Placeholder implementation
         }
         Commands::Ask {
             question,
@@ -257,7 +500,6 @@ async fn main() {
             stream,
             file,
         } => {
-            // Build the full question from question and optional message
             let full_question = if let Some(m) = message {
                 format!("{} {}", question, m)
             } else {
@@ -266,7 +508,6 @@ async fn main() {
 
             info!("Asking question: {}", full_question);
 
-            // Read file content if provided
             let file_content = if let Some(file_path) = file {
                 match std::fs::read_to_string(file_path) {
                     Ok(content) => {
@@ -306,7 +547,6 @@ async fn main() {
         } => {
             info!("Reviewing file: {:?}", file);
 
-            // Read file content
             let file_content = match std::fs::read_to_string(file) {
                 Ok(content) => {
                     info!("Read file content ({} bytes)", content.len());
@@ -318,11 +558,9 @@ async fn main() {
                 }
             };
 
-            // Get the appropriate review prompt based on file type
             let review_prompt = get_review_prompt_for_file(file);
             debug!("Using review prompt for file type");
 
-            // Build the review question
             let question = if let Some(msg) = message {
                 format!("Please review this code. {}", msg)
             } else {
