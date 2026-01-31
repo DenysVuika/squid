@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<!-- Issue: Missing lang attribute -->
+<head>
+    <!-- Issue: Missing charset declaration -->
+    <title>User Dashboard</title>
+    <!-- Issue: Missing viewport meta tag for mobile -->
+</head>
+<body>
+    <!-- Issue: Using divs instead of semantic header -->
+    <div class="header">
+        <div class="logo">
+            <!-- Issue: Missing alt text -->
+            <img src="logo.png">
+        </div>
+        <!-- Issue: Navigation not using nav element -->
+        <div class="menu">
+            <a href="#home">Home</a>
+            <a href="#about">About</a>
+            <a href="#contact">Contact</a>
+        </div>
+    </div>
+
+    <!-- Issue: Not using main element -->
+    <div class="content">
+        <!-- Issue: Using div instead of section/article -->
+        <div class="welcome">
+            <!-- Issue: Skipping heading levels (should start with h1) -->
+            <h3>Welcome Back!</h3>
+            <p>Here's your dashboard</p>
+        </div>
+
+        <!-- Issue: Form without proper labels -->
+        <div class="user-form">
+            <h2>Update Profile</h2>
+            <form>
+                <!-- Issue: Input without associated label -->
+                <input type="text" placeholder="Name" id="name">
+
+                <!-- Issue: Label not properly associated with input -->
+                <label>Email</label>
+                <input type="email">
+
+                <!-- Issue: No fieldset for related inputs -->
+                <input type="radio" name="gender" value="male"> Male
+                <input type="radio" name="gender" value="female"> Female
+
+                <!-- Issue: Button without type attribute -->
+                <button>Submit</button>
+            </form>
+        </div>
+
+        <!-- Issue: Using divs for list items -->
+        <div class="notifications">
+            <h2>Notifications</h2>
+            <div class="notification-item">New message from John</div>
+            <div class="notification-item">Your profile was updated</div>
+            <div class="notification-item">New follower: Jane</div>
+        </div>
+
+        <!-- Issue: Table without proper headers and caption -->
+        <div class="data-table">
+            <table>
+                <tr></table></tr>
+                    <td>Name</td>
+                    <td>Email</td>
+                    <td>Status</td>
+                </tr>
+                <tr>
+                    <td>John Doe</td>
+                    <td>john@example.com</td>
+                    <td>Active</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Issue: Click handler on non-interactive element without keyboard support -->
+        <div class="clickable-card" onclick="handleClick()">
+            <h3>Click me!</h3>
+            <p>This is a card that does something</p>
+        </div>
+
+        <!-- Issue: Icon buttons without text alternatives -->
+        <div class="actions">
+            <button><i class="icon-edit"></i></button>
+            <button><i class="icon-delete"></i></button>
+            <button><i class="icon-share"></i></button>
+        </div>
+    </div>
+
+    <!-- Issue: Using div instead of footer -->
+    <div class="footer">
+        <p>&copy; 2024 Company Name</p>
+        <!-- Issue: Links without descriptive text -->
+        <a href="/privacy">Click here</a> | <a href="/terms">Read more</a>
+    </div>
+
+    <!-- Issue: Inline script (should be external) -->
+    <script>
+        function handleClick() {
+            alert('Clicked!');
+        }
+    </script>
+
+    <!-- Issue: Inline styles (should be in CSS file) -->
+    <style>
+        .header { background: #333; color: white; }
+        .clickable-card { cursor: pointer; }
+    </style>
+</body>
+</html>

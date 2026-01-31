@@ -19,35 +19,24 @@ New to squid? Start here:
   - Common troubleshooting
   - Tips for better results
 
+- **[REVIEW_GUIDE.md](REVIEW_GUIDE.md)** - AI-powered code review guide
+  - Language-specific review prompts
+  - File type support (Rust, TypeScript, HTML, CSS, etc.)
+  - Usage examples and best practices
+  - Testing with example files
+
 - **[EXAMPLES.md](EXAMPLES.md)** - Comprehensive usage examples
   - Basic and advanced examples
   - Practical workflows
   - Best practices
   - File type support
 
-### Technical Documentation
-
 - **[FILE_CONTEXT.md](FILE_CONTEXT.md)** - File context feature architecture
   - How it works
-  - Code architecture
-  - Data flow diagrams
-  - Performance considerations
-  - Security considerations
-  - Future enhancements
-
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Implementation details
-  - What was implemented
-  - Code changes
   - Technical details
-  - Testing information
-  - Deployment guide
-
-### Project Information
+  - Best practices
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
-  - Feature additions
-  - Changes and improvements
-  - Technical details
 
 ## Resources
 
@@ -58,17 +47,32 @@ New to squid? Start here:
 ### Basic Commands
 
 ```bash
-# Ask a question
+# Ask a question (required)
 squid ask "What is Rust?"
 
+# With additional context using -m
+squid ask "Explain Rust" -m "Focus on memory safety"
+
 # Ask with file context
-squid ask --file docs/sample.txt "What is this about?"
+squid ask -f docs/sample.txt "What is this about?"
 
 # Stream the response
 squid ask -s "Explain async/await"
 
 # File context + streaming
 squid ask -f src/main.rs -s "Explain this code"
+
+# File with additional context
+squid ask -f src/main.rs "Explain this" -m "Focus on error handling"
+
+# Review code
+squid review src/main.rs
+
+# Review with streaming
+squid review app.ts --stream
+
+# Focused review
+squid review styles.css -m "Focus on performance"
 ```
 
 ### Help
@@ -79,6 +83,7 @@ squid --help
 
 # Command-specific help
 squid ask --help
+squid review --help
 ```
 
 ## File Context Feature
@@ -116,15 +121,13 @@ API_KEY=sk-your-key-here
 
 1. Check the [Quick Start Guide](QUICKSTART.md)
 2. Browse the [Examples](EXAMPLES.md)
-3. Review the [Technical Documentation](FILE_CONTEXT.md)
-4. Enable debug logging: `RUST_LOG=debug squid ask ...`
+3. Read the [Code Review Guide](REVIEW_GUIDE.md) for code reviews
+4. Try the [example files](../examples/README.md) for testing
+5. Enable debug logging: `RUST_LOG=debug squid ask ...`
 
 ## Contributing
 
-Found an issue or have a suggestion? The documentation is organized to be:
-- **User-focused**: Start with QUICKSTART.md and EXAMPLES.md
-- **Developer-focused**: Dive into FILE_CONTEXT.md and IMPLEMENTATION_SUMMARY.md
-- **Maintainable**: Check CHANGELOG.md for version history
+Found an issue or have a suggestion? Check the documentation in this directory.
 
 ---
 

@@ -1,6 +1,6 @@
-# Quick Start Guide - File Context Feature
+# Quick Start Guide
 
-Welcome! This guide will get you up and running with the file context feature in under 5 minutes.
+Welcome! This guide will get you up and running with squid in under 5 minutes.
 
 ## 1. Prerequisites
 
@@ -36,92 +36,134 @@ API_KEY=sk-your-actual-api-key-here
 
 ## 4. Try Your First Command
 
-### Without a file (basic usage):
+### Ask a question:
 
 ```bash
 cargo run -- ask "What is Rust?"
 ```
 
-### With a file (new feature!):
+### Ask about a file:
 
 ```bash
-cargo run -- ask --file docs/sample.txt "What is this document about?"
+cargo run -- ask -f docs/sample.txt "What is this document about?"
+```
+
+### Review code:
+
+```bash
+cargo run -- review src/main.rs
 ```
 
 That's it! 🎉
 
 ## 5. Common Use Cases
 
-### Understand Code
+### Ask Questions
+
+```bash
+# Basic question
+cargo run -- ask "What is Rust?"
+
+# With additional context
+cargo run -- ask "Explain Rust" -m "Focus on memory safety"
+```
+
+### Analyze Files
 
 ```bash
 cargo run -- ask -f src/main.rs "What does this code do?"
-```
-
-### Analyze Documents
-
-```bash
 cargo run -- ask -f README.md "Summarize this project"
 ```
 
-### Get Help with Config
+### Review Code
 
 ```bash
-cargo run -- ask -f Cargo.toml "What dependencies does this use?"
+# Basic review
+cargo run -- review src/main.rs
+
+# Focused review
+cargo run -- review src/auth.rs -m "Focus on security issues"
+
+# With streaming
+cargo run -- review components/App.tsx --stream
 ```
 
-### Use Streaming for Long Responses
+### Use Streaming for Real-Time Output
 
 ```bash
 cargo run -- ask -f large_file.txt -s "Provide a detailed analysis"
+cargo run -- review examples/example.rs -s
 ```
 
 ## 6. Command Syntax
 
+### Ask Command
+
 ```
 squid ask [OPTIONS] <QUESTION>
 
+Arguments:
+  <QUESTION>  The question to ask (required)
+
 Options:
-  -s, --stream       Stream the response (real-time output)
-  -f, --file <FILE>  Provide a file for context
-  -h, --help         Print help
+  -m, --message <MESSAGE>  Optional additional context or instructions
+  -s, --stream             Stream the response (real-time output)
+  -f, --file <FILE>        Provide a file for context
+  -h, --help               Print help
 ```
 
-### Short Flags
+### Review Command
 
-```bash
-# Long form
-cargo run -- ask --file sample.txt --stream "Explain this"
+```
+squid review [OPTIONS] <FILE>
 
-# Short form (same thing)
-cargo run -- ask -f sample.txt -s "Explain this"
+Arguments:
+  <FILE>  Path to the file to review (required)
+
+Options:
+  -m, --message <MESSAGE>  Optional additional message or specific question
+  -s, --stream             Stream the response
+  -h, --help               Print help
 ```
 
 ## 7. Tips for Better Results
 
-### ✅ Be Specific
+### ✅ Use the Right Command
+
+```bash
+# For questions and analysis
+cargo run -- ask "What is async/await in Rust?"
+cargo run -- ask -f code.rs "Explain this code"
+
+# For code reviews
+cargo run -- review src/main.rs
+cargo run -- review app.ts -m "Check for security issues"
+```
+
+### ✅ Be Specific with Context
 
 ```bash
 # Good
 cargo run -- ask -f code.rs "Explain the main function"
 
-# Better
-cargo run -- ask -f code.rs "Explain how error handling works in the main function"
+# Better - use -m for focus
+cargo run -- ask -f code.rs "Explain the main function" -m "Focus on error handling"
+cargo run -- review auth.rs -m "Focus on security vulnerabilities"
 ```
 
-### ✅ Use Appropriate File Types
+### ✅ Language-Specific Reviews
 
-Works great with:
-- Source code (.rs, .py, .js, .go, etc.)
-- Documentation (.md, .txt)
-- Configuration (.toml, .json, .yaml)
-- Data files (.csv, .log)
+The `review` command automatically uses specialized prompts for:
+- Rust (`.rs`) - Ownership, safety, idioms
+- TypeScript/JavaScript (`.ts`, `.js`, `.tsx`, `.jsx`) - Type safety, modern features
+- HTML (`.html`) - Semantics, accessibility
+- CSS (`.css`, `.scss`) - Performance, responsive design
 
 ### ✅ Use Streaming for Long Content
 
 ```bash
-# For detailed analysis or long files
 cargo run -- ask -f big_document.md -s "Analyze this thoroughly"
+cargo run -- review large_component.tsx --stream
 ```
 
 ## 8. Troubleshooting
@@ -143,27 +185,28 @@ cargo run -- ask -f big_document.md -s "Analyze this thoroughly"
 
 ## 9. What's Next?
 
-- Check `EXAMPLES.md` for more advanced usage patterns
-- Read `FILE_CONTEXT.md` to understand how it works
+- Check `REVIEW_GUIDE.md` for detailed code review documentation
+- Read `EXAMPLES.md` for more advanced usage patterns
+- Try example files in `../examples/` directory
 - See `README.md` for full documentation
 
 ## 10. Quick Reference
 
 ```bash
-# Basic question
+# Ask questions
 squid ask "question here"
-
-# Question with file context
+squid ask "question" -m "additional context"
 squid ask -f filename.txt "question here"
-
-# Streaming response
-squid ask -s "question here"
-
-# File context + streaming
 squid ask -f filename.txt -s "question here"
+
+# Review code
+squid review src/main.rs
+squid review app.ts -m "Focus on security"
+squid review styles.css --stream
 
 # Get help
 squid ask --help
+squid review --help
 ```
 
 ## Need More Help?
