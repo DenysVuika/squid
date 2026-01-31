@@ -10,6 +10,9 @@ use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
 use log::{debug, error, info};
+use mistralrs::{
+    IsqType, PagedAttentionMetaBuilder, TextMessageRole, TextMessages, TextModelBuilder,
+};
 use std::io::{self, Write};
 
 mod logger;
@@ -123,6 +126,33 @@ async fn ask_llm(question: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(answer.to_string())
 }
 
+async fn ask_local_model(model_id: &str, question: &str) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Loading local model: {}", model_id);
+    println!("Loading model from HuggingFace: {}", model_id);
+    println!("This may take a while on first run...\n");
+
+    // Build the model with auto-detection
+    let model = TextModelBuilder::new(model_id)
+        .with_isq(IsqType::Q4K) // 4-bit quantization for efficiency
+        .with_logging()
+        .with_paged_attn(|| PagedAttentionMetaBuilder::default().build())?
+        .build()
+        .await?;
+
+    debug!("Model loaded successfully");
+
+    // Create the messages
+    let messages = TextMessages::new().add_message(TextMessageRole::User, question);
+
+    // Send the chat request
+    let response = model.send_chat_request(messages).await?;
+
+    // Print the response
+    println!("\n{:?}\n", response.choices[0].message.content);
+
+    Ok(())
+}
+
 #[derive(Parser)]
 #[command(name = "squid")]
 #[command(about = "A basic CLI application", long_about = None)]
@@ -140,13 +170,21 @@ enum Commands {
         /// The command to run
         command: String,
     },
-    /// Ask a question to the LLM
+    /// Ask a question to the LLM (via API)
     Ask {
         /// The question to ask
         question: String,
         /// Stream the response
         #[arg(short, long)]
         stream: bool,
+    },
+    /// Ask a question using a local model from HuggingFace
+    AskLocal {
+        /// The HuggingFace model ID (e.g., "LiquidAI/LFM2.5-1.2B-Instruct")
+        #[arg(short, long)]
+        model: String,
+        /// The question to ask
+        question: String,
     },
 }
 
@@ -188,6 +226,18 @@ async fn main() {
                         error!("Failed to get response: {}", e);
                     }
                 }
+            }
+        }
+        Commands::AskLocal { model, question } => {
+            info!("Using local model: {}", model);
+            if let Err(e) = ask_local_model(model, question).await {
+                error!("Failed to get response from local model: {}", e);
+                eprintln!("\nTroubleshooting:");
+                eprintln!(
+                    "- Check if the model architecture is supported: https://ericlbuehler.github.io/mistral.rs/supported_models.html"
+                );
+                eprintln!("- Try a tested model like: Qwen/Qwen2.5-0.5B-Instruct");
+                eprintln!("- Ensure you have internet connection for first-time model download");
             }
         }
     }
