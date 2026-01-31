@@ -47,19 +47,23 @@ DATABASE_URL=postgresql://localhost/mydb
 
 ## Usage
 
-### Ask a Question (Non-streaming)
+### Ask a Question
 
 ```bash
+# Basic question (required)
 cargo run -- ask "What is Rust?"
+
+# With additional context using -m
+cargo run -- ask "Explain Rust" -m "Focus on memory safety"
 ```
 
 This will send the question to the LLM and display the complete response once it's ready.
 
-### Ask a Question (Streaming)
+### Ask with Streaming
 
 ```bash
 cargo run -- ask --stream "Explain async/await in Rust"
-# or use the short flag
+# or use short flag
 cargo run -- ask -s "Explain async/await in Rust"
 ```
 
@@ -68,11 +72,14 @@ This will stream the response in real-time, displaying tokens as they are genera
 ### Ask About a File
 
 ```bash
-cargo run -- ask --file docs/sample.txt "What are the key features mentioned?"
-# or with streaming
-cargo run -- ask --file README.md -s "Summarize this document"
-# or use the short flag
-cargo run -- ask -f code.rs "Explain what this code does"
+# Basic file question
+cargo run -- ask -f docs/sample.txt "What are the key features mentioned?"
+
+# With streaming
+cargo run -- ask -f code.rs -s "Explain what this code does"
+
+# With additional context using -m
+cargo run -- ask -f src/main.rs "What does this do?" -m "Focus on error handling"
 ```
 
 This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
@@ -155,7 +162,7 @@ cargo run -- run <command>
    ```bash
    cargo run -- ask -s "Write a hello world program in Rust"
    # Or with a file
-   cargo run -- ask --file docs/sample.txt "What is this document about?"
+   cargo run -- ask -f docs/sample.txt "What is this document about?"
 ```
 
 ### Using with OpenAI

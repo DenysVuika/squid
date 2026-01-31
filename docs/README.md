@@ -47,17 +47,23 @@ New to squid? Start here:
 ### Basic Commands
 
 ```bash
-# Ask a question
+# Ask a question (required)
 squid ask "What is Rust?"
 
+# With additional context using -m
+squid ask "Explain Rust" -m "Focus on memory safety"
+
 # Ask with file context
-squid ask --file docs/sample.txt "What is this about?"
+squid ask -f docs/sample.txt "What is this about?"
 
 # Stream the response
 squid ask -s "Explain async/await"
 
 # File context + streaming
 squid ask -f src/main.rs -s "Explain this code"
+
+# File with additional context
+squid ask -f src/main.rs "Explain this" -m "Focus on error handling"
 
 # Review code
 squid review src/main.rs

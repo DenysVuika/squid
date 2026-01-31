@@ -205,6 +205,9 @@ enum Commands {
     Ask {
         /// The question to ask
         question: String,
+        /// Optional additional context or instructions
+        #[arg(short, long)]
+        message: Option<String>,
         /// Stream the response
         #[arg(short, long)]
         stream: bool,
@@ -250,10 +253,18 @@ async fn main() {
         }
         Commands::Ask {
             question,
+            message,
             stream,
             file,
         } => {
-            info!("Asking question: {}", question);
+            // Build the full question from question and optional message
+            let full_question = if let Some(m) = message {
+                format!("{} {}", question, m)
+            } else {
+                question.clone()
+            };
+
+            info!("Asking question: {}", full_question);
 
             // Read file content if provided
             let file_content = if let Some(file_path) = file {
@@ -272,11 +283,13 @@ async fn main() {
             };
 
             if *stream {
-                if let Err(e) = ask_llm_streaming(question, file_content.as_deref(), None).await {
+                if let Err(e) =
+                    ask_llm_streaming(&full_question, file_content.as_deref(), None).await
+                {
                     error!("Failed to get response: {}", e);
                 }
             } else {
-                match ask_llm(question, file_content.as_deref(), None).await {
+                match ask_llm(&full_question, file_content.as_deref(), None).await {
                     Ok(response) => {
                         println!("\n{}", response);
                     }
