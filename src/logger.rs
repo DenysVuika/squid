@@ -1,7 +1,7 @@
 use env_logger::{Builder, Env};
 use std::io::Write;
 
-pub fn init_logger() {
+pub fn init() {
     let env = Env::default()
         .filter_or("LOG_LEVEL", "info")
         .write_style_or("LOG_STYLE", "always");

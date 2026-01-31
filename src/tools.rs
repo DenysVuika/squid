@@ -1,13 +1,12 @@
-use async_openai::types::{ChatCompletionTool, ChatCompletionToolType, FunctionObjectArgs};
+use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
 use inquire::Confirm;
 use log::{error, info, warn};
 use serde_json::json;
 
 /// Get the list of available tools for the LLM
-pub fn get_tools() -> Vec<ChatCompletionTool> {
+pub fn get_tools() -> Vec<ChatCompletionTools> {
     vec![
-        ChatCompletionTool {
-            r#type: ChatCompletionToolType::Function,
+        ChatCompletionTools::Function(ChatCompletionTool {
             function: FunctionObjectArgs::default()
                 .name("read_file")
                 .description("Read the contents of a file from the filesystem")
@@ -23,9 +22,8 @@ pub fn get_tools() -> Vec<ChatCompletionTool> {
                 }))
                 .build()
                 .expect("Failed to build read_file function"),
-        },
-        ChatCompletionTool {
-            r#type: ChatCompletionToolType::Function,
+        }),
+        ChatCompletionTools::Function(ChatCompletionTool {
             function: FunctionObjectArgs::default()
                 .name("write_file")
                 .description("Write content to a file on the filesystem")
@@ -45,7 +43,7 @@ pub fn get_tools() -> Vec<ChatCompletionTool> {
                 }))
                 .build()
                 .expect("Failed to build write_file function"),
-        },
+        }),
     ]
 }
 

@@ -1,11 +1,11 @@
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{
-        ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessageArgs,
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs,
-        ChatCompletionToolType, CreateChatCompletionRequestArgs, FinishReason, FunctionCall,
+    types::chat::{
+        ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+        ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+        ChatCompletionRequestSystemMessage, ChatCompletionRequestToolMessage,
+        ChatCompletionRequestUserMessage, CreateChatCompletionRequestArgs, FinishReason,
     },
 };
 use clap::{Parser, Subcommand};
@@ -72,14 +72,16 @@ async fn ask_llm_streaming(
     let system_message = system_prompt.unwrap_or(ASK_PROMPT);
 
     let initial_messages = vec![
-        ChatCompletionRequestSystemMessageArgs::default()
-            .content(system_message)
-            .build()?
-            .into(),
-        ChatCompletionRequestUserMessageArgs::default()
-            .content(user_message)
-            .build()?
-            .into(),
+        ChatCompletionRequestSystemMessage {
+            content: system_message.to_string().into(),
+            ..Default::default()
+        }
+        .into(),
+        ChatCompletionRequestUserMessage {
+            content: user_message.into(),
+            ..Default::default()
+        }
+        .into(),
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
@@ -111,11 +113,7 @@ async fn ask_llm_streaming(
                     while tool_calls.len() <= index {
                         tool_calls.push(ChatCompletionMessageToolCall {
                             id: String::new(),
-                            r#type: ChatCompletionToolType::Function,
-                            function: FunctionCall {
-                                name: String::new(),
-                                arguments: String::new(),
-                            },
+                            function: Default::default(),
                         });
                     }
 
@@ -160,22 +158,27 @@ async fn ask_llm_streaming(
 
         let mut messages: Vec<ChatCompletionRequestMessage> = initial_messages;
 
-        let assistant_tool_calls: Vec<ChatCompletionMessageToolCall> = tool_calls.clone();
+        let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> =
+            tool_calls.iter().map(|tc| tc.clone().into()).collect();
 
         messages.push(
-            ChatCompletionRequestAssistantMessageArgs::default()
-                .tool_calls(assistant_tool_calls)
-                .build()?
-                .into(),
+            ChatCompletionRequestAssistantMessage {
+                content: None,
+                tool_calls: Some(assistant_tool_calls),
+                ..Default::default()
+            }
+            .into(),
         );
 
         for (tool_call_id, response) in tool_responses {
-            messages.push(ChatCompletionRequestMessage::Tool(
+            messages.push(
                 ChatCompletionRequestToolMessage {
                     content: response.to_string().into(),
                     tool_call_id,
-                },
-            ));
+                    ..Default::default()
+                }
+                .into(),
+            );
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
@@ -231,14 +234,16 @@ async fn ask_llm(
     let system_message = system_prompt.unwrap_or(ASK_PROMPT);
 
     let initial_messages = vec![
-        ChatCompletionRequestSystemMessageArgs::default()
-            .content(system_message)
-            .build()?
-            .into(),
-        ChatCompletionRequestUserMessageArgs::default()
-            .content(user_message)
-            .build()?
-            .into(),
+        ChatCompletionRequestSystemMessage {
+            content: system_message.to_string().into(),
+            ..Default::default()
+        }
+        .into(),
+        ChatCompletionRequestUserMessage {
+            content: user_message.into(),
+            ..Default::default()
+        }
+        .into(),
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
@@ -260,44 +265,53 @@ async fn ask_llm(
     if let Some(tool_calls) = response_message.tool_calls {
         let mut handles = Vec::new();
         for tool_call in &tool_calls {
-            let name = tool_call.function.name.clone();
-            let args = tool_call.function.arguments.clone();
-            let tool_call_clone = tool_call.clone();
+            if let ChatCompletionMessageToolCalls::Function(tc) = tool_call {
+                let name = tc.function.name.clone();
+                let args = tc.function.arguments.clone();
+                let tool_call_clone = tool_call.clone();
 
-            let handle = tokio::spawn(async move {
-                let result: serde_json::Value = tools::call_tool(&name, &args).await;
-                (tool_call_clone, result)
-            });
-            handles.push(handle);
+                let handle = tokio::spawn(async move {
+                    let result: serde_json::Value = tools::call_tool(&name, &args).await;
+                    (tool_call_clone, result)
+                });
+                handles.push(handle);
+            }
         }
 
         let mut function_responses = Vec::new();
         for handle in handles {
-            let (tool_call, response_content) = handle.await?;
+            let (tool_call, response_content): (ChatCompletionMessageToolCalls, serde_json::Value) =
+                handle.await?;
             function_responses.push((tool_call, response_content));
         }
 
         let mut messages: Vec<ChatCompletionRequestMessage> = initial_messages;
 
-        let assistant_tool_calls: Vec<ChatCompletionMessageToolCall> = function_responses
+        let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = function_responses
             .iter()
             .map(|(tool_call, _)| tool_call.clone())
             .collect();
 
         messages.push(
-            ChatCompletionRequestAssistantMessageArgs::default()
-                .tool_calls(assistant_tool_calls)
-                .build()?
-                .into(),
+            ChatCompletionRequestAssistantMessage {
+                content: None,
+                tool_calls: Some(assistant_tool_calls),
+                ..Default::default()
+            }
+            .into(),
         );
 
         for (tool_call, response_content) in function_responses {
-            messages.push(ChatCompletionRequestMessage::Tool(
-                ChatCompletionRequestToolMessage {
-                    content: response_content.to_string().into(),
-                    tool_call_id: tool_call.id.clone(),
-                },
-            ));
+            if let ChatCompletionMessageToolCalls::Function(tc) = &tool_call {
+                messages.push(
+                    ChatCompletionRequestToolMessage {
+                        content: response_content.to_string().into(),
+                        tool_call_id: tc.id.clone(),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
         }
 
         let subsequent_request = CreateChatCompletionRequestArgs::default()
@@ -368,7 +382,7 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    logger::init_logger();
+    logger::init();
 
     let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "not-set".to_string());
     debug!("Database URL: {}", db_url);
