@@ -8,13 +8,13 @@ The file context feature allows users to provide a file to the `squid` CLI, whic
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    User Executes Command                     │
+│                    User Executes Command                    │
 │  squid ask --file document.txt "What is this about?"        │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  CLI Argument Parsing                        │
+│                  CLI Argument Parsing                       │
 │  - question: "What is this about?"                          │
 │  - file: Some("document.txt")                               │
 │  - stream: false                                            │
@@ -22,32 +22,32 @@ The file context feature allows users to provide a file to the `squid` CLI, whic
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    File Reading                              │
+│                    File Reading                             │
 │  std::fs::read_to_string("document.txt")                    │
 │  Returns: Ok(String) or Err                                 │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 Prompt Construction                          │
-│                                                              │
+│                 Prompt Construction                         │
+│                                                             │
 │  if file_content.is_some():                                 │
 │    "Here is the content of the file:                        │
-│                                                              │
-│     ```                                                      │
+│                                                             │
+│     ```                                                     │
 │     [FILE CONTENT HERE]                                     │
-│     ```                                                      │
-│                                                              │
+│     ```                                                     │
+│                                                             │
 │     Question: [USER QUESTION]"                              │
-│                                                              │
-│  else:                                                       │
+│                                                             │
+│  else:                                                      │
 │    "[USER QUESTION]"                                        │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  LLM Request Creation                        │
-│  Messages:                                                   │
+│                  LLM Request Creation                       │
+│  Messages:                                                  │
 │  1. System: "You are a helpful assistant..."                │
 │  2. User: [Constructed prompt with file content]            │
 └──────────────────────┬──────────────────────────────────────┘
@@ -60,7 +60,7 @@ The file context feature allows users to provide a file to the `squid` CLI, whic
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Response Processing                         │
+│                  Response Processing                        │
 │  - Streaming: Display tokens as received                    │
 │  - Non-streaming: Display complete response                 │
 └─────────────────────────────────────────────────────────────┘

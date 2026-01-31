@@ -2,6 +2,7 @@
 
 # Test script for code review examples
 # This script runs the review command on all example files to verify functionality
+# Run this from the squid project root directory: ./tests/test-reviews.sh
 
 set -e  # Exit on error
 
