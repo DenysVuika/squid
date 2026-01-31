@@ -105,7 +105,6 @@ See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and exa
 - **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
 - **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
-- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete feature overview
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](examples/README.md)** - Test files for code review prompts

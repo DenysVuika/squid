@@ -31,29 +31,12 @@ New to squid? Start here:
   - Best practices
   - File type support
 
-### Technical Documentation
-
 - **[FILE_CONTEXT.md](FILE_CONTEXT.md)** - File context feature architecture
   - How it works
-  - Code architecture
-  - Data flow diagrams
-  - Performance considerations
-  - Security considerations
-  - Future enhancements
-
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Implementation details
-  - What was implemented
-  - Code changes
   - Technical details
-  - Testing information
-  - Deployment guide
-
-### Project Information
+  - Best practices
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
-  - Feature additions
-  - Changes and improvements
-  - Technical details
 
 ## Resources
 
@@ -133,16 +116,12 @@ API_KEY=sk-your-key-here
 1. Check the [Quick Start Guide](QUICKSTART.md)
 2. Browse the [Examples](EXAMPLES.md)
 3. Read the [Code Review Guide](REVIEW_GUIDE.md) for code reviews
-4. Review the [Technical Documentation](FILE_CONTEXT.md)
-5. Try the [example files](../examples/README.md) for testing
-6. Enable debug logging: `RUST_LOG=debug squid ask ...`
+4. Try the [example files](../examples/README.md) for testing
+5. Enable debug logging: `RUST_LOG=debug squid ask ...`
 
 ## Contributing
 
-Found an issue or have a suggestion? The documentation is organized to be:
-- **User-focused**: Start with QUICKSTART.md and EXAMPLES.md
-- **Developer-focused**: Dive into FILE_CONTEXT.md and IMPLEMENTATION_SUMMARY.md
-- **Maintainable**: Check CHANGELOG.md for version history
+Found an issue or have a suggestion? Check the documentation in this directory.
 
 ---
 
