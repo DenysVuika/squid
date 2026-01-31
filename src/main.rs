@@ -4,21 +4,19 @@ use async_openai::{
     types::{
         ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessageArgs,
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs, ChatCompletionTool,
+        ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessageArgs,
         ChatCompletionToolType, CreateChatCompletionRequestArgs, FinishReason, FunctionCall,
-        FunctionObjectArgs,
     },
 };
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
-use inquire::Confirm;
-use log::{debug, error, info, warn};
-use serde_json::json;
+use log::{debug, error, info};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 mod logger;
+mod tools;
 
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
@@ -39,145 +37,6 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
         }
     } else {
         CODE_REVIEW_PROMPT
-    }
-}
-
-fn get_tools() -> Vec<ChatCompletionTool> {
-    vec![
-        ChatCompletionTool {
-            r#type: ChatCompletionToolType::Function,
-            function: FunctionObjectArgs::default()
-                .name("read_file")
-                .description("Read the contents of a file from the filesystem")
-                .parameters(json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "The path to the file to read"
-                        }
-                    },
-                    "required": ["path"]
-                }))
-                .build()
-                .unwrap(),
-        },
-        ChatCompletionTool {
-            r#type: ChatCompletionToolType::Function,
-            function: FunctionObjectArgs::default()
-                .name("write_file")
-                .description("Write content to a file on the filesystem")
-                .parameters(json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "The path to the file to write"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "The content to write to the file"
-                        }
-                    },
-                    "required": ["path", "content"]
-                }))
-                .build()
-                .unwrap(),
-        },
-    ]
-}
-
-async fn call_tool(name: &str, args: &str) -> serde_json::Value {
-    info!("Tool call: {} with args: {}", name, args);
-
-    // Parse arguments first to display them to the user
-    let args: serde_json::Value = match args.parse() {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Failed to parse tool arguments: {}", e);
-            return json!({"error": format!("Invalid arguments: {}", e)});
-        }
-    };
-
-    // Ask for user approval
-    let approval_message = match name {
-        "read_file" => {
-            let path = args["path"].as_str().unwrap_or("unknown");
-            format!("Allow reading file: {}?", path)
-        }
-        "write_file" => {
-            let path = args["path"].as_str().unwrap_or("unknown");
-            let content = args["content"].as_str().unwrap_or("");
-            let preview = if content.len() > 100 {
-                format!("{}... ({} bytes total)", &content[..100], content.len())
-            } else {
-                content.to_string()
-            };
-            format!(
-                "Allow writing to file: {}?\nContent preview:\n{}",
-                path, preview
-            )
-        }
-        _ => format!("Allow executing tool: {}?", name),
-    };
-
-    let approved = Confirm::new(&approval_message)
-        .with_default(false)
-        .with_help_message("Press Y to allow, N to skip")
-        .prompt();
-
-    match approved {
-        Ok(true) => {
-            // User approved, proceed with tool execution
-            match name {
-                "read_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
-                    match std::fs::read_to_string(path) {
-                        Ok(content) => {
-                            info!("Successfully read file: {} ({} bytes)", path, content.len());
-                            json!({"content": content})
-                        }
-                        Err(e) => {
-                            warn!("Failed to read file {}: {}", path, e);
-                            json!({"error": format!("Failed to read file: {}", e)})
-                        }
-                    }
-                }
-                "write_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
-                    let content = args["content"].as_str().unwrap_or("");
-
-                    match std::fs::write(path, content) {
-                        Ok(_) => {
-                            info!(
-                                "Successfully wrote file: {} ({} bytes)",
-                                path,
-                                content.len()
-                            );
-                            json!({"success": true, "message": format!("File written successfully: {}", path)})
-                        }
-                        Err(e) => {
-                            warn!("Failed to write file {}: {}", path, e);
-                            json!({"error": format!("Failed to write file: {}", e)})
-                        }
-                    }
-                }
-                _ => {
-                    warn!("Unknown tool called: {}", name);
-                    json!({"error": format!("Unknown tool: {}", name)})
-                }
-            }
-        }
-        Ok(false) => {
-            // User declined
-            info!("Tool execution skipped by user: {}", name);
-            json!({"error": "Tool execution declined by user", "skipped": true})
-        }
-        Err(e) => {
-            // Error in prompt (e.g., non-interactive terminal)
-            error!("Failed to get user approval: {}", e);
-            json!({"error": format!("Failed to get user approval: {}", e)})
-        }
     }
 }
 
@@ -227,7 +86,7 @@ async fn ask_llm_streaming(
     let request = CreateChatCompletionRequestArgs::default()
         .model(&api_model)
         .messages(initial_messages.clone())
-        .tools(get_tools())
+        .tools(tools::get_tools())
         .build()?;
 
     debug!("Sending streaming request...");
@@ -283,7 +142,7 @@ async fn ask_llm_streaming(
                     let tool_call_id = tool_call.id.clone();
 
                     let handle = tokio::spawn(async move {
-                        let result: serde_json::Value = call_tool(&name, &args).await;
+                        let result: serde_json::Value = tools::call_tool(&name, &args).await;
                         (tool_call_id, result)
                     });
                     execution_handles.push(handle);
@@ -388,7 +247,7 @@ async fn ask_llm(
     let request = CreateChatCompletionRequestArgs::default()
         .model(&api_model)
         .messages(initial_messages.clone())
-        .tools(get_tools())
+        .tools(tools::get_tools())
         .build()?;
 
     debug!("Sending request...");
@@ -409,7 +268,7 @@ async fn ask_llm(
             let tool_call_clone = tool_call.clone();
 
             let handle = tokio::spawn(async move {
-                let result: serde_json::Value = call_tool(&name, &args).await;
+                let result: serde_json::Value = tools::call_tool(&name, &args).await;
                 (tool_call_clone, result)
             });
             handles.push(handle);
