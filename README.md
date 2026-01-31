@@ -104,15 +104,6 @@ cargo run -- run <command>
    cargo run -- ask "Explain the benefits of Rust"
    ```
 
-## Dependencies
-
-- `async-openai`: OpenAI API client
-- `clap`: Command-line argument parsing
-- `tokio`: Async runtime
-- `futures`: Stream handling
-- `dotenvy`: Environment variable management
-- `log` & `env_logger`: Logging
-
 ## License
 
 Apache-2.0 License. See `LICENSE` file for details.
