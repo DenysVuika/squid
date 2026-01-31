@@ -1,10 +1,11 @@
-# squid
+# squid 🦑
 
 A CLI application for interacting with LLM APIs (OpenAI-compatible) with support for streaming responses.
 
 ## Features
 
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
+- 📄 Provide file context for AI analysis
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
@@ -63,6 +64,27 @@ cargo run -- ask -s "Explain async/await in Rust"
 
 This will stream the response in real-time, displaying tokens as they are generated.
 
+### Ask About a File
+
+```bash
+cargo run -- ask --file docs/sample.txt "What are the key features mentioned?"
+# or with streaming
+cargo run -- ask --file README.md -s "Summarize this document"
+# or use the short flag
+cargo run -- ask -f code.rs "Explain what this code does"
+```
+
+This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
+
+## Documentation
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
+- **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
+- **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete feature overview
+- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+- **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
+
 ### Other Commands
 
 ```bash
@@ -88,7 +110,9 @@ cargo run -- run <command>
 4. Run:
    ```bash
    cargo run -- ask -s "Write a hello world program in Rust"
-   ```
+   # Or with a file
+   cargo run -- ask --file docs/sample.txt "What is this document about?"
+```
 
 ### Using with OpenAI
 
@@ -102,6 +126,8 @@ cargo run -- run <command>
 3. Run:
    ```bash
    cargo run -- ask "Explain the benefits of Rust"
+   # Or analyze a file
+   cargo run -- ask -f mycode.rs "Review this code for potential improvements"
    ```
 
 ## License
