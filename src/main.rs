@@ -11,7 +11,7 @@ use dotenvy::dotenv;
 use futures::StreamExt;
 use log::{debug, error, info};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 mod logger;
 
@@ -21,7 +21,7 @@ const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typesc
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
 
-fn get_review_prompt_for_file(file_path: &PathBuf) -> &'static str {
+fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
     if let Some(extension) = file_path.extension() {
         match extension.to_str() {
             Some("rs") => CODE_REVIEW_RUST_PROMPT,
