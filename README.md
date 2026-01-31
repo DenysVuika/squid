@@ -6,6 +6,7 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
+- 🔍 AI-powered code reviews with language-specific prompts
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
@@ -76,14 +77,58 @@ cargo run -- ask -f code.rs "Explain what this code does"
 
 This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
 
+### Review Code
+
+```bash
+# Review a file with language-specific prompts
+cargo run -- review src/main.rs
+
+# Stream the review in real-time
+cargo run -- review app.ts --stream
+
+# Focus on specific aspects
+cargo run -- review styles.css -m "Focus on performance issues"
+```
+
+The review command automatically selects the appropriate review prompt based on file type:
+- **Rust** (`.rs`) - Ownership, safety, idioms, error handling
+- **TypeScript/JavaScript** (`.ts`, `.js`, `.tsx`, `.jsx`) - Type safety, modern features, security
+- **HTML** (`.html`, `.htm`) - Semantics, accessibility, SEO
+- **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
+- **Other files** - Generic code quality and best practices
+
+See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and examples.
+
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
+- **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
 - **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
 - **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete feature overview
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
+- **[Example Files](examples/README.md)** - Test files for code review prompts
+
+### Testing Code Reviews
+
+Try the code review feature with the provided example files:
+
+```bash
+# Test Rust review
+cargo run -- review examples/example.rs
+
+# Test TypeScript with streaming
+cargo run -- review examples/example.ts --stream
+
+# Test HTML accessibility
+cargo run -- review examples/example.html -m "Focus on accessibility"
+
+# Run all tests
+./examples/test-reviews.sh
+```
+
+See **[examples/README.md](examples/README.md)** for details on each example file.
 
 ### Other Commands
 

@@ -1,0 +1,222 @@
+/* Example CSS code with intentional issues for code review testing */
+
+/* Issue: Using universal selector (performance impact) */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Issue: Overly specific selectors */
+body div.container div.content ul li a.link {
+    color: blue;
+    text-decoration: none;
+}
+
+/* Issue: Magic numbers without explanation */
+.header {
+    height: 73px;
+    padding: 17px 23px;
+    margin-bottom: 42px;
+}
+
+/* Issue: Not using CSS variables for repeated values */
+.button-primary {
+    background-color: #3498db;
+    border: 2px solid #3498db;
+}
+
+.button-secondary {
+    background-color: #2ecc71;
+    border: 2px solid #2ecc71;
+}
+
+.link-primary {
+    color: #3498db;
+}
+
+/* Issue: Using fixed pixel units instead of responsive units */
+.container {
+    width: 1200px;
+    font-size: 16px;
+    padding: 20px;
+}
+
+/* Issue: Not mobile-first, desktop-first approach */
+.sidebar {
+    width: 300px;
+    float: left;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        float: none;
+    }
+}
+
+/* Issue: Using float for layout instead of flexbox/grid */
+.column {
+    float: left;
+    width: 33.33%;
+}
+
+.clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Issue: Excessive nesting */
+.navigation {
+    background: #333;
+}
+
+.navigation ul {
+    list-style: none;
+}
+
+.navigation ul li {
+    display: inline-block;
+}
+
+.navigation ul li a {
+    color: white;
+    padding: 10px;
+}
+
+.navigation ul li a:hover {
+    background: #555;
+}
+
+.navigation ul li a:hover span {
+    text-decoration: underline;
+}
+
+/* Issue: Using !important (should be avoided) */
+.text-red {
+    color: red !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Issue: Animating expensive properties */
+.animated-box {
+    transition: width 0.3s, height 0.3s, margin 0.3s;
+}
+
+.animated-box:hover {
+    width: 250px;
+    height: 250px;
+    margin-left: 20px;
+}
+
+/* Issue: No focus styles for accessibility */
+button {
+    border: none;
+    outline: none;
+}
+
+/* Issue: Inline vendor prefixes instead of autoprefixer */
+.rounded {
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+/* Issue: Hardcoded z-index values without system */
+.modal {
+    z-index: 9999;
+}
+
+.dropdown {
+    z-index: 999;
+}
+
+.tooltip {
+    z-index: 99999;
+}
+
+/* Issue: No fallback for modern CSS features */
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* Issue: Poor color contrast (accessibility issue) */
+.light-text {
+    color: #d0d0d0;
+    background-color: white;
+}
+
+/* Issue: Not respecting user preferences */
+.animated-element {
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Issue: Duplicated code */
+.card-1 {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-2 {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Issue: Using absolute positioning without considering layout flow */
+.notification {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+}
+
+/* Issue: Font sizes not using rem/em */
+h1 { font-size: 32px; }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+p { font-size: 14px; }
+
+/* Issue: No consistent naming convention */
+.btn-submit { }
+.buttonCancel { }
+.BUTTON_DELETE { }
+.button-primary { }
+
+/* Issue: Overly broad selectors that could affect other elements */
+div {
+    box-sizing: border-box;
+}
+
+a {
+    color: inherit;
+}
+
+/* Issue: Inline media query without organizing breakpoints */
+.hero {
+    height: 500px;
+}
+
+@media (max-width: 600px) {
+    .hero { height: 300px; }
+}
+
+.card {
+    width: 300px;
+}
+
+@media (max-width: 600px) {
+    .card { width: 100%; }
+}
