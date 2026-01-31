@@ -16,10 +16,31 @@ use std::path::PathBuf;
 mod logger;
 
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
+const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
+const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
+const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
+const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+
+fn get_review_prompt_for_file(file_path: &PathBuf) -> &'static str {
+    if let Some(extension) = file_path.extension() {
+        match extension.to_str() {
+            Some("rs") => CODE_REVIEW_RUST_PROMPT,
+            Some("ts") | Some("tsx") | Some("js") | Some("jsx") | Some("mjs") | Some("cjs") => {
+                CODE_REVIEW_TYPESCRIPT_PROMPT
+            }
+            Some("html") | Some("htm") => CODE_REVIEW_HTML_PROMPT,
+            Some("css") | Some("scss") | Some("sass") | Some("less") => CODE_REVIEW_CSS_PROMPT,
+            _ => CODE_REVIEW_PROMPT,
+        }
+    } else {
+        CODE_REVIEW_PROMPT
+    }
+}
 
 async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
+    system_prompt: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration from environment variables
     let api_url =
@@ -47,12 +68,17 @@ async fn ask_llm_streaming(
         question.to_string()
     };
 
+    // Use custom system prompt or default
+    let system_message = system_prompt.unwrap_or(
+        "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
+    );
+
     // Create the chat completion request
     let request = CreateChatCompletionRequestArgs::default()
         .model(api_model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content.")
+                .content(system_message)
                 .build()?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
@@ -95,6 +121,7 @@ async fn ask_llm_streaming(
 async fn ask_llm(
     question: &str,
     file_content: Option<&str>,
+    system_prompt: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Load configuration from environment variables
     let api_url =
@@ -122,12 +149,17 @@ async fn ask_llm(
         question.to_string()
     };
 
+    // Use custom system prompt or default
+    let system_message = system_prompt.unwrap_or(
+        "You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content."
+    );
+
     // Create the chat completion request
     let request = CreateChatCompletionRequestArgs::default()
         .model(api_model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant. When provided with file content, analyze it carefully and answer questions based on that content.")
+                .content(system_message)
                 .build()?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
@@ -180,6 +212,17 @@ enum Commands {
         #[arg(short, long)]
         file: Option<PathBuf>,
     },
+    /// Review code from a file
+    Review {
+        /// Path to the file to review
+        file: PathBuf,
+        /// Optional additional message or specific question about the code
+        #[arg(short, long)]
+        message: Option<String>,
+        /// Stream the response
+        #[arg(short, long)]
+        stream: bool,
+    },
 }
 
 #[tokio::main]
@@ -229,16 +272,63 @@ async fn main() {
             };
 
             if *stream {
-                if let Err(e) = ask_llm_streaming(question, file_content.as_deref()).await {
+                if let Err(e) = ask_llm_streaming(question, file_content.as_deref(), None).await {
                     error!("Failed to get response: {}", e);
                 }
             } else {
-                match ask_llm(question, file_content.as_deref()).await {
+                match ask_llm(question, file_content.as_deref(), None).await {
                     Ok(response) => {
                         println!("\n{}", response);
                     }
                     Err(e) => {
                         error!("Failed to get response: {}", e);
+                    }
+                }
+            }
+        }
+        Commands::Review {
+            file,
+            message,
+            stream,
+        } => {
+            info!("Reviewing file: {:?}", file);
+
+            // Read file content
+            let file_content = match std::fs::read_to_string(file) {
+                Ok(content) => {
+                    info!("Read file content ({} bytes)", content.len());
+                    content
+                }
+                Err(e) => {
+                    error!("Failed to read file: {}", e);
+                    return;
+                }
+            };
+
+            // Get the appropriate review prompt based on file type
+            let review_prompt = get_review_prompt_for_file(file);
+            debug!("Using review prompt for file type");
+
+            // Build the review question
+            let question = if let Some(msg) = message {
+                format!("Please review this code. {}", msg)
+            } else {
+                "Please review this code.".to_string()
+            };
+
+            if *stream {
+                if let Err(e) =
+                    ask_llm_streaming(&question, Some(&file_content), Some(review_prompt)).await
+                {
+                    error!("Failed to get review: {}", e);
+                }
+            } else {
+                match ask_llm(&question, Some(&file_content), Some(review_prompt)).await {
+                    Ok(response) => {
+                        println!("\n{}", response);
+                    }
+                    Err(e) => {
+                        error!("Failed to get review: {}", e);
                     }
                 }
             }
