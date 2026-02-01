@@ -10,7 +10,7 @@ squid/
 │   ├── README.md       # This file
 │   ├── test-security.sh    # Security approval tests
 │   └── test-reviews.sh     # Code review tests
-├── examples/           # Example files with intentional issues
+├── sample-files/       # Example files with intentional issues
 │   ├── example.rs      # Rust example
 │   ├── example.ts      # TypeScript example
 │   ├── example.js      # JavaScript example
@@ -96,7 +96,7 @@ Both scripts run all their tests by default. For custom testing, you can run ind
 
 ```bash
 # Test a specific review
-cargo run -- review examples/example.rs
+cargo run -- review sample-files/example.rs
 
 # Test a specific security scenario
 cargo run -- ask "Read README.md and summarize it"
@@ -104,15 +104,15 @@ cargo run -- ask "Read README.md and summarize it"
 
 ## Test Files
 
-The test scripts use files from the `examples/` directory:
-- `examples/example.rs` - Rust code with intentional issues
-- `examples/example.ts` - TypeScript code with issues
-- `examples/example.js` - JavaScript code with issues
-- `examples/example.html` - HTML with accessibility issues
-- `examples/example.css` - CSS with performance issues
-- `examples/example.py` - Python code (generic review)
+The test scripts use files from the `sample-files/` directory:
+- `sample-files/example.rs` - Rust code with intentional issues
+- `sample-files/example.ts` - TypeScript code with issues
+- `sample-files/example.js` - JavaScript code with issues
+- `sample-files/example.html` - HTML with accessibility issues
+- `sample-files/example.css` - CSS with performance issues
+- `sample-files/example.py` - Python code (generic review)
 
-See `examples/README.md` for details about each example file.
+See `sample-files/README.md` for details about each example file.
 
 ## Troubleshooting
 
@@ -134,7 +134,7 @@ cd tests
 1. Check that you've built the project: `cargo build --release`
 2. Verify your `.env` configuration
 3. Ensure LM Studio is running (if using local model)
-4. Check that example files exist in `examples/` directory
+4. Check that example files exist in `sample-files/` directory
 
 ### Security Test Hangs
 

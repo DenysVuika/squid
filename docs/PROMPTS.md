@@ -163,7 +163,7 @@ vim src/assets/review-rust.md
 cargo build --release
 
 # Test
-./target/release/squid review examples/example.rs
+./target/release/squid review sample-files/example.rs
 ```
 
 ## Prompt Best Practices

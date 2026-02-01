@@ -92,7 +92,7 @@ cargo run -- review components/App.tsx --stream
 
 ```bash
 cargo run -- ask -f large_file.txt -s "Provide a detailed analysis"
-cargo run -- review examples/example.rs -s
+cargo run -- review sample-files/example.rs -s
 ```
 
 ## 6. Command Syntax
@@ -207,7 +207,7 @@ cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 
 - Check `REVIEW_GUIDE.md` for detailed code review documentation
 - Read `EXAMPLES.md` for more advanced usage patterns
-- Try example files in `../examples/` directory
+- Try example files in `../sample-files/` directory
 - See `README.md` for full documentation
 
 ## 10. Quick Reference

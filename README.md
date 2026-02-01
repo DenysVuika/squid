@@ -145,7 +145,7 @@ cargo run -- ask -s "Read Cargo.toml and list all dependencies"
 - **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
-- **[Example Files](examples/README.md)** - Test files for code review prompts
+- **[Example Files](sample-files/README.md)** - Test files for code review prompts
 
 ### Testing
 
@@ -159,12 +159,12 @@ Try the code review and security features with the provided test scripts:
 ./tests/test-security.sh
 
 # Or test individual examples
-cargo run -- review examples/example.rs
-cargo run -- review examples/example.ts --stream
-cargo run -- review examples/example.html -m "Focus on accessibility"
+cargo run -- review sample-files/example.rs
+cargo run -- review sample-files/example.ts --stream
+cargo run -- review sample-files/example.html -m "Focus on accessibility"
 ```
 
-See **[tests/README.md](tests/README.md)** for complete testing documentation and **[examples/README.md](examples/README.md)** for details on each example file.
+See **[tests/README.md](tests/README.md)** for complete testing documentation and **[sample-files/README.md](sample-files/README.md)** for details on each example file.
 
 ### Other Commands
 

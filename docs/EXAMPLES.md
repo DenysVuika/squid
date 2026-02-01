@@ -121,7 +121,7 @@ squid ask -f .env "Explain what each configuration option does"
 ### 4. Learning from Examples
 
 ```bash
-squid ask -f examples/tutorial.rs "What concepts does this example teach?"
+squid ask -f sample-files/tutorial.rs "What concepts does this example teach?"
 ```
 
 ### 5. Quick File Summary

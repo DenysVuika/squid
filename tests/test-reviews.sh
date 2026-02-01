@@ -49,8 +49,8 @@ if [ ! -f "Cargo.toml" ]; then
 fi
 
 # Check if example files exist
-if [ ! -d "examples" ]; then
-    echo -e "${RED}Error: examples directory not found${NC}"
+if [ ! -d "sample-files" ]; then
+    echo -e "${RED}Error: sample-files directory not found${NC}"
     exit 1
 fi
 
@@ -58,28 +58,28 @@ echo "Starting tests..."
 echo ""
 
 # Test Rust example
-run_test "examples/example.rs" "Review Rust file (basic)"
-run_test "examples/example.rs" "Review Rust file (with message)" "-m 'Focus on error handling'"
+run_test "sample-files/example.rs" "Review Rust file (basic)"
+run_test "sample-files/example.rs" "Review Rust file (with message)" "-m 'Focus on error handling'"
 
 # Test TypeScript example
-run_test "examples/example.ts" "Review TypeScript file (basic)"
-run_test "examples/example.ts" "Review TypeScript file (security focus)" "-m 'Check for security issues'"
+run_test "sample-files/example.ts" "Review TypeScript file (basic)"
+run_test "sample-files/example.ts" "Review TypeScript file (security focus)" "-m 'Check for security issues'"
 
 # Test JavaScript example
-run_test "examples/example.js" "Review JavaScript file (basic)"
-run_test "examples/example.js" "Review JavaScript file (performance focus)" "-m 'Focus on performance'"
+run_test "sample-files/example.js" "Review JavaScript file (basic)"
+run_test "sample-files/example.js" "Review JavaScript file (performance focus)" "-m 'Focus on performance'"
 
 # Test HTML example
-run_test "examples/example.html" "Review HTML file (basic)"
-run_test "examples/example.html" "Review HTML file (accessibility focus)" "-m 'Focus on accessibility'"
+run_test "sample-files/example.html" "Review HTML file (basic)"
+run_test "sample-files/example.html" "Review HTML file (accessibility focus)" "-m 'Focus on accessibility'"
 
 # Test CSS example
-run_test "examples/example.css" "Review CSS file (basic)"
-run_test "examples/example.css" "Review CSS file (performance focus)" "-m 'Check for performance issues'"
+run_test "sample-files/example.css" "Review CSS file (basic)"
+run_test "sample-files/example.css" "Review CSS file (performance focus)" "-m 'Check for performance issues'"
 
 # Test Python example (uses generic prompt)
-run_test "examples/example.py" "Review Python file (generic prompt)"
-run_test "examples/example.py" "Review Python file (with message)" "-m 'Focus on best practices'"
+run_test "sample-files/example.py" "Review Python file (generic prompt)"
+run_test "sample-files/example.py" "Review Python file (with message)" "-m 'Focus on best practices'"
 
 # Summary
 echo "===================================="

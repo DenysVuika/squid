@@ -122,7 +122,7 @@ API_KEY=sk-your-key-here
 1. Check the [Quick Start Guide](QUICKSTART.md)
 2. Browse the [Examples](EXAMPLES.md)
 3. Read the [Code Review Guide](REVIEW_GUIDE.md) for code reviews
-4. Try the [example files](../examples/README.md) for testing
+4. Try the [example files](../sample-files/README.md) for testing
 5. Enable debug logging: `RUST_LOG=debug squid ask ...`
 
 ## Contributing

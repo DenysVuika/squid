@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Generic fallback prompt for other file types
   - Optional `-m, --message` flag for focused reviews or specific questions
   - Streaming support with `-s, --stream` flag
-  - Example files in `examples/` directory for testing
+  - Example files in `sample-files/` directory for testing
   - Test script: `tests/test-reviews.sh`
 
 - **Enhanced `ask` Command**:

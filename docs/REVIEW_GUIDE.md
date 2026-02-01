@@ -173,23 +173,23 @@ squid review app.ts -m "Assess testability"
 
 ## Testing the Review Command
 
-Try the example files in the `examples/` directory:
+Try the example files in the `sample-files/` directory:
 
 ```bash
 # Test Rust review
-cargo run -- review examples/example.rs
+cargo run -- review sample-files/example.rs
 
 # Test TypeScript review
-cargo run -- review examples/example.ts
+cargo run -- review sample-files/example.ts
 
 # Test HTML review with accessibility focus
-cargo run -- review examples/example.html -m "Focus on accessibility"
+cargo run -- review sample-files/example.html -m "Focus on accessibility"
 
 # Test CSS review with streaming
-cargo run -- review examples/example.css --stream
+cargo run -- review sample-files/example.css --stream
 ```
 
-See `examples/README.md` for detailed information about each example file.
+See `sample-files/README.md` for detailed information about each example file.
 
 ## Configuration
 
@@ -270,7 +270,7 @@ To add support for a new file type:
 1. Create a new prompt file in `src/assets/review-{language}.md`
 2. Add the constant in `main.rs`: `const CODE_REVIEW_{LANG}_PROMPT: &str = include_str!(...)`
 3. Update `get_review_prompt_for_file()` to handle the new extension
-4. Add example file(s) in `examples/`
+4. Add example file(s) in `sample-files/`
 5. Update documentation
 
 See the existing prompts for structure and style guidelines.

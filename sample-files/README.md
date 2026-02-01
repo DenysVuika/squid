@@ -25,9 +25,9 @@ Tests the Rust-specific review prompt with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.rs
-cargo run -- review examples/example.rs --stream
-cargo run -- review examples/example.rs -m "Focus on error handling and panics"
+cargo run -- review sample-files/example.rs
+cargo run -- review sample-files/example.rs --stream
+cargo run -- review sample-files/example.rs -m "Focus on error handling and panics"
 ```
 
 ### TypeScript (`example.ts`)
@@ -43,8 +43,8 @@ Tests the TypeScript/JavaScript review prompt with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.ts
-cargo run -- review examples/example.ts -m "Check for security issues"
+cargo run -- review sample-files/example.ts
+cargo run -- review sample-files/example.ts -m "Check for security issues"
 ```
 
 ### JavaScript (`example.js`)
@@ -60,8 +60,8 @@ Tests the JavaScript-specific review with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.js
-cargo run -- review examples/example.js --stream
+cargo run -- review sample-files/example.js
+cargo run -- review sample-files/example.js --stream
 ```
 
 ### HTML (`example.html`)
@@ -76,8 +76,8 @@ Tests the HTML review prompt with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.html
-cargo run -- review examples/example.html -m "Focus on accessibility"
+cargo run -- review sample-files/example.html
+cargo run -- review sample-files/example.html -m "Focus on accessibility"
 ```
 
 ### CSS (`example.css`)
@@ -94,8 +94,8 @@ Tests the CSS review prompt with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.css
-cargo run -- review examples/example.css -m "Check for performance issues"
+cargo run -- review sample-files/example.css
+cargo run -- review sample-files/example.css -m "Check for performance issues"
 ```
 
 ### Python (`example.py`)
@@ -111,8 +111,8 @@ Tests the generic code review prompt with issues like:
 
 **Test command:**
 ```bash
-cargo run -- review examples/example.py
-cargo run -- review examples/example.py --stream
+cargo run -- review sample-files/example.py
+cargo run -- review sample-files/example.py --stream
 ```
 
 ## Automated Testing
@@ -136,19 +136,19 @@ This will test all example files and show pass/fail results. See **[tests/README
 
 ```bash
 # Basic review
-cargo run -- review examples/example.rs
+cargo run -- review sample-files/example.rs
 
 # Streaming review
-cargo run -- review examples/example.ts --stream
+cargo run -- review sample-files/example.ts --stream
 
 # Review with specific focus
-cargo run -- review examples/example.js -m "Focus on security vulnerabilities"
+cargo run -- review sample-files/example.js -m "Focus on security vulnerabilities"
 
 # Review with specific question
-cargo run -- review examples/example.html -m "Are there any accessibility issues?"
+cargo run -- review sample-files/example.html -m "Are there any accessibility issues?"
 
 # Performance-focused review
-cargo run -- review examples/example.css -m "What can I do to improve performance?"
+cargo run -- review sample-files/example.css -m "What can I do to improve performance?"
 ```
 
 ## Contributing
