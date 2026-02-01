@@ -108,6 +108,7 @@ async fn ask_llm_streaming(
 
         // Log token usage statistics from streaming response (only present in final chunk)
         if let Some(usage) = &response.usage {
+            writeln!(lock)?; // Add newline before logging token stats
             info!(
                 "Token usage - Prompt: {}, Completion: {}, Total: {}",
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
@@ -216,6 +217,7 @@ async fn ask_llm_streaming(
 
             // Log token usage statistics from follow-up streaming response (only present in final chunk)
             if let Some(usage) = &response.usage {
+                writeln!(lock)?; // Add newline before logging token stats
                 info!(
                     "Follow-up token usage - Prompt: {}, Completion: {}, Total: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
@@ -478,7 +480,7 @@ async fn main() {
                 question.clone()
             };
 
-            info!("Asking question: {}", full_question);
+            info!("Q: {}", full_question);
 
             let file_content = if let Some(file_path) = file {
                 match std::fs::read_to_string(file_path) {
