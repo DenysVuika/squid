@@ -5,7 +5,8 @@ use async_openai::{
         ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
         ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
         ChatCompletionRequestSystemMessage, ChatCompletionRequestToolMessage,
-        ChatCompletionRequestUserMessage, CreateChatCompletionRequestArgs, FinishReason,
+        ChatCompletionRequestUserMessage, ChatCompletionStreamOptions,
+        CreateChatCompletionRequestArgs, FinishReason,
     },
 };
 use clap::{Parser, Subcommand};
@@ -88,6 +89,10 @@ async fn ask_llm_streaming(
         .model(&api_model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
+        .stream_options(ChatCompletionStreamOptions {
+            include_usage: Some(true),
+            include_obfuscation: None,
+        })
         .build()?;
 
     debug!("Sending streaming request...");
@@ -100,6 +105,21 @@ async fn ask_llm_streaming(
 
     while let Some(result) = stream.next().await {
         let response = result?;
+
+        // Log token usage statistics from streaming response (only present in final chunk)
+        if let Some(usage) = &response.usage {
+            writeln!(lock)?; // Add newline before logging token stats
+            info!(
+                "Token usage - Prompt: {}, Completion: {}, Total: {}",
+                usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+            );
+
+            if let Some(prompt_details) = &usage.prompt_tokens_details {
+                if let Some(cached) = prompt_details.cached_tokens {
+                    info!("Cached tokens: {}", cached);
+                }
+            }
+        }
 
         for choice in response.choices {
             if let Some(content) = &choice.delta.content {
@@ -184,12 +204,32 @@ async fn ask_llm_streaming(
         let follow_up_request = CreateChatCompletionRequestArgs::default()
             .model(&api_model)
             .messages(messages)
+            .stream_options(ChatCompletionStreamOptions {
+                include_usage: Some(true),
+                include_obfuscation: None,
+            })
             .build()?;
 
         let mut follow_up_stream = client.chat().create_stream(follow_up_request).await?;
 
         while let Some(result) = follow_up_stream.next().await {
             let response = result?;
+
+            // Log token usage statistics from follow-up streaming response (only present in final chunk)
+            if let Some(usage) = &response.usage {
+                writeln!(lock)?; // Add newline before logging token stats
+                info!(
+                    "Follow-up token usage - Prompt: {}, Completion: {}, Total: {}",
+                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                );
+
+                if let Some(prompt_details) = &usage.prompt_tokens_details {
+                    if let Some(cached) = prompt_details.cached_tokens {
+                        info!("Follow-up cached tokens: {}", cached);
+                    }
+                }
+            }
+
             for choice in response.choices {
                 if let Some(content) = &choice.delta.content {
                     write!(lock, "{}", content)?;
@@ -255,6 +295,20 @@ async fn ask_llm(
     debug!("Sending request...");
 
     let response = client.chat().create(request).await?;
+
+    // Log token usage statistics
+    if let Some(usage) = &response.usage {
+        info!(
+            "Token usage - Prompt: {}, Completion: {}, Total: {}",
+            usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+        );
+
+        if let Some(prompt_details) = &usage.prompt_tokens_details {
+            if let Some(cached) = prompt_details.cached_tokens {
+                info!("Cached tokens: {}", cached);
+            }
+        }
+    }
     let response_message = response
         .choices
         .first()
@@ -320,6 +374,20 @@ async fn ask_llm(
             .build()?;
 
         let final_response = client.chat().create(subsequent_request).await?;
+
+        // Log token usage statistics for follow-up request
+        if let Some(usage) = &final_response.usage {
+            info!(
+                "Follow-up token usage - Prompt: {}, Completion: {}, Total: {}",
+                usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+            );
+
+            if let Some(prompt_details) = &usage.prompt_tokens_details {
+                if let Some(cached) = prompt_details.cached_tokens {
+                    info!("Follow-up cached tokens: {}", cached);
+                }
+            }
+        }
 
         let answer = final_response
             .choices
@@ -412,7 +480,7 @@ async fn main() {
                 question.clone()
             };
 
-            info!("Asking question: {}", full_question);
+            info!("Q: {}", full_question);
 
             let file_content = if let Some(file_path) = file {
                 match std::fs::read_to_string(file_path) {
