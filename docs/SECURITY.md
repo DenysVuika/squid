@@ -2,7 +2,7 @@
 
 This document describes the security features implemented in `squid` to protect users during LLM interactions with tool calling capabilities.
 
-> **Quick Start:** For a quick reference guide with examples, see **[SECURITY_APPROVAL.md](SECURITY_APPROVAL.md)**
+> **Quick Start:** See the "Tool Calling (with Security Approval)" section in the main [README.md](../README.md) for examples.
 
 ## Overview
 

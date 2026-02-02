@@ -75,7 +75,7 @@ This will stream the response in real-time, displaying tokens as they are genera
 
 ```bash
 # Basic file question
-cargo run -- ask -f docs/sample.txt "What are the key features mentioned?"
+cargo run -- ask -f sample-files/sample.txt "What are the key features mentioned?"
 
 # With streaming
 cargo run -- ask -f code.rs -s "Explain what this code does"
@@ -106,7 +106,7 @@ The review command automatically selects the appropriate review prompt based on 
 - **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
 - **Other files** - Generic code quality and best practices
 
-See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and examples.
+
 
 ### Tool Calling (with Security Approval)
 
@@ -151,13 +151,10 @@ cargo run -- ask -s "Search for async functions in src and explain them"
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
-- **[Security Approval Guide](docs/SECURITY_APPROVAL.md)** - Quick reference for tool approval feature
-- **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
-- **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
-- **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
+- **[Sample File](sample-files/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](sample-files/README.md)** - Test files for code review prompts
 - **[AI Agents Guide](AGENTS.md)** - Instructions for AI coding assistants working on this project
 
@@ -206,7 +203,7 @@ cargo run -- run <command>
   ```bash
    cargo run -- ask -s "Write a hello world program in Rust"
    # Or with a file
-   cargo run -- ask -f docs/sample.txt "What is this document about?"
+   cargo run -- ask -f sample-files/sample.txt "What is this document about?"
    ```
 
 ### Using with OpenAI

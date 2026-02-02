@@ -45,7 +45,7 @@ cargo run -- ask "What is Rust?"
 ### Ask about a file:
 
 ```bash
-cargo run -- ask -f docs/sample.txt "What is this document about?"
+cargo run -- ask -f sample-files/sample.txt "What is this document about?"
 ```
 
 ### Review code:
@@ -205,8 +205,8 @@ cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 
 ## 9. What's Next?
 
-- Check `REVIEW_GUIDE.md` for detailed code review documentation
-- Read `EXAMPLES.md` for more advanced usage patterns
+- Read `EXAMPLES.md` for more advanced usage patterns and workflows
+- Check the code review section in `README.md` for review command details
 - Try example files in `../sample-files/` directory
 - See `README.md` for full documentation
 
@@ -237,7 +237,7 @@ squid review --help
 
 1. Enable debug logging:
    ```bash
-   RUST_LOG=debug cargo run -- ask -f docs/sample.txt "test"
+   RUST_LOG=debug cargo run -- ask -f sample-files/sample.txt "test"
    ```
 
 2. Check your configuration:

@@ -19,28 +19,17 @@ New to squid? Start here:
   - Common troubleshooting
   - Tips for better results
 
-- **[REVIEW_GUIDE.md](REVIEW_GUIDE.md)** - AI-powered code review guide
-  - Language-specific review prompts
-  - File type support (Rust, TypeScript, HTML, CSS, etc.)
-  - Usage examples and best practices
-  - Testing with example files
-
 - **[EXAMPLES.md](EXAMPLES.md)** - Comprehensive usage examples
   - Basic and advanced examples
   - Practical workflows
   - Best practices
   - File type support
 
-- **[FILE_CONTEXT.md](FILE_CONTEXT.md)** - File context feature architecture
-  - How it works
-  - Technical details
-  - Best practices
-
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 
 ## Resources
 
-- **[sample.txt](sample.txt)** - Sample file for testing the file context feature
+- **[sample.txt](../sample-files/sample.txt)** - Sample file for testing the file context feature
 
 ## Quick Reference
 
@@ -54,7 +43,7 @@ squid ask "What is Rust?"
 squid ask "Explain Rust" -m "Focus on memory safety"
 
 # Ask with file context
-squid ask -f docs/sample.txt "What is this about?"
+squid ask -f sample-files/sample.txt "What is this about?"
 
 # Stream the response
 squid ask -s "Explain async/await"
@@ -121,7 +110,7 @@ API_KEY=sk-your-key-here
 
 1. Check the [Quick Start Guide](QUICKSTART.md)
 2. Browse the [Examples](EXAMPLES.md)
-3. Read the [Code Review Guide](REVIEW_GUIDE.md) for code reviews
+3. See code review examples in the main [README](../README.md) and [EXAMPLES.md](EXAMPLES.md)
 4. Try the [example files](../sample-files/README.md) for testing
 5. Enable debug logging: `RUST_LOG=debug squid ask ...`
 

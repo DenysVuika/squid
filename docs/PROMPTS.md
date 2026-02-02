@@ -294,9 +294,8 @@ bat src/assets/review-rust.md  # if you have bat installed
 
 ## Related Documentation
 
-- **[Code Review Guide](REVIEW_GUIDE.md)** - How to use the review command
 - **[Security Features](SECURITY.md)** - Tool approval and security
-- **[Examples](EXAMPLES.md)** - Usage examples and workflows
+- **[Examples](EXAMPLES.md)** - Comprehensive usage examples and workflows
 
 ---
 

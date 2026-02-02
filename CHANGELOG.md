@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AGENTS.md**: Added comprehensive guidelines for AI coding assistants working on this project
+  - Minimal documentation philosophy
+  - File organization rules
+  - Documentation anti-patterns to avoid
+  - Guidelines for adding new features
+
 - **Tool Calling with Security Approval**: LLM can now interact with the file system safely
   - **Tools available**:
     - `read_file` - Read file contents from the filesystem
@@ -32,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - ✅ Default deny - prompts default to "No" for safety
   - Works with both streaming and non-streaming modes
   - Works with both `ask` and `review` commands
-  - See `docs/SECURITY.md` and `docs/SECURITY_APPROVAL.md` for details
+  - See `docs/SECURITY.md` for details
 
 - **Code Review Command**: New `review` command for AI-powered code reviews
   - Automatically selects appropriate review prompt based on file type
@@ -54,8 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Documentation**:
   - `docs/SECURITY.md` - Comprehensive security features guide
-  - `docs/SECURITY_APPROVAL.md` - Quick reference for tool approval
-  - `docs/REVIEW_GUIDE.md` - Code review usage guide
+  - `docs/PROMPTS.md` - System prompts reference
+  - `docs/EXAMPLES.md` - Comprehensive usage examples
   - Updated all documentation with new features
 
 - **Prompts and System Messages**:
@@ -65,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improves LLM understanding of file-related requests
 
 ### Changed
+
+- **Documentation consolidation** following minimal documentation philosophy:
+  - Removed redundant documentation files (REVIEW_GUIDE.md, SECURITY_APPROVAL.md, FILE_CONTEXT.md)
+  - Consolidated all user-facing documentation into README.md and EXAMPLES.md
+  - Kept only essential docs: README, CHANGELOG, EXAMPLES, SECURITY, PROMPTS, QUICKSTART
+  - Improved maintainability by reducing documentation surface area
 
 - Reorganized project structure:
   - Moved all test scripts to `tests/` directory

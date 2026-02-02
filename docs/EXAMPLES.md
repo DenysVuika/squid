@@ -23,7 +23,7 @@ squid ask -s "Explain async/await in Rust"
 ### Analyze a Text Document
 
 ```bash
-squid ask --file docs/sample.txt "What is this document about?"
+squid ask --file sample-files/sample.txt "What is this document about?"
 ```
 
 ### Summarize a File
@@ -53,9 +53,9 @@ squid ask --file EXAMPLES.md "What examples are provided in this file?"
 ### Streaming with File Context
 
 ```bash
-squid ask --file docs/sample.txt --stream "List the key features mentioned"
+squid ask --file sample-files/sample.txt --stream "List the key features mentioned"
 # or shorter:
-squid ask -f docs/sample.txt -s "List the key features mentioned"
+squid ask -f sample-files/sample.txt -s "List the key features mentioned"
 ```
 
 ## Advanced Examples
@@ -239,7 +239,7 @@ Tool approvals work the same way in streaming mode - you'll be prompted before e
 Try this with the included sample file:
 
 ```bash
-squid ask --file docs/sample.txt "How many hearts does a squid have?"
+squid ask --file sample-files/sample.txt "How many hearts does a squid have?"
 ```
 
-Expected answer: Three hearts (as mentioned in the docs/sample.txt fun facts section)
+Expected answer: Three hearts (as mentioned in the sample-files/sample.txt fun facts section)
