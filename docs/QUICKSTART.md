@@ -7,12 +7,14 @@ Welcome! This guide will get you up and running with squid in under 5 minutes.
 - Rust installed (for building)
 - LM Studio running locally OR OpenAI API key
 
-## 2. Build the Project
+## 2. Install squid
 
 ```bash
 cd squid
-cargo build --release
+cargo install --path .
 ```
+
+This installs the `squid` command to your system. Alternatively, you can build it with `cargo build --release` and use `cargo run --` for development.
 
 ## 3. Configure Your Environment
 
@@ -39,20 +41,25 @@ API_KEY=sk-your-actual-api-key-here
 ### Ask a question:
 
 ```bash
-cargo run -- ask "What is Rust?"
+squid ask "What is Rust?"
 ```
 
 ### Ask about a file:
 
 ```bash
-cargo run -- ask -f docs/sample.txt "What is this document about?"
+squid ask -f sample-files/sample.txt "What is this document about?"
 ```
 
 ### Review code:
 
 ```bash
-cargo run -- review src/main.rs
+squid review src/main.rs
 ```
+
+> **Development:** If you didn't install squid, use `cargo run --` instead of `squid`:
+> ```bash
+> cargo run -- ask "What is Rust?"
+> ```
 
 That's it! 🎉
 
@@ -62,37 +69,37 @@ That's it! 🎉
 
 ```bash
 # Basic question
-cargo run -- ask "What is Rust?"
+squid ask "What is Rust?"
 
 # With additional context
-cargo run -- ask "Explain Rust" -m "Focus on memory safety"
+squid ask "Explain Rust" -m "Focus on memory safety"
 ```
 
 ### Analyze Files
 
 ```bash
-cargo run -- ask -f src/main.rs "What does this code do?"
-cargo run -- ask -f README.md "Summarize this project"
+squid ask -f src/main.rs "What does this code do?"
+squid ask -f README.md "Summarize this project"
 ```
 
 ### Review Code
 
 ```bash
 # Basic review
-cargo run -- review src/main.rs
+squid review src/main.rs
 
 # Focused review
-cargo run -- review src/auth.rs -m "Focus on security issues"
+squid review src/auth.rs -m "Focus on security issues"
 
 # With streaming
-cargo run -- review components/App.tsx --stream
+squid review components/App.tsx --stream
 ```
 
 ### Use Streaming for Real-Time Output
 
 ```bash
-cargo run -- ask -f large_file.txt -s "Provide a detailed analysis"
-cargo run -- review sample-files/example.rs -s
+squid ask -f large_file.txt -s "Provide a detailed analysis"
+squid review sample-files/example.rs -s
 ```
 
 ## 6. Command Syntax
@@ -132,23 +139,23 @@ Options:
 
 ```bash
 # For questions and analysis
-cargo run -- ask "What is async/await in Rust?"
-cargo run -- ask -f code.rs "Explain this code"
+squid ask "What is async/await in Rust?"
+squid ask -f code.rs "Explain this code"
 
 # For code reviews
-cargo run -- review src/main.rs
-cargo run -- review app.ts -m "Check for security issues"
+squid review src/main.rs
+squid review app.ts -m "Check for security issues"
 ```
 
 ### ✅ Be Specific with Context
 
 ```bash
 # Good
-cargo run -- ask -f code.rs "Explain the main function"
+squid ask -f code.rs "Explain the main function"
 
 # Better - use -m for focus
-cargo run -- ask -f code.rs "Explain the main function" -m "Focus on error handling"
-cargo run -- review auth.rs -m "Focus on security vulnerabilities"
+squid ask -f code.rs "Explain the main function" -m "Focus on error handling"
+squid review auth.rs -m "Focus on security vulnerabilities"
 ```
 
 ### ✅ Language-Specific Reviews
@@ -162,8 +169,8 @@ The `review` command automatically uses specialized prompts for:
 ### ✅ Use Streaming for Long Content
 
 ```bash
-cargo run -- ask -f big_document.md -s "Analyze this thoroughly"
-cargo run -- review large_component.tsx --stream
+squid ask -f big_document.md -s "Analyze this thoroughly"
+squid review large_component.tsx --stream
 ```
 
 ### ✅ Tool Calling with Security
@@ -172,11 +179,11 @@ The LLM can read and write files when needed - you'll approve each action:
 
 ```bash
 # LLM can read files (with your approval)
-cargo run -- ask "Read the README.md and summarize it"
+squid ask "Read the README.md and summarize it"
 # You'll see: "Allow reading file: README.md? (Y/n)"
 
 # LLM can write files (with preview and approval)
-cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
+squid ask "Create a hello.txt file with 'Hello, World!'"
 # You'll see the content preview and: "Allow writing to file: hello.txt?"
 ```
 
@@ -205,10 +212,11 @@ cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 
 ## 9. What's Next?
 
-- Check `REVIEW_GUIDE.md` for detailed code review documentation
-- Read `EXAMPLES.md` for more advanced usage patterns
-- Try example files in `../sample-files/` directory
+- Read `EXAMPLES.md` for more advanced usage patterns and workflows
+- Check the code review section in `README.md` for review command details
+- Try example files in `sample-files/` directory
 - See `README.md` for full documentation
+- Run `squid --help` to see all available commands and options
 
 ## 10. Quick Reference
 
@@ -237,7 +245,7 @@ squid review --help
 
 1. Enable debug logging:
    ```bash
-   RUST_LOG=debug cargo run -- ask -f docs/sample.txt "test"
+   RUST_LOG=debug squid ask -f sample-files/sample.txt "test"
    ```
 
 2. Check your configuration:

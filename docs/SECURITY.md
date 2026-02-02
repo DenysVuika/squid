@@ -2,11 +2,11 @@
 
 This document describes the security features implemented in `squid` to protect users during LLM interactions with tool calling capabilities.
 
-> **Quick Start:** For a quick reference guide with examples, see **[SECURITY_APPROVAL.md](SECURITY_APPROVAL.md)**
+> **Quick Start:** See the "Tool Calling (with Security Approval)" section in the main [README.md](../README.md) for examples.
 
 ## Overview
 
-When the LLM requests to use tools (such as reading or writing files), `squid` requires explicit user approval before executing any operation. This prevents unauthorized or unintended file system access.
+When the LLM requests to use tools (such as reading, writing, or searching files), `squid` requires explicit user approval before executing any operation. This prevents unauthorized or unintended file system access.
 
 ## Tool Approval Flow
 
@@ -45,11 +45,15 @@ When the LLM requests to use tools (such as reading or writing files), `squid` r
 
 ### 🔒 User Approval Required
 
-All tool executions require explicit user approval. The LLM cannot read or write files without user consent.
+All tool executions require explicit user approval. The LLM cannot read, write, or search files without user consent.
 
 ```bash
-cargo run -- ask "Read my secret.txt file"
+squid ask "Read my secret.txt file"
 # Prompt: Allow reading file: secret.txt? (Y/n)
+# → You control whether this happens
+
+squid ask "Search for passwords in the project"
+# Prompt: Allow searching for pattern 'passwords' in: .? (Y/n)
 # → You control whether this happens
 ```
 
@@ -58,7 +62,7 @@ cargo run -- ask "Read my secret.txt file"
 When the LLM attempts to write a file, you see a preview of the content before approving:
 
 ```bash
-cargo run -- ask "Create a config.json file with default settings"
+squid ask "Create a config.json file with default settings"
 
 # You'll see:
 # Allow writing to file: config.json?
@@ -72,6 +76,24 @@ cargo run -- ask "Create a config.json file with default settings"
 ```
 
 For large content (>100 bytes), only the first 100 bytes are shown with a total size indicator.
+
+### 🔍 Search Pattern Transparency
+
+When the LLM attempts to search files using grep, you see the exact pattern and path:
+
+```bash
+squid ask "Find all TODO comments in src"
+
+# You'll see:
+# Allow searching for pattern 'TODO' in: src? (Y/n)
+```
+
+**Search features:**
+- Regex pattern matching with case sensitivity options
+- Recursive directory search or single file search
+- Results show file path, line number, and matched content
+- Automatic binary file filtering for safety
+- Configurable result limits (default: 50 matches)
 
 ### 📝 Comprehensive Logging
 
@@ -143,7 +165,7 @@ This is a test file.
 - **Use absolute paths** when possible to avoid ambiguity
 - **Enable debug logging** if you want more detailed information:
   ```bash
-  RUST_LOG=debug cargo run -- ask "your question"
+  RUST_LOG=debug squid ask "your question"
   ```
 
 ### ❌ DON'T
@@ -159,7 +181,7 @@ This is a test file.
 
 **Command:**
 ```bash
-cargo run -- ask "What environment variables do I have?"
+squid ask "What environment variables do I have?"
 ```
 
 **LLM may try:**
@@ -177,7 +199,7 @@ Path: .env
 
 **Command:**
 ```bash
-cargo run -- ask "Create a startup script for this project"
+squid ask "Create a startup script for this project"
 ```
 
 **LLM may try:**
@@ -198,7 +220,7 @@ rm -rf / # Malicious content
 
 **Command:**
 ```bash
-cargo run -- ask "Read all .rs files in src/ and create a summary"
+squid ask "Read all .rs files in src/ and create a summary"
 ```
 
 **LLM behavior:**
@@ -214,13 +236,13 @@ All tool operations are logged at the INFO level. To view these logs:
 
 ```bash
 # Default (shows INFO and above)
-RUST_LOG=info cargo run -- ask "your question"
+RUST_LOG=info squid ask "your question"
 
 # Debug (shows all logs including tool details)
-RUST_LOG=debug cargo run -- ask "your question"
+RUST_LOG=debug squid ask "your question"
 
 # Only errors
-RUST_LOG=error cargo run -- ask "your question"
+RUST_LOG=error squid ask "your question"
 ```
 
 **Log examples:**

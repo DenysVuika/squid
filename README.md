@@ -7,7 +7,7 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
-- 🔧 Tool calling support (file read/write operations) with security approval
+- 🔧 Tool calling support (file read/write/search operations) with security approval
 - 🔒 User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
@@ -15,22 +15,31 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 
 ## Installation
 
+### Install to Your System
+
+```bash
+cargo install --path .
+```
+
+This installs the `squid` command globally. You can then use `squid` from anywhere.
+
+### Or Build for Development
+
 ```bash
 cargo build --release
 ```
 
+For development, use `cargo run --` instead of `squid` in the examples below.
+
 ## Configuration
 
-Create a `.env` file in the project root (or copy from `.env.example`):
+Create a `.env` file in the project root:
 
 ```bash
 # OpenAI API Configuration (for LM Studio or OpenAI)
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
-
-# Optional: Database configuration
-DATABASE_URL=postgresql://localhost/mydb
 ```
 
 ### Configuration Options
@@ -49,14 +58,17 @@ DATABASE_URL=postgresql://localhost/mydb
 
 ## Usage
 
+> **Note:** The examples below use the `squid` command (after installation with `cargo install --path .`).  
+> For development, replace `squid` with `cargo run --` (e.g., `cargo run -- ask "question"`).
+
 ### Ask a Question
 
 ```bash
 # Basic question (required)
-cargo run -- ask "What is Rust?"
+squid ask "What is Rust?"
 
 # With additional context using -m
-cargo run -- ask "Explain Rust" -m "Focus on memory safety"
+squid ask "Explain Rust" -m "Focus on memory safety"
 ```
 
 This will send the question to the LLM and display the complete response once it's ready.
@@ -64,9 +76,9 @@ This will send the question to the LLM and display the complete response once it
 ### Ask with Streaming
 
 ```bash
-cargo run -- ask --stream "Explain async/await in Rust"
+squid ask --stream "Explain async/await in Rust"
 # or use short flag
-cargo run -- ask -s "Explain async/await in Rust"
+squid ask -s "Explain async/await in Rust"
 ```
 
 This will stream the response in real-time, displaying tokens as they are generated.
@@ -75,13 +87,13 @@ This will stream the response in real-time, displaying tokens as they are genera
 
 ```bash
 # Basic file question
-cargo run -- ask -f docs/sample.txt "What are the key features mentioned?"
+squid ask -f sample-files/sample.txt "What are the key features mentioned?"
 
 # With streaming
-cargo run -- ask -f code.rs -s "Explain what this code does"
+squid ask -f code.rs -s "Explain what this code does"
 
 # With additional context using -m
-cargo run -- ask -f src/main.rs "What does this do?" -m "Focus on error handling"
+squid ask -f src/main.rs "What does this do?" -m "Focus on error handling"
 ```
 
 This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
@@ -90,13 +102,13 @@ This will read the file content and include it in the prompt, allowing the AI to
 
 ```bash
 # Review a file with language-specific prompts
-cargo run -- review src/main.rs
+squid review src/main.rs
 
 # Stream the review in real-time
-cargo run -- review app.ts --stream
+squid review app.ts --stream
 
 # Focus on specific aspects
-cargo run -- review styles.css -m "Focus on performance issues"
+squid review styles.css -m "Focus on performance issues"
 ```
 
 The review command automatically selects the appropriate review prompt based on file type:
@@ -106,46 +118,60 @@ The review command automatically selects the appropriate review prompt based on 
 - **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
 - **Other files** - Generic code quality and best practices
 
-See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and examples.
+
 
 ### Tool Calling (with Security Approval)
 
-The LLM has been trained to intelligently use tools when needed. It understands when to read or write files based on your questions. For security, you'll be prompted to approve each tool execution:
+The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions. For security, you'll be prompted to approve each tool execution:
 
 ```bash
 # LLM intelligently reads files when you ask about them
-cargo run -- ask "Read the README.md file and summarize it"
-cargo run -- ask "What dependencies are in Cargo.toml?"
-cargo run -- ask "Analyze the main.rs file for me"
+squid ask "Read the README.md file and summarize it"
+squid ask "What dependencies are in Cargo.toml?"
+squid ask "Analyze the main.rs file for me"
 # You'll be prompted: "Allow reading file: [filename]? (Y/n)"
 
 # LLM can write files
-cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
+squid ask "Create a hello.txt file with 'Hello, World!'"
 # You'll be prompted with a preview: "Allow writing to file: hello.txt?"
 
+# LLM can search for patterns in files using grep
+squid ask "Search for all TODO comments in the src directory"
+squid ask "Find all function definitions in src/main.rs"
+squid ask "Search for 'API_URL' in the project"
+squid ask "Find all uses of 'unwrap' in the codebase"
+squid ask "Show me all error handling patterns in src/tools.rs"
+# You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
+# Results show file path, line number, and matched content
+
 # Works with streaming too
-cargo run -- ask -s "Read Cargo.toml and list all dependencies"
+squid ask -s "Read Cargo.toml and list all dependencies"
+squid ask -s "Search for async functions in src and explain them"
 ```
 
+**Available Tools:**
+- 📖 **read_file** - Read file contents from the filesystem
+- 📝 **write_file** - Write content to files
+- 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
+
 **Key Features:**
-- 🤖 **Intelligent tool usage** - LLM understands when to read/write files from natural language
+- 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
 - 🔒 **Security approval** - All tool executions require user confirmation
 - 📋 **Content preview** - File write operations show what will be written
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
+- 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
 
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
-- **[Security Approval Guide](docs/SECURITY_APPROVAL.md)** - Quick reference for tool approval feature
-- **[Code Review Guide](docs/REVIEW_GUIDE.md)** - AI-powered code reviews with language-specific prompts
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows
-- **[File Context Feature](docs/FILE_CONTEXT.md)** - Technical architecture documentation
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
-- **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
+- **[Sample File](sample-files/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](sample-files/README.md)** - Test files for code review prompts
+- **[AI Agents Guide](AGENTS.md)** - Instructions for AI coding assistants working on this project
 
 ### Testing
 
@@ -159,9 +185,9 @@ Try the code review and security features with the provided test scripts:
 ./tests/test-security.sh
 
 # Or test individual examples
-cargo run -- review sample-files/example.rs
-cargo run -- review sample-files/example.ts --stream
-cargo run -- review sample-files/example.html -m "Focus on accessibility"
+squid review sample-files/example.rs
+squid review sample-files/example.ts --stream
+squid review sample-files/example.html -m "Focus on accessibility"
 ```
 
 See **[tests/README.md](tests/README.md)** for complete testing documentation and **[sample-files/README.md](sample-files/README.md)** for details on each example file.
@@ -170,10 +196,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 
 ```bash
 # Initialize a project (placeholder)
-cargo run -- init
+squid init
 
 # Run a command (placeholder)
-cargo run -- run <command>
+squid run <command>
 ```
 
 ## Examples
@@ -190,9 +216,9 @@ cargo run -- run <command>
    ```
 4. Run:
   ```bash
-   cargo run -- ask -s "Write a hello world program in Rust"
+   squid ask -s "Write a hello world program in Rust"
    # Or with a file
-   cargo run -- ask -f docs/sample.txt "What is this document about?"
+   squid ask -f sample-files/sample.txt "What is this document about?"
    ```
 
 ### Using with OpenAI
@@ -206,9 +232,9 @@ cargo run -- run <command>
    ```
 3. Run:
    ```bash
-   cargo run -- ask "Explain the benefits of Rust"
+   squid ask "Explain the benefits of Rust"
    # Or analyze a file
-   cargo run -- ask -f mycode.rs "Review this code for potential improvements"
+   squid ask -f mycode.rs "Review this code for potential improvements"
    ```
 
 ## License

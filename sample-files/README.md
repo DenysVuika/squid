@@ -1,17 +1,32 @@
-# Code Review Examples
+# Sample Files
 
-This directory contains example files with intentional code issues designed to test the `squid review` command and its file-type-specific prompts.
+This directory contains example files for testing the `squid` CLI functionality, including code review prompts and file context features.
 
-## Purpose
+## Files
 
-Each example file demonstrates common code smells, anti-patterns, and issues that the code review prompts should detect. These files are useful for:
+### Test File (`sample.txt`)
+A general-purpose test file for trying out the file context feature.
+
+Contains information about:
+- The squid project
+- Key features
+- Example usage
+- Fun facts about squids
+
+**Test command:**
+```bash
+cargo run -- ask -f sample-files/sample.txt "What is this document about?"
+cargo run -- ask -f sample-files/sample.txt "How many hearts does a squid have?"
+```
+
+## Code Review Examples
+
+The following files contain intentional code issues designed to test the `squid review` command and its file-type-specific prompts. These files are useful for:
 
 - Testing the code review functionality
 - Evaluating the quality of review suggestions
 - Demonstrating what kinds of issues each prompt catches
 - Onboarding new developers to the project
-
-## Available Examples
 
 ### Rust (`example.rs`)
 Tests the Rust-specific review prompt with issues like:

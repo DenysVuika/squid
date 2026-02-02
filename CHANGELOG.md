@@ -9,14 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AGENTS.md**: Added comprehensive guidelines for AI coding assistants working on this project
+  - Minimal documentation philosophy
+  - File organization rules
+  - Documentation anti-patterns to avoid
+  - Guidelines for adding new features
+
 - **Tool Calling with Security Approval**: LLM can now interact with the file system safely
   - **Tools available**:
     - `read_file` - Read file contents from the filesystem
     - `write_file` - Write content to files
+    - `grep` - Search for patterns in files using regex (supports files and directories)
   - **Intelligent tool usage**:
     - Comprehensive system prompt guides LLM on when to use tools
     - LLM understands natural language requests like "read Cargo.toml" or "analyze main.rs"
     - Proactive file reading based on context and user questions
+  - **Grep tool features**:
+    - Regex pattern matching with configurable case sensitivity
+    - Recursive directory search or single file search
+    - Configurable result limits (default: 50)
+    - Automatic binary file filtering
+    - Returns file path, line number, and matched content
   - **Security features**:
     - ✅ User approval required for every tool execution
     - ✅ File write operations show content preview before approval
@@ -25,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - ✅ Default deny - prompts default to "No" for safety
   - Works with both streaming and non-streaming modes
   - Works with both `ask` and `review` commands
-  - See `docs/SECURITY.md` and `docs/SECURITY_APPROVAL.md` for details
+  - See `docs/SECURITY.md` for details
 
 - **Code Review Command**: New `review` command for AI-powered code reviews
   - Automatically selects appropriate review prompt based on file type
@@ -47,8 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Documentation**:
   - `docs/SECURITY.md` - Comprehensive security features guide
-  - `docs/SECURITY_APPROVAL.md` - Quick reference for tool approval
-  - `docs/REVIEW_GUIDE.md` - Code review usage guide
+  - `docs/PROMPTS.md` - System prompts reference
+  - `docs/EXAMPLES.md` - Comprehensive usage examples
   - Updated all documentation with new features
 
 - **Prompts and System Messages**:
@@ -58,6 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improves LLM understanding of file-related requests
 
 ### Changed
+
+- **Documentation improvements**:
+  - **Consolidation**: Removed redundant files (REVIEW_GUIDE.md, SECURITY_APPROVAL.md, FILE_CONTEXT.md)
+  - **Consistency**: All docs now use `squid` command instead of `cargo run --` (for post-installation usage)
+  - **Organization**: Moved `sample.txt` from `docs/` to `sample-files/` directory
+  - **Installation guide**: Enhanced with `cargo install --path .` option and clear usage instructions
+  - **Cleanup**: Removed unused `DATABASE_URL` references from code and documentation
+  - Kept only essential docs: README, CHANGELOG, EXAMPLES, SECURITY, PROMPTS, QUICKSTART
+  - Improved maintainability and user experience
 
 - Reorganized project structure:
   - Moved all test scripts to `tests/` directory
