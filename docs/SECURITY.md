@@ -6,7 +6,7 @@ This document describes the security features implemented in `squid` to protect 
 
 ## Overview
 
-When the LLM requests to use tools (such as reading or writing files), `squid` requires explicit user approval before executing any operation. This prevents unauthorized or unintended file system access.
+When the LLM requests to use tools (such as reading, writing, or searching files), `squid` requires explicit user approval before executing any operation. This prevents unauthorized or unintended file system access.
 
 ## Tool Approval Flow
 
@@ -45,11 +45,15 @@ When the LLM requests to use tools (such as reading or writing files), `squid` r
 
 ### 🔒 User Approval Required
 
-All tool executions require explicit user approval. The LLM cannot read or write files without user consent.
+All tool executions require explicit user approval. The LLM cannot read, write, or search files without user consent.
 
 ```bash
 cargo run -- ask "Read my secret.txt file"
 # Prompt: Allow reading file: secret.txt? (Y/n)
+# → You control whether this happens
+
+cargo run -- ask "Search for passwords in the project"
+# Prompt: Allow searching for pattern 'passwords' in: .? (Y/n)
 # → You control whether this happens
 ```
 
@@ -72,6 +76,24 @@ cargo run -- ask "Create a config.json file with default settings"
 ```
 
 For large content (>100 bytes), only the first 100 bytes are shown with a total size indicator.
+
+### 🔍 Search Pattern Transparency
+
+When the LLM attempts to search files using grep, you see the exact pattern and path:
+
+```bash
+cargo run -- ask "Find all TODO comments in src"
+
+# You'll see:
+# Allow searching for pattern 'TODO' in: src? (Y/n)
+```
+
+**Search features:**
+- Regex pattern matching with case sensitivity options
+- Recursive directory search or single file search
+- Results show file path, line number, and matched content
+- Automatic binary file filtering for safety
+- Configurable result limits (default: 50 matches)
 
 ### 📝 Comprehensive Logging
 

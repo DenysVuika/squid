@@ -13,10 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tools available**:
     - `read_file` - Read file contents from the filesystem
     - `write_file` - Write content to files
+    - `grep` - Search for patterns in files using regex (supports files and directories)
   - **Intelligent tool usage**:
     - Comprehensive system prompt guides LLM on when to use tools
     - LLM understands natural language requests like "read Cargo.toml" or "analyze main.rs"
     - Proactive file reading based on context and user questions
+  - **Grep tool features**:
+    - Regex pattern matching with configurable case sensitivity
+    - Recursive directory search or single file search
+    - Configurable result limits (default: 50)
+    - Automatic binary file filtering
+    - Returns file path, line number, and matched content
   - **Security features**:
     - ✅ User approval required for every tool execution
     - ✅ File write operations show content preview before approval

@@ -7,7 +7,7 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
-- 🔧 Tool calling support (file read/write operations) with security approval
+- 🔧 Tool calling support (file read/write/search operations) with security approval
 - 🔒 User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
 - ⚙️ Configurable via environment variables
@@ -110,7 +110,7 @@ See the **[Code Review Guide](docs/REVIEW_GUIDE.md)** for detailed usage and exa
 
 ### Tool Calling (with Security Approval)
 
-The LLM has been trained to intelligently use tools when needed. It understands when to read or write files based on your questions. For security, you'll be prompted to approve each tool execution:
+The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions. For security, you'll be prompted to approve each tool execution:
 
 ```bash
 # LLM intelligently reads files when you ask about them
@@ -123,16 +123,29 @@ cargo run -- ask "Analyze the main.rs file for me"
 cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 # You'll be prompted with a preview: "Allow writing to file: hello.txt?"
 
+# LLM can search for patterns in files
+cargo run -- ask "Search for all TODO comments in the src directory"
+cargo run -- ask "Find all function definitions in src/main.rs"
+cargo run -- ask "Search for 'API_URL' in the project"
+# You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
+
 # Works with streaming too
 cargo run -- ask -s "Read Cargo.toml and list all dependencies"
+cargo run -- ask -s "Search for async functions in src and explain them"
 ```
 
+**Available Tools:**
+- 📖 **read_file** - Read file contents from the filesystem
+- 📝 **write_file** - Write content to files
+- 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
+
 **Key Features:**
-- 🤖 **Intelligent tool usage** - LLM understands when to read/write files from natural language
+- 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
 - 🔒 **Security approval** - All tool executions require user confirmation
 - 📋 **Content preview** - File write operations show what will be written
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
+- 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
 
 ## Documentation
 
@@ -146,6 +159,7 @@ cargo run -- ask -s "Read Cargo.toml and list all dependencies"
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[Sample File](docs/sample.txt)** - Test file for trying out the file context feature
 - **[Example Files](sample-files/README.md)** - Test files for code review prompts
+- **[AI Agents Guide](AGENTS.md)** - Instructions for AI coding assistants working on this project
 
 ### Testing
 

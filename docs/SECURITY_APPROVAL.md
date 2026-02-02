@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `squid` CLI now includes **mandatory user approval** for all tool executions. This prevents the LLM from reading or writing files without your explicit consent.
+The `squid` CLI now includes **mandatory user approval** for all tool executions. This prevents the LLM from reading, writing, or searching files without your explicit consent.
 
 ## How It Works
 
@@ -41,13 +41,41 @@ Hello, World!
 - A preview of the content (first 100 bytes)
 - Total byte count for larger files
 
+### Searching Files (Grep)
+
+```bash
+$ cargo run -- ask "Search for TODO comments in the src directory"
+
+# The LLM requests to search files:
+Allow searching for pattern 'TODO' in: src? (Y/n)
+> _
+```
+
+**Press:**
+- `Y` or `Enter` → Allow the search operation
+- `N` → Skip/deny the operation
+
+**You'll see:**
+- The regex pattern being searched
+- The file or directory path to search
+- Results include file path, line number, and matched content
+
+## Available Tools
+
+The LLM has access to these tools (all require approval):
+
+1. **read_file** - Read file contents from the filesystem
+2. **write_file** - Write content to files  
+3. **grep** - Search for patterns in files using regex
+
 ## Key Features
 
 ✅ **Default Deny** - All prompts default to "No" for safety  
 ✅ **Content Preview** - See what will be written before approving  
-✅ **Full Transparency** - Exact paths and content shown  
+✅ **Full Transparency** - Exact paths, patterns, and content shown  
 ✅ **Complete Logging** - All tool calls logged for audit  
 ✅ **Interactive Only** - Won't run unattended (security by design)  
+✅ **Regex Support** - Grep tool supports pattern matching with case sensitivity options
 
 ## Examples
 
