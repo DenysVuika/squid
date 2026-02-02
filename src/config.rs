@@ -44,7 +44,6 @@ impl Config {
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_json::from_str::<Config>(&content) {
                     Ok(config) => {
-                        info!("Configuration loaded from squid.config.json");
                         return config;
                     }
                     Err(e) => {
