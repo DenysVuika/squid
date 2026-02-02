@@ -158,36 +158,29 @@ API_KEY=not-needed
 ### Ask a Question
 
 ```bash
-# Basic question (required)
+# Basic question (streaming by default)
 squid ask "What is Rust?"
 
 # With additional context using -m
 squid ask "Explain Rust" -m "Focus on memory safety"
+
+# Disable streaming for complete response at once (useful for scripting)
+squid ask "Explain async/await in Rust" --no-stream
 ```
 
-This will send the question to the LLM and display the complete response once it's ready.
-
-### Ask with Streaming
-
-```bash
-squid ask --stream "Explain async/await in Rust"
-# or use short flag
-squid ask -s "Explain async/await in Rust"
-```
-
-This will stream the response in real-time, displaying tokens as they are generated.
+By default, responses are streamed in real-time, displaying tokens as they are generated. Use `--no-stream` to get the complete response at once (useful for piping or scripting).
 
 ### Ask About a File
 
 ```bash
-# Basic file question
+# Basic file question (streams by default)
 squid ask -f sample-files/sample.txt "What are the key features mentioned?"
-
-# With streaming
-squid ask -f code.rs -s "Explain what this code does"
 
 # With additional context using -m
 squid ask -f src/main.rs "What does this do?" -m "Focus on error handling"
+
+# Disable streaming for complete response
+squid ask -f code.rs --no-stream "Explain what this code does"
 ```
 
 This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
@@ -195,14 +188,14 @@ This will read the file content and include it in the prompt, allowing the AI to
 ### Review Code
 
 ```bash
-# Review a file with language-specific prompts
+# Review a file with language-specific prompts (streams by default)
 squid review src/main.rs
-
-# Stream the review in real-time
-squid review app.ts --stream
 
 # Focus on specific aspects
 squid review styles.css -m "Focus on performance issues"
+
+# Get complete review at once (no streaming)
+squid review app.ts --no-stream
 ```
 
 The review command automatically selects the appropriate review prompt based on file type:
@@ -238,9 +231,8 @@ squid ask "Show me all error handling patterns in src/tools.rs"
 # You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
 # Results show file path, line number, and matched content
 
-# Works with streaming too
-squid ask -s "Read Cargo.toml and list all dependencies"
-squid ask -s "Search for async functions in src and explain them"
+# Use --no-stream for non-streaming mode
+squid ask --no-stream "Read Cargo.toml and list all dependencies"
 ```
 
 **Available Tools:**
@@ -312,9 +304,11 @@ squid run <command>
    ```
 6. Run:
    ```bash
-   squid ask -s "Write a hello world program in Rust"
+   squid ask "Write a hello world program in Rust"
    # Or with a file
    squid ask -f sample-files/sample.txt "What is this document about?"
+   # Use --no-stream for complete response at once
+   squid ask --no-stream "Quick question"
    ```
 
 ### Using with Ollama
@@ -337,8 +331,10 @@ squid run <command>
 5. Run:
    ```bash
    squid ask "Write a hello world program in Rust"
-   # Or with streaming
-   squid ask -s -f mycode.rs "Explain this code"
+   # Or with a file
+   squid ask -f mycode.rs "Explain this code"
+   # Use --no-stream if needed
+   squid ask --no-stream "Quick question"
    ```
 
 ### Using with OpenAI
@@ -355,6 +351,8 @@ squid run <command>
    squid ask "Explain the benefits of Rust"
    # Or analyze a file
    squid ask -f mycode.rs "Review this code for potential improvements"
+   # Use --no-stream for scripting
+   result=$(squid ask --no-stream "Generate a function name")
    ```
 
 ## License

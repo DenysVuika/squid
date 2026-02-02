@@ -7,15 +7,18 @@ This file contains practical examples of using the `squid` CLI with file context
 ### Simple Question (No File)
 
 ```bash
+# Streams by default
 squid ask "What is Rust?"
+
+# Disable streaming for complete response at once
+squid ask --no-stream "What is Rust?"
 ```
 
-### Simple Question with Streaming
+### Question with Complete Response (No Streaming)
 
 ```bash
-squid ask --stream "Explain async/await in Rust"
-# or shorter:
-squid ask -s "Explain async/await in Rust"
+# Get complete response at once (useful for piping or scripting)
+squid ask --no-stream "Explain async/await in Rust"
 ```
 
 ## File Context Examples
@@ -50,12 +53,14 @@ squid ask --file src/main.rs "Review this code and suggest improvements"
 squid ask --file EXAMPLES.md "What examples are provided in this file?"
 ```
 
-### Streaming with File Context
+### File Context with Complete Response
 
 ```bash
-squid ask --file sample-files/sample.txt --stream "List the key features mentioned"
-# or shorter:
-squid ask -f sample-files/sample.txt -s "List the key features mentioned"
+# Default behavior streams the response
+squid ask --file sample-files/sample.txt "List the key features mentioned"
+
+# Use --no-stream for complete response at once
+squid ask -f sample-files/sample.txt --no-stream "List the key features mentioned"
 ```
 
 ## Advanced Examples
@@ -109,7 +114,8 @@ squid ask -f src/complex_module.rs "Break down this code into simple terms"
 ### 2. Documentation Review
 
 ```bash
-squid ask -f README.md -s "Is this README clear? What's missing?"
+# Streams by default
+squid ask -f README.md "Is this README clear? What's missing?"
 ```
 
 ### 3. Configuration Help
@@ -141,9 +147,13 @@ squid ask -f CHANGELOG.md "What are the latest changes?"
    squid ask -f main.rs "Explain how error handling works in the ask_llm_streaming function"
    ```
 
-2. **Use Streaming for Long Responses**: If you expect a detailed answer, use `-s` flag
+2. **Streaming is Default**: Responses stream in real-time. Use `--no-stream` for complete responses
    ```bash
-   squid ask -f large_file.txt -s "Provide a detailed analysis"
+   # Default: streaming (watch the response appear in real-time)
+   squid ask -f large_file.txt "Provide a detailed analysis"
+   
+   # No streaming: get complete response at once (useful for piping/scripting)
+   squid ask -f large_file.txt --no-stream "Provide a detailed analysis" > analysis.txt
    ```
 
 3. **Combine Context with Questions**: Frame your questions in context
@@ -219,13 +229,17 @@ squid ask "Read Cargo.toml, extract all dependencies, and create a deps.txt file
 3. Second approval: `Allow writing to file: deps.txt?` (with content preview) → Press `Y`
 4. Both operations complete successfully
 
-### Streaming with Tools
+### Tools Work with Both Modes
 
 ```bash
-squid ask -s "Read the CHANGELOG.md and tell me what's new in the latest version"
+# Default: streaming
+squid ask "Read the CHANGELOG.md and tell me what's new in the latest version"
+
+# No streaming: complete response at once
+squid ask --no-stream "Read the CHANGELOG.md and tell me what's new in the latest version"
 ```
 
-Tool approvals work the same way in streaming mode - you'll be prompted before each tool execution.
+Tool approvals work the same way in both modes - you'll be prompted before each tool execution.
 
 ### Security Tips
 
@@ -233,6 +247,19 @@ Tool approvals work the same way in streaming mode - you'll be prompted before e
 - **Check content previews** for write operations (shows first 100 bytes)
 - **Press N to skip** any suspicious or unintended operations
 - **All tool calls are logged** - check logs if you need to audit what happened
+
+### Streaming vs Non-Streaming
+
+**Default (Streaming):**
+- Responses appear in real-time as tokens are generated
+- Better UX for interactive use
+- Watch the AI "think" and respond
+
+**With `--no-stream`:**
+- Complete response delivered at once
+- Better for piping output to other commands
+- Better for scripting and automation
+- Example: `result=$(squid ask --no-stream "question")`
 
 ## Sample Test
 

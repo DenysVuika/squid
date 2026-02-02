@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Next Release (v0.3.0)
+## [0.3.0] - 2026-02-02
+
+### Changed
+
+- **Streaming is now the default behavior**: Responses stream in real-time by default
+  - Replaced `--stream` / `-s` flag with `--no-stream` flag
+  - Use `--no-stream` to get complete response at once (useful for scripting/piping)
+  - Improved user experience with immediate feedback
+  - Both streaming and non-streaming modes fully support tool calling
+  - Updated all documentation and examples to reflect new default behavior
+
+- **Enhanced Documentation Prerequisites**: Comprehensive setup guides for multiple LLM providers
+  - Detailed LM Studio setup with Qwen2.5-Coder model recommendation
+  - Complete Ollama installation and configuration guide
+  - OpenAI API setup instructions
+  - Support for other OpenAI-compatible services (OpenRouter, Together AI, etc.)
+  - Updated `.env.example` with examples for all providers
+  - Enhanced configuration documentation in README.md and QUICKSTART.md
 
 ### Added
 
@@ -106,10 +123,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Summary
 
-- **v0.3.0** (Unreleased): Tool calling with security approval, code reviews, enhanced documentation
+- **v0.3.0**: Streaming by default, tool calling with security approval, code reviews, enhanced documentation
 - **v0.2.0**: File context feature
 - **v0.1.0**: Initial release with basic ask command
 
-[Unreleased]: https://github.com/yourusername/squid/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/yourusername/squid/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yourusername/squid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yourusername/squid/releases/tag/v0.1.0

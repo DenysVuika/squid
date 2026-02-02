@@ -406,6 +406,7 @@ async fn ask_llm(
 #[derive(Parser)]
 #[command(name = "squid")]
 #[command(about = "squid 🦑: An AI-powered command-line tool for code reviews and suggestions.", long_about = None)]
+#[command(version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -427,9 +428,9 @@ enum Commands {
         /// Optional additional context or instructions
         #[arg(short, long)]
         message: Option<String>,
-        /// Stream the response
-        #[arg(short, long)]
-        stream: bool,
+        /// Disable streaming (return complete response at once)
+        #[arg(long)]
+        no_stream: bool,
         /// Optional file to provide context
         #[arg(short, long)]
         file: Option<PathBuf>,
@@ -441,9 +442,9 @@ enum Commands {
         /// Optional additional message or specific question about the code
         #[arg(short, long)]
         message: Option<String>,
-        /// Stream the response
-        #[arg(short, long)]
-        stream: bool,
+        /// Disable streaming (return complete response at once)
+        #[arg(long)]
+        no_stream: bool,
     },
 }
 
@@ -468,7 +469,7 @@ async fn main() {
         Commands::Ask {
             question,
             message,
-            stream,
+            no_stream,
             file,
         } => {
             let full_question = if let Some(m) = message {
@@ -494,13 +495,7 @@ async fn main() {
                 None
             };
 
-            if *stream {
-                if let Err(e) =
-                    ask_llm_streaming(&full_question, file_content.as_deref(), None).await
-                {
-                    error!("Failed to get response: {}", e);
-                }
-            } else {
+            if *no_stream {
                 match ask_llm(&full_question, file_content.as_deref(), None).await {
                     Ok(response) => {
                         println!("\n{}", response);
@@ -509,12 +504,18 @@ async fn main() {
                         error!("Failed to get response: {}", e);
                     }
                 }
+            } else {
+                if let Err(e) =
+                    ask_llm_streaming(&full_question, file_content.as_deref(), None).await
+                {
+                    error!("Failed to get response: {}", e);
+                }
             }
         }
         Commands::Review {
             file,
             message,
-            stream,
+            no_stream,
         } => {
             info!("Reviewing file: {:?}", file);
 
@@ -538,13 +539,7 @@ async fn main() {
                 "Please review this code.".to_string()
             };
 
-            if *stream {
-                if let Err(e) =
-                    ask_llm_streaming(&question, Some(&file_content), Some(review_prompt)).await
-                {
-                    error!("Failed to get review: {}", e);
-                }
-            } else {
+            if *no_stream {
                 match ask_llm(&question, Some(&file_content), Some(review_prompt)).await {
                     Ok(response) => {
                         println!("\n{}", response);
@@ -552,6 +547,12 @@ async fn main() {
                     Err(e) => {
                         error!("Failed to get review: {}", e);
                     }
+                }
+            } else {
+                if let Err(e) =
+                    ask_llm_streaming(&question, Some(&file_content), Some(review_prompt)).await
+                {
+                    error!("Failed to get review: {}", e);
                 }
             }
         }
