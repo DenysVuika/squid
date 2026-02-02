@@ -22,9 +22,9 @@ Squid uses specialized system prompts to guide the LLM's behavior for different 
 
 **Examples of when this prompt is active:**
 ```bash
-cargo run -- ask "Read Cargo.toml and list dependencies"
-cargo run -- ask "What's in the README file?"
-cargo run -- ask "Create a notes.txt with my tasks"
+squid ask "Read Cargo.toml and list dependencies"
+squid ask "What's in the README file?"
+squid ask "Create a notes.txt with my tasks"
 ```
 
 ---
@@ -59,7 +59,7 @@ cargo run -- ask "Create a notes.txt with my tasks"
 
 **Example:**
 ```bash
-cargo run -- review src/main.rs
+squid review src/main.rs
 ```
 
 #### TypeScript/JavaScript Review (`review-typescript.md`)
@@ -78,7 +78,7 @@ cargo run -- review src/main.rs
 
 **Example:**
 ```bash
-cargo run -- review src/App.tsx
+squid review src/App.tsx
 ```
 
 #### HTML Review (`review-html.md`)
@@ -97,7 +97,7 @@ cargo run -- review src/App.tsx
 
 **Example:**
 ```bash
-cargo run -- review index.html
+squid review index.html
 ```
 
 #### CSS Review (`review-css.md`)
@@ -116,7 +116,7 @@ cargo run -- review index.html
 
 **Example:**
 ```bash
-cargo run -- review styles/main.css
+squid review styles/main.css
 ```
 
 ## How Prompts Are Selected

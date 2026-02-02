@@ -452,9 +452,6 @@ async fn main() {
     dotenv().ok();
     logger::init();
 
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "not-set".to_string());
-    debug!("Database URL: {}", db_url);
-
     let cli = Cli::parse();
 
     match &cli.command {

@@ -72,11 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Documentation consolidation** following minimal documentation philosophy:
-  - Removed redundant documentation files (REVIEW_GUIDE.md, SECURITY_APPROVAL.md, FILE_CONTEXT.md)
-  - Consolidated all user-facing documentation into README.md and EXAMPLES.md
+- **Documentation improvements**:
+  - **Consolidation**: Removed redundant files (REVIEW_GUIDE.md, SECURITY_APPROVAL.md, FILE_CONTEXT.md)
+  - **Consistency**: All docs now use `squid` command instead of `cargo run --` (for post-installation usage)
+  - **Organization**: Moved `sample.txt` from `docs/` to `sample-files/` directory
+  - **Installation guide**: Enhanced with `cargo install --path .` option and clear usage instructions
+  - **Cleanup**: Removed unused `DATABASE_URL` references from code and documentation
   - Kept only essential docs: README, CHANGELOG, EXAMPLES, SECURITY, PROMPTS, QUICKSTART
-  - Improved maintainability by reducing documentation surface area
+  - Improved maintainability and user experience
 
 - Reorganized project structure:
   - Moved all test scripts to `tests/` directory
