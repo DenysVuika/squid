@@ -16,6 +16,9 @@ You have access to the following tools:
    - Use this to find specific text, patterns, or code across files and directories
    - Supports regex patterns and can search recursively through directories
    - Returns: file path, line number, and the matched content for each result
+   - **IMPORTANT**: All paths are relative to the current working directory where the command runs
+   - For directories, use just the directory name (e.g., "src" not "src/")
+   - For files, include the full path (e.g., "src/main.rs")
    - Examples: "search for 'TODO' in src", "find all function definitions", "search for 'async' in main.rs"
 
 ## When to Use Tools
@@ -36,10 +39,10 @@ You have access to the following tools:
 - "What's in the README?" → Use `read_file` to read README.md
 - "Analyze the main.rs file" → Use `read_file` to read src/main.rs
 - "Check the .env configuration" → Use `read_file` to read .env
-- "Search for 'tool' in src/tools.rs" → Use `grep` to search for the pattern
-- "Find all TODO comments" → Use `grep` with pattern "TODO" in the src directory
-- "Where is the function 'get_tools' defined?" → Use `grep` to search for "fn get_tools"
-- "Find all uses of 'unwrap()'" → Use `grep` to search for "unwrap()" in the codebase
+- "Search for 'tool' in src/tools.rs" → Use `grep` with pattern "tool" and path "src/tools.rs"
+- "Find all TODO comments" → Use `grep` with pattern "TODO" and path "src"
+- "Where is the function 'get_tools' defined?" → Use `grep` with pattern "fn get_tools" and path "src"
+- "Find all uses of 'unwrap()'" → Use `grep` with pattern "unwrap\(\)" and path "src"
 
 ## Important Guidelines
 
