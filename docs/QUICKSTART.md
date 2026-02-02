@@ -89,6 +89,40 @@ This installs the `squid` command to your system. Alternatively, you can build i
 
 ## 3. Configure Your Environment
 
+You can configure squid in two ways:
+
+### Option A: Interactive Setup (Recommended)
+
+Run the `init` command to create a `squid.config.json` file:
+
+```bash
+squid init
+```
+
+This will prompt you for:
+- API URL (e.g., `http://127.0.0.1:1234/v1` for LM Studio)
+- API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+- API Key (optional, leave empty for local models)
+- Log Level (error, warn, info, debug, trace)
+
+Example session:
+```
+$ squid init
+INFO: Initializing squid configuration...
+? API URL: http://127.0.0.1:1234/v1
+? API Model: local-model
+? API Key (optional, press Enter to skip): 
+? Log Level: info
+
+Configuration:
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [not set]
+  Log Level: info
+```
+
+### Option B: Manual Configuration
+
 Create a `.env` file in the project root:
 
 ### For LM Studio
@@ -97,6 +131,7 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
+LOG_LEVEL=info
 ```
 
 ### For Ollama
@@ -105,6 +140,7 @@ API_KEY=not-needed
 API_URL=http://localhost:11434/v1
 API_MODEL=qwen2.5-coder
 API_KEY=not-needed
+LOG_LEVEL=info
 ```
 
 ### For OpenAI
@@ -113,11 +149,18 @@ API_KEY=not-needed
 API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
+LOG_LEVEL=info
 ```
 
 ### For Other Providers
 
 Check your provider's documentation for the correct `API_URL`, `API_MODEL`, and `API_KEY` values.
+
+**Important Notes:**
+- If both `squid.config.json` and `.env` exist, the config file takes precedence
+- **Commit `squid.config.json`** to your repository to share project settings with your team
+- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
+- For cloud API services (OpenAI, etc.), store the actual API key in `.env` and omit `api_key` from `squid.config.json`
 
 ## 4. Try Your First Command
 

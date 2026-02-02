@@ -1,9 +1,11 @@
 use env_logger::{Builder, Env};
 use std::io::Write;
 
-pub fn init() {
+pub fn init(log_level: Option<&str>) {
+    let default_level = log_level.unwrap_or("info");
+
     let env = Env::default()
-        .filter_or("LOG_LEVEL", "info")
+        .filter_or("LOG_LEVEL", default_level)
         .write_style_or("LOG_STYLE", "always");
 
     // env_logger::init_from_env(env);

@@ -1592,6 +1592,7 @@ dependencies = [
  "inquire",
  "log",
  "regex",
+ "serde",
  "serde_json",
  "tokio",
  "walkdir",
