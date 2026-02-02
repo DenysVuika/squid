@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Custom System Prompts**: New `-p`/`--prompt` flag for `ask` command
+  - Override the default system prompt with a custom prompt from a file
+  - Useful for specialized tasks (security analysis, performance review, domain-specific expertise)
+  - Can be combined with file context (`-f`) and other flags
+  - Examples: `squid ask -p expert.md "question"` or `squid ask -f code.rs -p reviewer.md "review"`
+  - No rebuild required - change prompts on the fly
+  - See `docs/PROMPTS.md` for detailed guide on creating custom prompts
+
 - **Init Command**: Interactive configuration setup via `squid init`
   - Prompts for API URL, API Model, optional API Key, and Log Level
   - Creates `squid.config.json` in the current directory for project settings

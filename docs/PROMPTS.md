@@ -10,7 +10,7 @@ Squid uses specialized system prompts to guide the LLM's behavior for different 
 
 ### 1. Ask Command Prompt (`ask-prompt.md`)
 
-**Used by:** `ask` command (default)  
+**Used by:** `ask` command (default, unless overridden with `-p`/`--prompt`)  
 **Location:** `src/assets/ask-prompt.md`  
 **Purpose:** General-purpose assistant with intelligent tool usage
 
@@ -25,6 +25,13 @@ Squid uses specialized system prompts to guide the LLM's behavior for different 
 squid ask "Read Cargo.toml and list dependencies"
 squid ask "What's in the README file?"
 squid ask "Create a notes.txt with my tasks"
+```
+
+**Using a custom prompt instead:**
+```bash
+# Override with your own system prompt
+squid ask -p custom-prompt.md "Your question here"
+squid ask --prompt expert-coder.md -f main.rs "Review this code"
 ```
 
 ---
@@ -123,12 +130,26 @@ squid review styles/main.css
 
 ### Ask Command
 
-The `ask` command always uses `ask-prompt.md` unless a custom system prompt is provided.
+The `ask` command uses `ask-prompt.md` by default, but can be overridden with the `-p`/`--prompt` flag:
+
+```bash
+# Default: uses built-in ask-prompt.md
+squid ask "What is Rust?"
+
+# Custom: uses your own system prompt
+squid ask -p my-prompt.md "What is Rust?"
+```
 
 ```rust
 // In src/main.rs
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 ```
+
+**When to use custom prompts:**
+- Specialized domain knowledge (security expert, performance analyst, etc.)
+- Different response styles (concise, verbose, tutorial-style, etc.)
+- Specific workflows or methodologies
+- Custom tool usage patterns
 
 ### Review Command
 
@@ -148,7 +169,9 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
 
 ## Customizing Prompts
 
-To customize a prompt:
+### Option 1: Edit Built-in Prompts (Permanent)
+
+To customize the built-in prompts:
 
 1. Edit the corresponding `.md` file in `src/assets/`
 2. Rebuild the project: `cargo build --release`
@@ -165,6 +188,28 @@ cargo build --release
 # Test
 ./target/release/squid review sample-files/example.rs
 ```
+
+### Option 2: Use Custom Prompts (Per-Command)
+
+For the `ask` command, you can use custom prompts without rebuilding:
+
+```bash
+# Create your custom prompt
+cat > security-expert.md << 'EOF'
+You are a security expert specializing in code security analysis.
+Focus on identifying vulnerabilities, security best practices, and potential attack vectors.
+EOF
+
+# Use it with the ask command
+squid ask -p security-expert.md "Review this authentication code"
+squid ask -f auth.rs -p security-expert.md "Find security issues"
+```
+
+**Benefits:**
+- No rebuild required
+- Easy to experiment with different prompts
+- Share prompts with team members
+- Version control your custom prompts
 
 ## Prompt Best Practices
 
@@ -289,6 +334,7 @@ bat src/assets/review-rust.md  # if you have bat installed
 
 ## Version History
 
+- **v0.4.0**: Added `-p`/`--prompt` flag for custom system prompts in `ask` command
 - **v0.3.0**: Added `ask-prompt.md` for intelligent tool usage
 - **v0.3.0**: Initial specialized review prompts (Rust, TypeScript, HTML, CSS)
 

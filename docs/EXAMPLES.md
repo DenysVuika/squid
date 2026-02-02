@@ -47,6 +47,16 @@ squid ask --file src/main.rs "Explain what this code does"
 squid ask --file src/main.rs "Review this code and suggest improvements"
 ```
 
+### Custom System Prompt
+
+```bash
+# Use a custom system prompt for specialized behavior
+squid ask --prompt custom-prompt.md "Explain Rust ownership"
+
+# Combine with file context
+squid ask -f src/main.rs -p expert-reviewer.md "Review this code"
+```
+
 ### Documentation Questions
 
 ```bash
@@ -138,7 +148,16 @@ squid ask -f CHANGELOG.md "What are the latest changes?"
 
 ## Tips
 
-1. **Be Specific**: The more specific your question, the better the answer
+1. **Use Custom Prompts**: Override the default system prompt for specialized tasks
+   ```bash
+   # Use a domain-specific prompt
+   squid ask -p security-expert.md "Analyze this authentication flow"
+   
+   # Combine with file context for specialized reviews
+   squid ask -f api.rs -p performance-reviewer.md "Review for performance issues"
+   ```
+
+2. **Be Specific**: The more specific your question, the better the answer
    ```bash
    # Good
    squid ask -f main.rs "What does the ask_llm_streaming function do?"
@@ -147,7 +166,7 @@ squid ask -f CHANGELOG.md "What are the latest changes?"
    squid ask -f main.rs "Explain how error handling works in the ask_llm_streaming function"
    ```
 
-2. **Streaming is Default**: Responses stream in real-time. Use `--no-stream` for complete responses
+3. **Streaming is Default**: Responses stream in real-time. Use `--no-stream` for complete responses
    ```bash
    # Default: streaming (watch the response appear in real-time)
    squid ask -f large_file.txt "Provide a detailed analysis"
@@ -156,12 +175,12 @@ squid ask -f CHANGELOG.md "What are the latest changes?"
    squid ask -f large_file.txt --no-stream "Provide a detailed analysis" > analysis.txt
    ```
 
-3. **Combine Context with Questions**: Frame your questions in context
+4. **Combine Context with Questions**: Frame your questions in context
    ```bash
    squid ask -f auth.rs "How does this authentication system prevent CSRF attacks?"
    ```
 
-4. **File Types Supported**: Works with any text-based file
+5. **File Types Supported**: Works with any text-based file
    - Source code (.rs, .py, .js, .go, etc.)
    - Documentation (.md, .txt, .rst)
    - Configuration (.toml, .json, .yaml, .env)

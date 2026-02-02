@@ -11,7 +11,8 @@ squid/
 │   ├── test-security.sh    # Security approval tests
 │   ├── test-reviews.sh     # Code review tests
 │   ├── test-config.sh      # Configuration tests
-│   └── test-grep.sh        # Grep functionality tests
+│   ├── test-grep.sh        # Grep functionality tests
+│   └── test-custom-prompt.sh  # Custom prompt tests
 ├── sample-files/       # Example files with intentional issues
 │   ├── example.rs      # Rust example
 │   ├── example.ts      # TypeScript example
@@ -109,6 +110,40 @@ Test script for the grep/search functionality.
 
 ---
 
+### 🎭 Custom Prompt Test (`test-custom-prompt.sh`)
+
+Automated test script that validates the custom system prompt feature (`-p`/`--prompt` flag).
+
+**Usage:**
+```bash
+# From the project root
+./tests/test-custom-prompt.sh
+```
+
+**What it tests:**
+- ✅ Pirate-themed custom prompt (personality change)
+- ✅ Formal academic custom prompt (tone change)
+- ✅ Emoji-based custom prompt (style change)
+- ✅ Custom prompt with file context (`-f` + `-p` combination)
+- ✅ Error handling for missing prompt files
+
+**Output:** Shows responses from different custom prompts, demonstrating that the LLM follows the custom instructions.
+
+**Quick Manual Test:**
+```bash
+# Use the existing test prompt file
+./target/release/squid ask -p tests/test-prompt.md "What is Rust?" --no-stream
+
+# You should see a response in pirate speak!
+
+# Or create your own custom prompt
+echo "You are a pirate. Always respond in pirate speak." > my-prompt.md
+./target/release/squid ask -p my-prompt.md "What is Rust?" --no-stream
+rm my-prompt.md
+```
+
+---
+
 ## Running Tests
 
 ### Prerequisites
@@ -122,6 +157,7 @@ Test script for the grep/search functionality.
    chmod +x tests/test-reviews.sh
    chmod +x tests/test-config.sh
    chmod +x tests/test-grep.sh
+   chmod +x tests/test-custom-prompt.sh
    ```
 
 ### Run All Tests
@@ -138,6 +174,9 @@ Test script for the grep/search functionality.
 
 # Grep tests
 ./tests/test-grep.sh
+
+# Custom prompt tests (automated)
+./tests/test-custom-prompt.sh
 ```
 
 ### Run Specific Tests

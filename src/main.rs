@@ -427,6 +427,9 @@ enum Commands {
         /// Optional file to provide context
         #[arg(short, long)]
         file: Option<PathBuf>,
+        /// Optional custom system prompt file
+        #[arg(short, long)]
+        prompt: Option<PathBuf>,
     },
     /// Review code from a file
     Review {
@@ -531,6 +534,7 @@ async fn main() {
             message,
             no_stream,
             file,
+            prompt,
         } => {
             let full_question = if let Some(m) = message {
                 format!("{} {}", question, m)
@@ -555,8 +559,30 @@ async fn main() {
                 None
             };
 
+            let custom_prompt = if let Some(prompt_path) = prompt {
+                match std::fs::read_to_string(prompt_path) {
+                    Ok(content) => {
+                        info!("Using custom system prompt ({} bytes)", content.len());
+                        Some(content)
+                    }
+                    Err(e) => {
+                        error!("Failed to read custom prompt file: {}", e);
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
+
             if *no_stream {
-                match ask_llm(&full_question, file_content.as_deref(), None, &app_config).await {
+                match ask_llm(
+                    &full_question,
+                    file_content.as_deref(),
+                    custom_prompt.as_deref(),
+                    &app_config,
+                )
+                .await
+                {
                     Ok(response) => {
                         println!("\n{}", response);
                     }
@@ -565,9 +591,13 @@ async fn main() {
                     }
                 }
             } else {
-                if let Err(e) =
-                    ask_llm_streaming(&full_question, file_content.as_deref(), None, &app_config)
-                        .await
+                if let Err(e) = ask_llm_streaming(
+                    &full_question,
+                    file_content.as_deref(),
+                    custom_prompt.as_deref(),
+                    &app_config,
+                )
+                .await
                 {
                     error!("Failed to get response: {}", e);
                 }
