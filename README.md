@@ -123,11 +123,14 @@ cargo run -- ask "Analyze the main.rs file for me"
 cargo run -- ask "Create a hello.txt file with 'Hello, World!'"
 # You'll be prompted with a preview: "Allow writing to file: hello.txt?"
 
-# LLM can search for patterns in files
+# LLM can search for patterns in files using grep
 cargo run -- ask "Search for all TODO comments in the src directory"
 cargo run -- ask "Find all function definitions in src/main.rs"
 cargo run -- ask "Search for 'API_URL' in the project"
+cargo run -- ask "Find all uses of 'unwrap' in the codebase"
+cargo run -- ask "Show me all error handling patterns in src/tools.rs"
 # You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
+# Results show file path, line number, and matched content
 
 # Works with streaming too
 cargo run -- ask -s "Read Cargo.toml and list all dependencies"
