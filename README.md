@@ -1,6 +1,6 @@
 # squid 🦑
 
-A CLI application for interacting with LLM APIs (OpenAI-compatible) with support for streaming responses.
+An AI-powered command-line tool for code reviews and suggestions. 
 
 ## Features
 
