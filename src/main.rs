@@ -16,6 +16,7 @@ use log::{debug, error, info};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+mod config;
 mod logger;
 mod tools;
 
@@ -46,18 +47,14 @@ async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
     system_prompt: Option<&str>,
+    app_config: &config::Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let api_url =
-        std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
-    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
-    let api_model = std::env::var("API_MODEL").unwrap_or_else(|_| "local-model".to_string());
-
-    debug!("Using API URL: {}", api_url);
-    debug!("Using API Model: {}", api_model);
+    debug!("Using API URL: {}", app_config.api_url);
+    debug!("Using API Model: {}", app_config.api_model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(api_url)
-        .with_api_key(api_key);
+        .with_api_base(&app_config.api_url)
+        .with_api_key(app_config.get_api_key());
 
     let client = Client::with_config(config);
 
@@ -86,7 +83,7 @@ async fn ask_llm_streaming(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(&api_model)
+        .model(&app_config.api_model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .stream_options(ChatCompletionStreamOptions {
@@ -202,7 +199,7 @@ async fn ask_llm_streaming(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(&api_model)
+            .model(&app_config.api_model)
             .messages(messages)
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
@@ -247,18 +244,14 @@ async fn ask_llm(
     question: &str,
     file_content: Option<&str>,
     system_prompt: Option<&str>,
+    app_config: &config::Config,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let api_url =
-        std::env::var("API_URL").unwrap_or_else(|_| "http://127.0.0.1:1234/v1".to_string());
-    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "not-needed".to_string());
-    let api_model = std::env::var("API_MODEL").unwrap_or_else(|_| "local-model".to_string());
-
-    debug!("Using API URL: {}", api_url);
-    debug!("Using API Model: {}", api_model);
+    debug!("Using API URL: {}", app_config.api_url);
+    debug!("Using API Model: {}", app_config.api_model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(api_url)
-        .with_api_key(api_key);
+        .with_api_base(&app_config.api_url)
+        .with_api_key(app_config.get_api_key());
 
     let client = Client::with_config(config);
 
@@ -287,7 +280,7 @@ async fn ask_llm(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(&api_model)
+        .model(&app_config.api_model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .build()?;
@@ -368,12 +361,12 @@ async fn ask_llm(
             }
         }
 
-        let subsequent_request = CreateChatCompletionRequestArgs::default()
-            .model(&api_model)
+        let follow_up_request = CreateChatCompletionRequestArgs::default()
+            .model(&app_config.api_model)
             .messages(messages)
             .build()?;
 
-        let final_response = client.chat().create(subsequent_request).await?;
+        let final_response = client.chat().create(follow_up_request).await?;
 
         // Log token usage statistics for follow-up request
         if let Some(usage) = &final_response.usage {
@@ -457,7 +450,55 @@ async fn main() {
 
     match &cli.command {
         Commands::Init => {
-            info!("Initializing project...");
+            info!("Initializing squid configuration...");
+
+            let default_config = config::Config::default();
+
+            let api_url = inquire::Text::new("API URL:")
+                .with_default(&default_config.api_url)
+                .with_help_message(
+                    "The base URL for the API (e.g., http://127.0.0.1:1234/v1 for LM Studio)",
+                )
+                .prompt();
+
+            let api_model = inquire::Text::new("API Model:")
+                .with_default(&default_config.api_model)
+                .with_help_message("The model identifier to use")
+                .prompt();
+
+            let api_key = inquire::Text::new("API Key (optional, press Enter to skip):")
+                .with_help_message("API key if required (leave empty for local models)")
+                .prompt_skippable();
+
+            match (api_url, api_model, api_key) {
+                (Ok(url), Ok(model), Ok(key)) => {
+                    let config = config::Config {
+                        api_url: url,
+                        api_model: model,
+                        api_key: key.filter(|k| !k.is_empty()),
+                    };
+
+                    match config.save() {
+                        Ok(_) => {
+                            info!("✓ Configuration saved to squid.config.json");
+                            println!("\nConfiguration:");
+                            println!("  API URL: {}", config.api_url);
+                            println!("  API Model: {}", config.api_model);
+                            if config.api_key.is_some() {
+                                println!("  API Key: [configured]");
+                            } else {
+                                println!("  API Key: [not set]");
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to save configuration: {}", e);
+                        }
+                    }
+                }
+                _ => {
+                    error!("Configuration initialization cancelled or failed");
+                }
+            }
         }
         Commands::Run { command } => {
             info!("Running command: {}", command);
@@ -495,8 +536,10 @@ async fn main() {
                 None
             };
 
+            let app_config = config::Config::load();
+
             if *no_stream {
-                match ask_llm(&full_question, file_content.as_deref(), None).await {
+                match ask_llm(&full_question, file_content.as_deref(), None, &app_config).await {
                     Ok(response) => {
                         println!("\n{}", response);
                     }
@@ -506,7 +549,8 @@ async fn main() {
                 }
             } else {
                 if let Err(e) =
-                    ask_llm_streaming(&full_question, file_content.as_deref(), None).await
+                    ask_llm_streaming(&full_question, file_content.as_deref(), None, &app_config)
+                        .await
                 {
                     error!("Failed to get response: {}", e);
                 }
@@ -539,8 +583,17 @@ async fn main() {
                 "Please review this code.".to_string()
             };
 
+            let app_config = config::Config::load();
+
             if *no_stream {
-                match ask_llm(&question, Some(&file_content), Some(review_prompt)).await {
+                match ask_llm(
+                    &question,
+                    Some(&file_content),
+                    Some(review_prompt),
+                    &app_config,
+                )
+                .await
+                {
                     Ok(response) => {
                         println!("\n{}", response);
                     }
@@ -549,8 +602,13 @@ async fn main() {
                     }
                 }
             } else {
-                if let Err(e) =
-                    ask_llm_streaming(&question, Some(&file_content), Some(review_prompt)).await
+                if let Err(e) = ask_llm_streaming(
+                    &question,
+                    Some(&file_content),
+                    Some(review_prompt),
+                    &app_config,
+                )
+                .await
                 {
                     error!("Failed to get review: {}", e);
                 }

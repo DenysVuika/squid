@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Init Command**: Interactive configuration setup via `squid init`
+  - Prompts for API URL, API Model, and optional API Key
+  - Creates `squid.config.json` in the current directory for project settings
+  - Configuration file can be committed to share team settings (like `.eslintrc`, `.prettierrc`)
+  - Configuration file takes precedence over environment variables
+  - Falls back to `.env` variables if config file doesn't exist
+  - Supports all existing LLM providers (LM Studio, Ollama, OpenAI, etc.)
+  - Best practice: commit `squid.config.json`, keep sensitive API keys in `.env`
+
 ## [0.3.0] - 2026-02-02
 
 ### Changed

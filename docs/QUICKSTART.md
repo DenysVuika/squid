@@ -89,6 +89,37 @@ This installs the `squid` command to your system. Alternatively, you can build i
 
 ## 3. Configure Your Environment
 
+You can configure squid in two ways:
+
+### Option A: Interactive Setup (Recommended)
+
+Run the `init` command to create a `squid.config.json` file:
+
+```bash
+squid init
+```
+
+This will prompt you for:
+- API URL (e.g., `http://127.0.0.1:1234/v1` for LM Studio)
+- API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+- API Key (optional, leave empty for local models)
+
+Example session:
+```
+$ squid init
+INFO: Initializing squid configuration...
+? API URL: http://127.0.0.1:1234/v1
+? API Model: local-model
+? API Key (optional, press Enter to skip): 
+
+Configuration:
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [not set]
+```
+
+### Option B: Manual Configuration
+
 Create a `.env` file in the project root:
 
 ### For LM Studio
@@ -118,6 +149,12 @@ API_KEY=sk-your-actual-api-key-here
 ### For Other Providers
 
 Check your provider's documentation for the correct `API_URL`, `API_MODEL`, and `API_KEY` values.
+
+**Important Notes:**
+- If both `squid.config.json` and `.env` exist, the config file takes precedence
+- **Commit `squid.config.json`** to your repository to share project settings with your team
+- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
+- For cloud API services (OpenAI, etc.), store the actual API key in `.env` and omit `api_key` from `squid.config.json`
 
 ## 4. Try Your First Command
 

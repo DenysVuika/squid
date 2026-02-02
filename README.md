@@ -121,6 +121,39 @@ For development, use `cargo run --` instead of `squid` in the examples below.
 
 ## Configuration
 
+You can configure squid in two ways:
+
+### Option 1: Interactive Setup (Recommended)
+
+Use the `init` command to create a `squid.config.json` file interactively:
+
+```bash
+squid init
+```
+
+This will prompt you for:
+- **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
+- **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+- **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
+
+The configuration is saved to `squid.config.json` in your current directory. This file can be committed to your repository to share project settings with your team.
+
+**Example session:**
+```
+$ squid init
+INFO: Initializing squid configuration...
+? API URL: http://127.0.0.1:1234/v1
+? API Model: local-model
+? API Key (optional, press Enter to skip): 
+
+Configuration:
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [not set]
+```
+
+### Option 2: Manual Configuration
+
 Create a `.env` file in the project root:
 
 ```bash
@@ -129,6 +162,12 @@ API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
 ```
+
+**Important Notes:**
+- `squid.config.json` takes precedence over `.env` variables. If both exist, the config file will be used.
+- **Commit `squid.config.json`** to your repository to share project settings with your team
+- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
+- For cloud API services (OpenAI, etc.), store the actual API key in `.env` and omit `api_key` from `squid.config.json`
 
 ### Configuration Options
 
