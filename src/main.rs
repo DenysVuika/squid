@@ -444,9 +444,18 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    logger::init();
 
     let cli = Cli::parse();
+
+    // Load config early to initialize logger with correct log level
+    // For init command, we'll use defaults since config doesn't exist yet
+    let app_config = if matches!(cli.command, Commands::Init) {
+        config::Config::default()
+    } else {
+        config::Config::load()
+    };
+
+    logger::init(Some(&app_config.log_level));
 
     match &cli.command {
         Commands::Init => {
@@ -470,12 +479,21 @@ async fn main() {
                 .with_help_message("API key if required (leave empty for local models)")
                 .prompt_skippable();
 
-            match (api_url, api_model, api_key) {
-                (Ok(url), Ok(model), Ok(key)) => {
+            let log_level = inquire::Select::new(
+                "Log Level:",
+                vec!["error", "warn", "info", "debug", "trace"],
+            )
+            .with_help_message("Logging verbosity (info is recommended)")
+            .with_starting_cursor(2) // Default to "info"
+            .prompt();
+
+            match (api_url, api_model, api_key, log_level) {
+                (Ok(url), Ok(model), Ok(key), Ok(level)) => {
                     let config = config::Config {
                         api_url: url,
                         api_model: model,
                         api_key: key.filter(|k| !k.is_empty()),
+                        log_level: level.to_string(),
                     };
 
                     match config.save() {
@@ -489,6 +507,7 @@ async fn main() {
                             } else {
                                 println!("  API Key: [not set]");
                             }
+                            println!("  Log Level: {}", config.log_level);
                         }
                         Err(e) => {
                             error!("Failed to save configuration: {}", e);
@@ -536,8 +555,6 @@ async fn main() {
                 None
             };
 
-            let app_config = config::Config::load();
-
             if *no_stream {
                 match ask_llm(&full_question, file_content.as_deref(), None, &app_config).await {
                     Ok(response) => {
@@ -582,8 +599,6 @@ async fn main() {
             } else {
                 "Please review this code.".to_string()
             };
-
-            let app_config = config::Config::load();
 
             if *no_stream {
                 match ask_llm(

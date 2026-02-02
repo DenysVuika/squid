@@ -7,11 +7,18 @@ use std::path::PathBuf;
 ///
 /// This configuration is typically stored in `squid.config.json` in the project directory.
 ///
+/// **Fields:**
+/// - `api_url`: Base URL for the LLM API (e.g., `http://127.0.0.1:1234/v1`)
+/// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+/// - `api_key`: Optional API key (use `None` for local models)
+/// - `log_level`: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+///
 /// **Best Practices:**
 /// - Commit `squid.config.json` to your repository to share project settings with your team
 /// - Keep sensitive API keys in `.env` file (which is gitignored)
 /// - Use `api_key: None` in config file for local models (LM Studio, Ollama)
 /// - For cloud services (OpenAI, etc.), omit `api_key` from config and set it via `.env`
+/// - Default `log_level` is `info` (recommended for most users)
 ///
 /// **Configuration Priority:**
 /// 1. `squid.config.json` (if exists) - project settings
@@ -22,6 +29,12 @@ pub struct Config {
     pub api_model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl Default for Config {
@@ -30,6 +43,7 @@ impl Default for Config {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
             api_model: "local-model".to_string(),
             api_key: None,
+            log_level: default_log_level(),
         }
     }
 }
@@ -62,6 +76,7 @@ impl Config {
             api_url: std::env::var("API_URL").unwrap_or_else(|_| Self::default().api_url),
             api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
             api_key: std::env::var("API_KEY").ok(),
+            log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
         }
     }
 
@@ -93,6 +108,7 @@ mod tests {
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
         assert_eq!(config.api_model, "local-model");
         assert_eq!(config.api_key, None);
+        assert_eq!(config.log_level, "info");
     }
 
     #[test]

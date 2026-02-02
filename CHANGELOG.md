@@ -10,13 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Init Command**: Interactive configuration setup via `squid init`
-  - Prompts for API URL, API Model, and optional API Key
+  - Prompts for API URL, API Model, optional API Key, and Log Level
   - Creates `squid.config.json` in the current directory for project settings
   - Configuration file can be committed to share team settings (like `.eslintrc`, `.prettierrc`)
   - Configuration file takes precedence over environment variables
   - Falls back to `.env` variables if config file doesn't exist
   - Supports all existing LLM providers (LM Studio, Ollama, OpenAI, etc.)
   - Best practice: commit `squid.config.json`, keep sensitive API keys in `.env`
+- **Configurable Log Level**: Control logging verbosity via config or environment
+  - Set via `squid init` with interactive prompt (error, warn, info, debug, trace)
+  - Stored in `squid.config.json` or `LOG_LEVEL` environment variable
+  - Default level is `info` (recommended for most users)
+  - Config file setting takes precedence over `LOG_LEVEL` environment variable
 
 ## [0.3.0] - 2026-02-02
 

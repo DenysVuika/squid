@@ -1,4 +1,5 @@
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model"
+  "api_model": "local-model",
+  "log_level": "info"
 }

@@ -52,7 +52,8 @@ cat > squid.config.json << 'EOF'
 {
   "api_url": "http://test-url:1234/v1",
   "api_model": "test-model",
-  "api_key": "test-key"
+  "api_key": "test-key",
+  "log_level": "info"
 }
 EOF
 run_test "Config file created" "[ -f squid.config.json ]"
@@ -63,6 +64,7 @@ echo "Test 2: Verifying config file structure"
 run_test "Config has api_url" "grep -q '\"api_url\"' squid.config.json"
 run_test "Config has api_model" "grep -q '\"api_model\"' squid.config.json"
 run_test "Config has api_key" "grep -q '\"api_key\"' squid.config.json"
+run_test "Config has log_level" "grep -q '\"log_level\"' squid.config.json"
 echo
 
 # Test 3: Config example file exists
@@ -72,14 +74,17 @@ run_test "Example config is valid JSON" "cat squid.config.json.example | python3
 echo
 
 # Test 4: Config without api_key (optional field)
-echo "Test 4: Testing config without api_key"
+# Test 4: Testing config without optional fields
+echo "Test 4: Testing config without optional fields (api_key)"
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model"
+  "api_model": "local-model",
+  "log_level": "info"
 }
 EOF
 run_test "Config without api_key is valid JSON" "cat squid.config.json | python3 -m json.tool > /dev/null"
+run_test "Config has log_level field" "grep -q '\"log_level\": \"info\"' squid.config.json"
 echo
 
 # Test 5: Config module exists

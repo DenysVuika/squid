@@ -103,6 +103,7 @@ This will prompt you for:
 - API URL (e.g., `http://127.0.0.1:1234/v1` for LM Studio)
 - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 - API Key (optional, leave empty for local models)
+- Log Level (error, warn, info, debug, trace)
 
 Example session:
 ```
@@ -111,11 +112,13 @@ INFO: Initializing squid configuration...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
+? Log Level: info
 
 Configuration:
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
+  Log Level: info
 ```
 
 ### Option B: Manual Configuration
@@ -128,6 +131,7 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
+LOG_LEVEL=info
 ```
 
 ### For Ollama
@@ -136,6 +140,7 @@ API_KEY=not-needed
 API_URL=http://localhost:11434/v1
 API_MODEL=qwen2.5-coder
 API_KEY=not-needed
+LOG_LEVEL=info
 ```
 
 ### For OpenAI
@@ -144,6 +149,7 @@ API_KEY=not-needed
 API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
+LOG_LEVEL=info
 ```
 
 ### For Other Providers

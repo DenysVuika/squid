@@ -135,6 +135,7 @@ This will prompt you for:
 - **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
 - **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 - **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
+- **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 
 The configuration is saved to `squid.config.json` in your current directory. This file can be committed to your repository to share project settings with your team.
 
@@ -145,11 +146,13 @@ INFO: Initializing squid configuration...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
+? Log Level: info
 
 Configuration:
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
+  Log Level: info
 ```
 
 ### Option 2: Manual Configuration
@@ -188,6 +191,13 @@ API_KEY=not-needed
   - Ollama: `not-needed` (no authentication required)
   - OpenAI: Your actual API key (e.g., `sk-...`)
   - Other: Your provider's API key
+
+- `LOG_LEVEL`: Logging verbosity (optional, default: `info`)
+  - `error`: Only errors
+  - `warn`: Warnings and errors
+  - `info`: Informational messages (recommended)
+  - `debug`: Detailed debugging information
+  - `trace`: Very verbose output
 
 ## Usage
 
