@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Next Release (v0.3.0)
 
+### Changed
+
+- **Streaming is now the default behavior**: Responses stream in real-time by default
+  - Replaced `--stream` / `-s` flag with `--no-stream` flag
+  - Use `--no-stream` to get complete response at once (useful for scripting/piping)
+  - Improved user experience with immediate feedback
+  - Both streaming and non-streaming modes fully support tool calling
+  - Updated all documentation and examples to reflect new default behavior
+
 ### Added
 
 - **AGENTS.md**: Added comprehensive guidelines for AI coding assistants working on this project

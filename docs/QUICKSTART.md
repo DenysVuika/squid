@@ -89,7 +89,7 @@ This installs the `squid` command to your system. Alternatively, you can build i
 
 ## 3. Configure Your Environment
 
-Create a `.env` file:
+Create a `.env` file in the project root:
 
 ### For LM Studio
 
@@ -121,7 +121,7 @@ Check your provider's documentation for the correct `API_URL`, `API_MODEL`, and 
 
 ## 4. Try Your First Command
 
-### Ask a question:
+### Ask a question (streaming by default):
 
 ```bash
 squid ask "What is Rust?"
@@ -139,6 +139,12 @@ squid ask -f sample-files/sample.txt "What is this document about?"
 squid review src/main.rs
 ```
 
+### Disable streaming (for scripting/piping):
+
+```bash
+squid ask --no-stream "Generate a hello world function"
+```
+
 > **Development:** If you didn't install squid, use `cargo run --` instead of `squid`:
 > ```bash
 > cargo run -- ask "What is Rust?"
@@ -146,43 +152,56 @@ squid review src/main.rs
 
 That's it! 🎉
 
+> **Note:** All commands stream responses by default. Use `--no-stream` when you need the complete response at once (e.g., for piping to other commands or scripting).
+
 ## 5. Common Use Cases
 
 ### Ask Questions
 
 ```bash
-# Basic question
+# Basic question (streams by default)
 squid ask "What is Rust?"
 
 # With additional context
 squid ask "Explain Rust" -m "Focus on memory safety"
+
+# Disable streaming for complete response
+squid ask --no-stream "What is Rust?"
 ```
 
 ### Analyze Files
 
 ```bash
+# Streams by default
 squid ask -f src/main.rs "What does this code do?"
 squid ask -f README.md "Summarize this project"
+
+# Complete response at once
+squid ask -f config.json --no-stream "Extract the API settings"
 ```
 
 ### Review Code
 
 ```bash
-# Basic review
+# Basic review (streams by default)
 squid review src/main.rs
 
 # Focused review
 squid review src/auth.rs -m "Focus on security issues"
 
-# With streaming
-squid review components/App.tsx --stream
+# Complete review at once
+squid review components/App.tsx --no-stream
 ```
 
-### Use Streaming for Real-Time Output
+### Disable Streaming for Scripting
 
 ```bash
-squid ask -f large_file.txt -s "Provide a detailed analysis"
-squid review sample-files/example.rs -s
+# Get complete response for piping
+result=$(squid ask --no-stream "Generate a variable name for user data")
+echo $result | tr '[:upper:]' '[:lower:]'
+
+# Use in scripts
+squid review sample-files/example.rs --no-stream > review.txt
 ```
 
 ## 6. Command Syntax
@@ -197,10 +216,12 @@ Arguments:
 
 Options:
   -m, --message <MESSAGE>  Optional additional context or instructions
-  -s, --stream             Stream the response (real-time output)
+  --no-stream              Disable streaming (return complete response at once)
   -f, --file <FILE>        Provide a file for context
   -h, --help               Print help
 ```
+
+**Note:** Responses are streamed by default. Use `--no-stream` for complete response.
 
 ### Review Command
 
@@ -212,22 +233,27 @@ Arguments:
 
 Options:
   -m, --message <MESSAGE>  Optional additional message or specific question
-  -s, --stream             Stream the response
+  --no-stream              Disable streaming (return complete response at once)
   -h, --help               Print help
 ```
+
+**Note:** Reviews are streamed by default. Use `--no-stream` for complete response.
 
 ## 7. Tips for Better Results
 
 ### ✅ Use the Right Command
 
 ```bash
-# For questions and analysis
+# For questions and analysis (streams by default)
 squid ask "What is async/await in Rust?"
 squid ask -f code.rs "Explain this code"
 
-# For code reviews
+# For code reviews (streams by default)
 squid review src/main.rs
 squid review app.ts -m "Check for security issues"
+
+# Use --no-stream for scripting
+squid ask --no-stream "List three Rust features" | head -n 3
 ```
 
 ### ✅ Be Specific with Context
@@ -249,11 +275,16 @@ The `review` command automatically uses specialized prompts for:
 - HTML (`.html`) - Semantics, accessibility
 - CSS (`.css`, `.scss`) - Performance, responsive design
 
-### ✅ Use Streaming for Long Content
+### ✅ Streaming is Default (Disable When Needed)
 
 ```bash
-squid ask -f big_document.md -s "Analyze this thoroughly"
-squid review large_component.tsx --stream
+# Streaming is automatic - great for watching progress
+squid ask -f big_document.md "Analyze this thoroughly"
+squid review large_component.tsx
+
+# Disable for scripting or piping
+squid ask --no-stream "Brief answer" | grep "keyword"
+squid review code.rs --no-stream > review-results.txt
 ```
 
 ### ✅ Tool Calling with Security
@@ -314,20 +345,24 @@ squid ask "Create a hello.txt file with 'Hello, World!'"
 ## 10. Quick Reference
 
 ```bash
-# Ask questions
+# Ask questions (streaming by default)
 squid ask "question here"
 squid ask "question" -m "additional context"
 squid ask -f filename.txt "question here"
-squid ask -f filename.txt -s "question here"
+squid ask --no-stream "question here"  # Complete response at once
 
-# Review code
+# Review code (streaming by default)
 squid review src/main.rs
 squid review app.ts -m "Focus on security"
-squid review styles.css --stream
+squid review styles.css --no-stream  # Complete review at once
 
 # Tool calling (with approval prompts)
 squid ask "Read README.md and summarize it"
 squid ask "Create a notes.txt file with today's tasks"
+
+# Scripting/piping
+result=$(squid ask --no-stream "Generate a name")
+squid review code.rs --no-stream > output.txt
 
 # Get help
 squid ask --help
@@ -338,7 +373,7 @@ squid review --help
 
 1. Enable debug logging:
    ```bash
-   RUST_LOG=debug squid ask -f sample-files/sample.txt "test"
+   RUST_LOG=debug squid ask "test question"
    ```
 
 2. Check your configuration:
