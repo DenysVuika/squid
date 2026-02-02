@@ -4,8 +4,79 @@ Welcome! This guide will get you up and running with squid in under 5 minutes.
 
 ## 1. Prerequisites
 
-- Rust installed (for building)
-- LM Studio running locally OR OpenAI API key
+### Required
+
+- **Rust toolchain** (for building squid)
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+
+### Choose Your LLM Provider
+
+You need **one** of the following:
+
+#### Option A: LM Studio (Recommended for Beginners)
+
+[LM Studio](https://lmstudio.ai/) - Easy-to-use GUI for running local LLMs.
+
+1. Download from https://lmstudio.ai/
+2. Install and launch LM Studio
+3. Download recommended model: **Qwen2.5-Coder-7B-Instruct**
+   - Search in LM Studio: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
+   - Or visit: https://huggingface.co/lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit
+4. Load the model (click on it in the "My Models" tab)
+5. Start local server:
+   - Click "Local Server" tab (↔️ icon)
+   - Click "Start Server"
+   - Default: `http://127.0.0.1:1234/v1`
+
+#### Option B: Ollama (Lightweight CLI)
+
+[Ollama](https://ollama.com/) - Command-line tool for running LLMs.
+
+1. **Install**:
+   ```bash
+   # macOS
+   brew install ollama
+   
+   # Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # Windows/Other - download from https://ollama.com/
+   ```
+
+2. **Start the service**:
+   ```bash
+   ollama serve
+   ```
+
+3. **Pull recommended model** (in a new terminal):
+   ```bash
+   ollama pull qwen2.5-coder
+   ```
+   - Model info: https://ollama.com/library/qwen2.5-coder
+   - Size options: 0.5B, 1.5B, 3B, 7B (default/recommended), 14B, 32B
+
+4. **Verify**:
+   ```bash
+   ollama list  # Should show qwen2.5-coder
+   ```
+
+#### Option C: OpenAI API
+
+Use OpenAI's cloud service:
+
+1. Get API key from https://platform.openai.com/api-keys
+2. Add credits to your account
+3. Choose a model: `gpt-4`, `gpt-4-turbo`, or `gpt-3.5-turbo`
+
+#### Option D: Other OpenAI-Compatible APIs
+
+Any OpenAI-compatible REST API works:
+- OpenRouter (https://openrouter.ai/)
+- Together AI (https://together.ai/)
+- Anyscale (https://anyscale.com/)
+- Custom endpoints
 
 ## 2. Install squid
 
@@ -20,11 +91,19 @@ This installs the `squid` command to your system. Alternatively, you can build i
 
 Create a `.env` file:
 
-### For LM Studio (Local - Recommended for Testing)
+### For LM Studio
 
 ```bash
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
+API_KEY=not-needed
+```
+
+### For Ollama
+
+```bash
+API_URL=http://localhost:11434/v1
+API_MODEL=qwen2.5-coder
 API_KEY=not-needed
 ```
 
@@ -35,6 +114,10 @@ API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
 ```
+
+### For Other Providers
+
+Check your provider's documentation for the correct `API_URL`, `API_MODEL`, and `API_KEY` values.
 
 ## 4. Try Your First Command
 
@@ -201,9 +284,19 @@ squid ask "Create a hello.txt file with 'Hello, World!'"
 - Try using absolute path if relative doesn't work
 
 ### No response / Connection error
-- **LM Studio**: Make sure it's running and server is enabled
-- **OpenAI**: Check your API key is valid and has credits
-- Verify API_URL in your `.env` file
+- **LM Studio**: 
+  - Make sure LM Studio is running
+  - Verify a model is loaded
+  - Check that local server is started (↔️ tab → "Start Server")
+  - Default URL: `http://127.0.0.1:1234/v1`
+- **Ollama**: 
+  - Make sure `ollama serve` is running
+  - Verify model is pulled: `ollama list`
+  - Default URL: `http://localhost:11434/v1`
+- **OpenAI**: 
+  - Check your API key is valid and has credits
+  - Verify URL: `https://api.openai.com/v1`
+- **All providers**: Verify `API_URL`, `API_MODEL`, and `API_KEY` in your `.env` file
 
 ### Response not relevant to file
 - Make sure your question specifically asks about the file content
@@ -253,10 +346,9 @@ squid review --help
    cat .env
    ```
 
-3. Verify LM Studio is running:
-   - Open LM Studio
-   - Load a model
-   - Enable local server (bottom left)
-   - Default: `http://127.0.0.1:1234`
+3. Verify your LLM provider is running:
+   - **LM Studio**: Model loaded, local server started
+   - **Ollama**: `ollama serve` running, model pulled
+   - **OpenAI**: API key valid, account has credits
 
 Happy coding! 🦑

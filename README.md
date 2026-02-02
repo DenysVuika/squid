@@ -13,6 +13,94 @@ A CLI application for interacting with LLM APIs (OpenAI-compatible) with support
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
 
+## Prerequisites
+
+Before you begin, you'll need:
+
+1. **Rust toolchain** (for building squid)
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+2. **An OpenAI-compatible LLM service** (choose one):
+
+### Option A: LM Studio (Recommended for Local Development)
+
+[LM Studio](https://lmstudio.ai/) provides a user-friendly interface for running local LLMs.
+
+1. **Download and install** LM Studio from https://lmstudio.ai/
+2. **Download a model** - We recommend **Qwen2.5-Coder** for code-related tasks:
+   - In LM Studio, search for: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
+   - Or browse: https://huggingface.co/lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit
+   - Click download and wait for it to complete
+3. **Load the model** - Select the downloaded model in LM Studio
+4. **Start the local server**:
+   - Click the "Local Server" tab (↔️ icon on the left)
+   - Click "Start Server"
+   - Default endpoint: `http://127.0.0.1:1234/v1`
+   - Note: No API key required for local server
+
+**Alternative models in LM Studio:**
+- `Meta-Llama-3.1-8B-Instruct` - General purpose
+- `deepseek-coder` - Code-focused
+- Any other model compatible with your hardware
+
+### Option B: Ollama (Lightweight CLI Option)
+
+[Ollama](https://ollama.com/) is a lightweight, command-line tool for running LLMs.
+
+1. **Install Ollama**:
+   ```bash
+   # macOS
+   brew install ollama
+   
+   # Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # Or download from https://ollama.com/
+   ```
+
+2. **Start Ollama service**:
+   ```bash
+   ollama serve
+   ```
+
+3. **Pull the recommended model** - **Qwen2.5-Coder**:
+   ```bash
+   ollama pull qwen2.5-coder
+   ```
+   - Model page: https://ollama.com/library/qwen2.5-coder
+   - Available sizes: 0.5B, 1.5B, 3B, 7B, 14B, 32B
+   - Default (7B) is recommended for most use cases
+
+4. **Verify it's running**:
+   ```bash
+   ollama list  # Should show qwen2.5-coder
+   curl http://localhost:11434/api/tags  # API check
+   ```
+
+**Alternative models in Ollama:**
+- `codellama` - Code generation
+- `deepseek-coder` - Code understanding
+- `llama3.1` - General purpose
+- See all at https://ollama.com/library
+
+### Option C: OpenAI API
+
+Use OpenAI's cloud API for access to GPT models:
+
+1. **Get an API key** from https://platform.openai.com/api-keys
+2. **Add credits** to your OpenAI account
+3. **Choose a model**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
+
+### Option D: Other OpenAI-Compatible Services
+
+Squid works with any OpenAI-compatible REST API:
+- **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
+- **Together AI** (https://together.ai/) - Fast inference
+- **Anyscale** (https://anyscale.com/) - Enterprise solutions
+- **Local APIs** - Any custom OpenAI-compatible endpoint
+
 ## Installation
 
 ### Install to Your System
@@ -45,16 +133,22 @@ API_KEY=not-needed
 ### Configuration Options
 
 - `API_URL`: The base URL for the API endpoint
-  - Default: `http://127.0.0.1:1234/v1` (LM Studio)
-  - For OpenAI: `https://api.openai.com/v1`
+  - LM Studio: `http://127.0.0.1:1234/v1` (default)
+  - Ollama: `http://localhost:11434/v1`
+  - OpenAI: `https://api.openai.com/v1`
+  - Other: Your provider's base URL
   
 - `API_MODEL`: The model to use
-  - Default: `local-model` (LM Studio uses whatever model is loaded)
-  - For OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
+  - LM Studio: `local-model` (uses whatever model is loaded)
+  - Ollama: `qwen2.5-coder` (recommended) or any pulled model
+  - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
+  - Other: Check your provider's model names
   
 - `API_KEY`: Your API key
-  - Default: `not-needed` (LM Studio doesn't require authentication)
-  - For OpenAI: Your actual API key (e.g., `sk-...`)
+  - LM Studio: `not-needed` (no authentication required)
+  - Ollama: `not-needed` (no authentication required)
+  - OpenAI: Your actual API key (e.g., `sk-...`)
+  - Other: Your provider's API key
 
 ## Usage
 
@@ -206,24 +300,50 @@ squid run <command>
 
 ### Using with LM Studio
 
-1. Start LM Studio and load a model
-2. Enable the local server (default: `http://127.0.0.1:1234`)
-3. Set up your `.env`:
+1. Download and install LM Studio from https://lmstudio.ai/
+2. Download the recommended model: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
+3. Load the model in LM Studio
+4. Start the local server (↔️ icon → "Start Server")
+5. Set up your `.env`:
    ```bash
    API_URL=http://127.0.0.1:1234/v1
    API_MODEL=local-model
    API_KEY=not-needed
    ```
-4. Run:
-  ```bash
+6. Run:
+   ```bash
    squid ask -s "Write a hello world program in Rust"
    # Or with a file
    squid ask -f sample-files/sample.txt "What is this document about?"
    ```
 
+### Using with Ollama
+
+1. Install Ollama from https://ollama.com/
+2. Start Ollama service:
+   ```bash
+   ollama serve
+   ```
+3. Pull the recommended model:
+   ```bash
+   ollama pull qwen2.5-coder
+   ```
+4. Set up your `.env`:
+   ```bash
+   API_URL=http://localhost:11434/v1
+   API_MODEL=qwen2.5-coder
+   API_KEY=not-needed
+   ```
+5. Run:
+   ```bash
+   squid ask "Write a hello world program in Rust"
+   # Or with streaming
+   squid ask -s -f mycode.rs "Explain this code"
+   ```
+
 ### Using with OpenAI
 
-1. Get your API key from OpenAI
+1. Get your API key from https://platform.openai.com/api-keys
 2. Set up your `.env`:
    ```bash
    API_URL=https://api.openai.com/v1
