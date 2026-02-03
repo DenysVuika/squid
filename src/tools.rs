@@ -1,4 +1,5 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
+use console::style;
 use inquire::Confirm;
 use log::{error, info, warn};
 use regex::Regex;
@@ -196,11 +197,16 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
         }
     };
 
-    // Ask for user approval
+    // Ask for user approval with styled formatting
     let approval_message = match name {
         "read_file" => {
             let path = args["path"].as_str().unwrap_or("unknown");
-            format!("Allow reading file: {}?", path)
+            format!(
+                "🦑 {} wants to {}\n  📄 File: {}",
+                style("Tool Request").cyan().bold(),
+                style("read a file").yellow(),
+                style(path).green()
+            )
         }
         "write_file" => {
             let path = args["path"].as_str().unwrap_or("unknown");
@@ -211,21 +217,39 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
                 content.to_string()
             };
             format!(
-                "Allow writing to file: {}?\nContent preview:\n{}",
-                path, preview
+                "🦑 {} wants to {}\n  📄 File: {}\n  📝 Content preview:\n{}",
+                style("Tool Request").cyan().bold(),
+                style("write to a file").yellow(),
+                style(path).green(),
+                style(&preview).dim()
             )
         }
         "grep" => {
             let pattern = args["pattern"].as_str().unwrap_or("unknown");
             let path = args["path"].as_str().unwrap_or("unknown");
-            format!("Allow searching for pattern '{}' in: {}?", pattern, path)
+            format!(
+                "🦑 {} wants to {}\n  🔍 Pattern: {}\n  📂 Path: {}",
+                style("Tool Request").cyan().bold(),
+                style("search files").yellow(),
+                style(pattern).magenta(),
+                style(path).green()
+            )
         }
-        _ => format!("Allow executing tool: {}?", name),
+        _ => format!(
+            "🦑 {} wants to execute: {}",
+            style("Tool Request").cyan().bold(),
+            style(name).yellow()
+        ),
     };
 
     let approved = Confirm::new(&approval_message)
         .with_default(false)
-        .with_help_message("Press Y to allow, N to skip")
+        .with_help_message(&format!(
+            "{} {} to allow, {} to deny",
+            style("→").cyan(),
+            style("Y").green().bold(),
+            style("N").red().bold()
+        ))
         .prompt();
 
     match approved {
