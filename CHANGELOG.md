@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **File Context in Ask Command**: Fixed issue where LLM didn't know the actual filename when using `-f` flag
+  - Previously, only file content was sent without the filename
+  - LLM would guess incorrect file paths (e.g., `./config.json` instead of `squid.config.json`)
+  - Now includes filename in the context: "Here is the content of the file 'squid.config.json':"
+  - Applies to both streaming and non-streaming modes
+
 ### Changed
+
+- **Default Log Level**: Changed default log level from `info` to `error`
+  - Reduces noise in normal operation
+  - Users can still set to `info`, `debug`, or `trace` for more verbose output
+  - Configure via `squid init`, `LOG_LEVEL` environment variable, or `squid.config.json`
+
+- **Personalized Tool Approval Prompts**: Tool requests now use first-person conversational language
+  - Changed from "Tool Request wants to read a file" to "Can I read this file?"
+  - Changed from "Tool Request wants to write to a file" to "Can I write to this file?"
+  - Changed from "Tool Request wants to search files" to "Can I search for this pattern?"
+  - Makes the assistant feel more personal and conversational
 
 - **Modular Prompt Architecture**: Introduced `persona.md` for shared AI personality
   - Separated persona definition from task-specific instructions
@@ -62,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable Log Level**: Control logging verbosity via config or environment
   - Set via `squid init` with interactive prompt (error, warn, info, debug, trace)
   - Stored in `squid.config.json` or `LOG_LEVEL` environment variable
-  - Default level is `info` (recommended for most users)
+  - Default level is `error` (minimal noise)
   - Config file setting takes precedence over `LOG_LEVEL` environment variable
 
 ### Removed

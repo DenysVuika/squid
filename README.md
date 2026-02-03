@@ -226,10 +226,10 @@ API_KEY=not-needed
   - OpenAI: Your actual API key (e.g., `sk-...`)
   - Other: Your provider's API key
 
-- `LOG_LEVEL`: Logging verbosity (optional, default: `info`)
-  - `error`: Only errors
+- `LOG_LEVEL`: Logging verbosity (optional, default: `error`)
+  - `error`: Only errors (default)
   - `warn`: Warnings and errors
-  - `info`: Informational messages (recommended)
+  - `info`: Informational messages
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
 

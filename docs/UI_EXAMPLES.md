@@ -20,7 +20,7 @@ Tool approval prompts now feature styled, colorful formatting with emoji icons.
 ### Reading a File
 
 ```
-🦑 Tool Request wants to read a file
+🦑 Can I read this file?
   📄 File: src/main.rs
 → Y to allow, N to deny [y/N]
 ```
@@ -28,7 +28,7 @@ Tool approval prompts now feature styled, colorful formatting with emoji icons.
 ### Writing a File
 
 ```
-🦑 Tool Request wants to write to a file
+🦑 Can I write to this file?
   📄 File: config.json
   📝 Content preview:
 {
@@ -41,7 +41,7 @@ Tool approval prompts now feature styled, colorful formatting with emoji icons.
 For large files, the content preview is truncated:
 
 ```
-🦑 Tool Request wants to write to a file
+🦑 Can I write to this file?
   📄 File: large_document.md
   📝 Content preview:
 # Large Document
@@ -53,7 +53,7 @@ This is a very long document with lots of content that will be truncated... (204
 ### Searching Files (grep)
 
 ```
-🦑 Tool Request wants to search files
+🦑 Can I search for this pattern?
   🔍 Pattern: TODO
   📂 Path: src
 → Y to allow, N to deny [y/N]
@@ -63,8 +63,8 @@ This is a very long document with lots of content that will be truncated... (204
 
 The terminal output uses a consistent color scheme:
 
-- **Cyan Bold**: Headers and section titles ("Tool Request")
-- **Yellow**: Actions being performed ("read a file", "write to a file")
+- **Cyan Bold**: Headers and section titles
+- **Yellow**: Actions being performed ("read this file", "write to this file")
 - **Green**: File and directory paths
 - **Magenta**: Search patterns
 - **Dim**: Preview content
@@ -87,7 +87,7 @@ The terminal output uses a consistent color scheme:
 ```
 $ squid review src/main.rs
 
-🦑 Tool Request wants to read a file
+🦑 Can I read this file?
   📄 File: src/main.rs
 → Y to allow, N to deny [y/N] y
 

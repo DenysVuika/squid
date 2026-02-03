@@ -51,6 +51,7 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
 async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
+    file_path: Option<&str>,
     system_prompt: Option<&str>,
     app_config: &config::Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -64,9 +65,14 @@ async fn ask_llm_streaming(
     let client = Client::with_config(config);
 
     let user_message = if let Some(content) = file_content {
+        let file_info = if let Some(path) = file_path {
+            format!("the file '{}'", path)
+        } else {
+            "the file".to_string()
+        };
         format!(
-            "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
-            content, question
+            "Here is the content of {}:\n\n```\n{}\n```\n\nQuestion: {}",
+            file_info, content, question
         )
     } else {
         question.to_string()
@@ -249,6 +255,7 @@ async fn ask_llm_streaming(
 async fn ask_llm(
     question: &str,
     file_content: Option<&str>,
+    file_path: Option<&str>,
     system_prompt: Option<&str>,
     app_config: &config::Config,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -262,9 +269,14 @@ async fn ask_llm(
     let client = Client::with_config(config);
 
     let user_message = if let Some(content) = file_content {
+        let file_info = if let Some(path) = file_path {
+            format!("the file '{}'", path)
+        } else {
+            "the file".to_string()
+        };
         format!(
-            "Here is the content of the file:\n\n```\n{}\n```\n\nQuestion: {}",
-            content, question
+            "Here is the content of {}:\n\n```\n{}\n```\n\nQuestion: {}",
+            file_info, content, question
         )
     } else {
         question.to_string()
@@ -642,6 +654,7 @@ async fn main() {
                 match ask_llm(
                     &full_question,
                     file_content.as_deref(),
+                    file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
                 )
@@ -658,6 +671,7 @@ async fn main() {
                 if let Err(e) = ask_llm_streaming(
                     &full_question,
                     file_content.as_deref(),
+                    file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
                 )
@@ -699,6 +713,7 @@ async fn main() {
                 match ask_llm(
                     &question,
                     Some(&file_content),
+                    file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
                 )
@@ -715,6 +730,7 @@ async fn main() {
                 if let Err(e) = ask_llm_streaming(
                     &question,
                     Some(&file_content),
+                    file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
                 )

@@ -2,7 +2,7 @@ use env_logger::{Builder, Env};
 use std::io::Write;
 
 pub fn init(log_level: Option<&str>) {
-    let default_level = log_level.unwrap_or("info");
+    let default_level = log_level.unwrap_or("error");
 
     let env = Env::default()
         .filter_or("LOG_LEVEL", default_level)

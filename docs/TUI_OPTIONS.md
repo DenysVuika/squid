@@ -14,7 +14,7 @@ We currently use the `inquire` crate with `console` for styled, visually appeali
 
 ### Example Output:
 ```
-🦑 Tool Request wants to read a file
+🦑 Can I read this file?
   📄 File: src/main.rs
 → Y to allow, N to deny
 ```
@@ -127,7 +127,7 @@ use console::Term;
 
 let term = Term::stdout();
 term.write_line("╭─────────────────────────╮")?;
-term.write_line("│  🦑 Tool Request        │")?;
+term.write_line("│  🦑 Can I help?         │")?;
 term.write_line("╰─────────────────────────╯")?;
 ```
 
