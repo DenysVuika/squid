@@ -98,7 +98,7 @@ async fn ask_llm_streaming(
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
     let mut execution_handles = Vec::new();
     let mut lock = io::stdout().lock();
-    writeln!(lock)?;
+    write!(lock, "\n🦑: ")?;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -641,7 +641,7 @@ async fn main() {
                 .await
                 {
                     Ok(response) => {
-                        println!("\n{}", response);
+                        println!("\n🦑: {}", response);
                     }
                     Err(e) => {
                         error!("Failed to get response: {}", e);
@@ -697,7 +697,7 @@ async fn main() {
                 .await
                 {
                     Ok(response) => {
-                        println!("\n{}", response);
+                        println!("\n🦑: {}", response);
                     }
                     Err(e) => {
                         error!("Failed to get review: {}", e);

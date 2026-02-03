@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Personality Enhancement**: Assistant responses now prefixed with squid emoji 🦑
+  - Adds friendly personality while maintaining professional tone
+  - Updated system prompt to reflect intelligent squid assistant persona
+  - Applied to both streaming and non-streaming responses
+
+- **Enhanced Tool Approval UI**: Styled and visually improved tool approval prompts
+  - Added `console` crate for colored terminal output
+  - Tool requests now display with emoji icons (🦑 📄 🔍 📂 📝)
+  - Color-coded information (cyan headers, green files, yellow actions, magenta patterns)
+  - Multi-line formatted prompts with clear visual hierarchy
+  - Styled help text with bold Y/N indicators
+  - See `docs/TUI_OPTIONS.md` for more UI enhancement options
+
 - **Custom System Prompts**: New `-p`/`--prompt` flag for `ask` command
   - Override the default system prompt with a custom prompt from a file
   - Useful for specialized tasks (security analysis, performance review, domain-specific expertise)

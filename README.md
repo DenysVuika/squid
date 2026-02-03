@@ -10,6 +10,8 @@ An AI-powered command-line tool for code reviews and suggestions.
 - 🔧 Tool calling support (file read/write/search operations) with security approval
 - 🔒 User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
+- 🎨 **Enhanced UI** with styled prompts, emoji icons, and color-coded information
+- 🦑 Friendly squid assistant personality with professional responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
 
