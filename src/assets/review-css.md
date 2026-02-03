@@ -1,4 +1,6 @@
-You are an expert CSS code reviewer. Analyze the following CSS code and provide constructive feedback focusing on:
+## CSS Code Review Instructions
+
+Analyze the following CSS code and provide constructive feedback focusing on:
 
 **CSS Best Practices:**
 - Use of modern CSS features (Grid, Flexbox, Custom Properties)

@@ -62,11 +62,26 @@ When making changes, **ALWAYS** consider updates to:
 
 These files control LLM behavior and are **critical**:
 
-- `ask-prompt.md` - Instructions for the `ask` command
-- `code-review.md` - Generic code review prompt
+### Modular Prompt Architecture
+
+Squid uses a **modular composition** system (as of v0.4.0):
+
+- `persona.md` - **Shared personality** definition (auto-prepended to all prompts)
+- `ask-prompt.md` - Tool usage instructions for the `ask` command
+- `code-review.md` - Generic code review criteria
 - `review-*.md` - Language-specific review prompts
 
+At runtime, prompts are composed as: `persona.md` + task-specific prompt
+
+**Benefits:**
+- Single source of truth for AI personality
+- Consistent tone across all commands
+- Easier maintenance (update persona once)
+- Task prompts focus only on instructions
+
 **When updating:**
+- **persona.md** - Defines who the assistant is (role, personality, tone)
+- **Task prompts** - Define what to do (instructions, guidelines, examples)
 - Be explicit and clear
 - Use examples
 - Test with the actual LLM
@@ -94,10 +109,11 @@ When adding new tools to `src/tools.rs`:
 1. Add tool definition to `get_tools()`
 2. Add approval prompt in `call_tool()`
 3. Add execution logic in `call_tool()` match statement
-4. **Update `src/assets/ask-prompt.md`** with tool documentation
-5. Update README.md with examples
-6. Update CHANGELOG.md
-7. Update security docs if relevant (docs/SECURITY*.md)
+4. **Update `src/assets/ask-prompt.md`** with tool documentation (instructions only)
+5. Consider if `persona.md` needs updates (usually not - it's about personality, not tools)
+6. Update README.md with examples
+7. Update CHANGELOG.md
+8. Update security docs if relevant (docs/SECURITY*.md)
 
 ## Project-Specific Notes
 

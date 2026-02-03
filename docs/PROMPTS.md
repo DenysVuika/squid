@@ -6,7 +6,40 @@ This document describes all the system prompts used in the `squid` CLI tool.
 
 Squid uses specialized system prompts to guide the LLM's behavior for different commands. These prompts are stored in `src/assets/` and are compiled into the binary.
 
+### Prompt Architecture
+
+As of v0.4.0, squid uses a **modular prompt composition** system:
+
+- **`persona.md`** - Shared AI assistant personality and role definition
+- **Task-specific prompts** - Instructions for specific commands (`ask-prompt.md`, `code-review.md`, etc.)
+
+At runtime, the persona is automatically combined with the task-specific prompt to create the complete system message:
+
+```
+[PERSONA] + [TASK-SPECIFIC INSTRUCTIONS] = COMPLETE SYSTEM PROMPT
+```
+
+This architecture provides:
+- **Consistency** - Same personality across all commands
+- **Maintainability** - Update persona once, affects all prompts
+- **Clarity** - Separates "who you are" from "what you do"
+
 ## Available Prompts
+
+### 0. Shared Persona (`persona.md`)
+
+**Used by:** All commands (automatically combined with task prompts)  
+**Location:** `src/assets/persona.md`  
+**Purpose:** Define the AI assistant's personality and role
+
+**Content:**
+- Defines the assistant as helpful and professional
+- Introduces the squid 🦑 personality (adaptable, precise, equipped with tools)
+- Sets the tone: friendly yet professional
+
+**Note:** This prompt is automatically prepended to all task-specific prompts at runtime. You don't interact with it directly, but it shapes the assistant's behavior across all commands.
+
+---
 
 ### 1. Ask Command Prompt (`ask-prompt.md`)
 
@@ -334,7 +367,10 @@ bat src/assets/review-rust.md  # if you have bat installed
 
 ## Version History
 
-- **v0.4.0**: Added `-p`/`--prompt` flag for custom system prompts in `ask` command
+- **v0.4.0**: 
+  - Added `-p`/`--prompt` flag for custom system prompts in `ask` command
+  - Introduced modular prompt architecture with `persona.md`
+  - Task prompts now focus on instructions only (persona separated)
 - **v0.3.0**: Added `ask-prompt.md` for intelligent tool usage
 - **v0.3.0**: Initial specialized review prompts (Rust, TypeScript, HTML, CSS)
 

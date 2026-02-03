@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Modular Prompt Architecture**: Introduced `persona.md` for shared AI personality
+  - Separated persona definition from task-specific instructions
+  - All prompts now composed at runtime: `persona.md` + task prompt
+  - `ask-prompt.md` now focuses only on tool usage instructions
+  - All review prompts updated to remove conflicting "You are an expert..." statements
+  - Review prompts now use instruction-based headers (e.g., "## Code Review Instructions")
+  - Easier to maintain consistent personality across all commands
+  - Single source of truth for AI assistant behavior and tone
+
 ### Added
 
 - **Personality Enhancement**: Assistant responses now prefixed with squid emoji 🦑
