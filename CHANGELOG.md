@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Personality Enhancement**: Assistant responses now prefixed with squid emoji 🦑
+  - Adds friendly personality while maintaining professional tone
+  - Updated system prompt to reflect intelligent squid assistant persona
+  - Applied to both streaming and non-streaming responses
+
 - **Custom System Prompts**: New `-p`/`--prompt` flag for `ask` command
   - Override the default system prompt with a custom prompt from a file
   - Useful for specialized tasks (security analysis, performance review, domain-specific expertise)
