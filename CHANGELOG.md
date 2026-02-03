@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Default Log Level**: Changed default log level from `info` to `error`
   - Reduces noise in normal operation
+  - Fixed in both `logger.rs` and `config.rs` to ensure consistent defaults
   - Users can still set to `info`, `debug`, or `trace` for more verbose output
   - Configure via `squid init`, `LOG_LEVEL` environment variable, or `squid.config.json`
 

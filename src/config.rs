@@ -18,7 +18,7 @@ use std::path::PathBuf;
 /// - Keep sensitive API keys in `.env` file (which is gitignored)
 /// - Use `api_key: None` in config file for local models (LM Studio, Ollama)
 /// - For cloud services (OpenAI, etc.), omit `api_key` from config and set it via `.env`
-/// - Default `log_level` is `info` (recommended for most users)
+/// - Default `log_level` is `error` (minimal noise)
 ///
 /// **Configuration Priority:**
 /// 1. `squid.config.json` (if exists) - project settings
@@ -34,7 +34,7 @@ pub struct Config {
 }
 
 fn default_log_level() -> String {
-    "info".to_string()
+    "error".to_string()
 }
 
 impl Default for Config {
@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
         assert_eq!(config.api_model, "local-model");
         assert_eq!(config.api_key, None);
-        assert_eq!(config.log_level, "info");
+        assert_eq!(config.log_level, "error");
     }
 
     #[test]
