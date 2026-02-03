@@ -408,7 +408,23 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new project
-    Init,
+    Init {
+        /// Directory to initialize (defaults to current directory)
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        /// API URL (skips interactive prompt if provided)
+        #[arg(long)]
+        url: Option<String>,
+        /// API Model (skips interactive prompt if provided)
+        #[arg(long)]
+        model: Option<String>,
+        /// API Key (skips interactive prompt if provided)
+        #[arg(long)]
+        api_key: Option<String>,
+        /// Log Level (skips interactive prompt if provided)
+        #[arg(long)]
+        log_level: Option<String>,
+    },
     /// Ask a question to the LLM
     Ask {
         /// The question to ask
@@ -447,7 +463,7 @@ async fn main() {
 
     // Load config early to initialize logger with correct log level
     // For init command, we'll use defaults since config doesn't exist yet
-    let app_config = if matches!(cli.command, Commands::Init) {
+    let app_config = if matches!(cli.command, Commands::Init { .. }) {
         config::Config::default()
     } else {
         config::Config::load()
@@ -456,64 +472,117 @@ async fn main() {
     logger::init(Some(&app_config.log_level));
 
     match &cli.command {
-        Commands::Init => {
-            info!("Initializing squid configuration...");
+        Commands::Init {
+            dir,
+            url,
+            model,
+            api_key,
+            log_level,
+        } => {
+            info!("Initializing squid configuration in {:?}...", dir);
+
+            // Create directory if it doesn't exist
+            if !dir.exists() {
+                if let Err(e) = std::fs::create_dir_all(dir) {
+                    error!("Failed to create directory {:?}: {}", dir, e);
+                    return;
+                }
+            }
 
             let default_config = config::Config::default();
 
-            let api_url = inquire::Text::new("API URL:")
-                .with_default(&default_config.api_url)
-                .with_help_message(
-                    "The base URL for the API (e.g., http://127.0.0.1:1234/v1 for LM Studio)",
-                )
-                .prompt();
-
-            let api_model = inquire::Text::new("API Model:")
-                .with_default(&default_config.api_model)
-                .with_help_message("The model identifier to use")
-                .prompt();
-
-            let api_key = inquire::Text::new("API Key (optional, press Enter to skip):")
-                .with_help_message("API key if required (leave empty for local models)")
-                .prompt_skippable();
-
-            let log_level = inquire::Select::new(
-                "Log Level:",
-                vec!["error", "warn", "info", "debug", "trace"],
-            )
-            .with_help_message("Logging verbosity (info is recommended)")
-            .with_starting_cursor(2) // Default to "info"
-            .prompt();
-
-            match (api_url, api_model, api_key, log_level) {
-                (Ok(url), Ok(model), Ok(key), Ok(level)) => {
-                    let config = config::Config {
-                        api_url: url,
-                        api_model: model,
-                        api_key: key.filter(|k| !k.is_empty()),
-                        log_level: level.to_string(),
-                    };
-
-                    match config.save() {
-                        Ok(_) => {
-                            info!("✓ Configuration saved to squid.config.json");
-                            println!("\nConfiguration:");
-                            println!("  API URL: {}", config.api_url);
-                            println!("  API Model: {}", config.api_model);
-                            if config.api_key.is_some() {
-                                println!("  API Key: [configured]");
-                            } else {
-                                println!("  API Key: [not set]");
-                            }
-                            println!("  Log Level: {}", config.log_level);
-                        }
-                        Err(e) => {
-                            error!("Failed to save configuration: {}", e);
-                        }
+            // Use CLI args if provided, otherwise prompt interactively
+            let final_url = if let Some(u) = url {
+                u.clone()
+            } else {
+                match inquire::Text::new("API URL:")
+                    .with_default(&default_config.api_url)
+                    .with_help_message(
+                        "The base URL for the API (e.g., http://127.0.0.1:1234/v1 for LM Studio)",
+                    )
+                    .prompt()
+                {
+                    Ok(u) => u,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
                     }
                 }
-                _ => {
-                    error!("Configuration initialization cancelled or failed");
+            };
+
+            let final_model = if let Some(m) = model {
+                m.clone()
+            } else {
+                match inquire::Text::new("API Model:")
+                    .with_default(&default_config.api_model)
+                    .with_help_message("The model identifier to use")
+                    .prompt()
+                {
+                    Ok(m) => m,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                }
+            };
+
+            let final_api_key = if api_key.is_some() {
+                api_key.clone()
+            } else {
+                match inquire::Text::new("API Key (optional, press Enter to skip):")
+                    .with_help_message("API key if required (leave empty for local models)")
+                    .prompt_skippable()
+                {
+                    Ok(key) => key.filter(|k| !k.is_empty()),
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                }
+            };
+
+            let final_log_level = if let Some(level) = log_level {
+                level.clone()
+            } else {
+                match inquire::Select::new(
+                    "Log Level:",
+                    vec!["error", "warn", "info", "debug", "trace"],
+                )
+                .with_help_message("Logging verbosity (info is recommended)")
+                .with_starting_cursor(2) // Default to "info"
+                .prompt()
+                {
+                    Ok(level) => level.to_string(),
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                }
+            };
+
+            let config = config::Config {
+                api_url: final_url,
+                api_model: final_model,
+                api_key: final_api_key,
+                log_level: final_log_level,
+            };
+
+            match config.save_to_dir(dir) {
+                Ok(_) => {
+                    let config_path = dir.join("squid.config.json");
+                    info!("✓ Configuration saved to {:?}", config_path);
+                    println!("\nConfiguration saved to: {:?}", config_path);
+                    println!("  API URL: {}", config.api_url);
+                    println!("  API Model: {}", config.api_model);
+                    if config.api_key.is_some() {
+                        println!("  API Key: [configured]");
+                    } else {
+                        println!("  API Key: [not set]");
+                    }
+                    println!("  Log Level: {}", config.log_level);
+                }
+                Err(e) => {
+                    error!("Failed to save configuration: {}", e);
                 }
             }
         }

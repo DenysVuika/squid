@@ -125,10 +125,17 @@ You can configure squid in two ways:
 
 ### Option 1: Interactive Setup (Recommended)
 
-Use the `init` command to create a `squid.config.json` file interactively:
+Use the `init` command to create a `squid.config.json` file:
+
+#### Interactive Mode (Default)
 
 ```bash
+# Initialize in current directory
 squid init
+
+# Initialize in a specific directory
+squid init ./my-project
+squid init /path/to/project
 ```
 
 This will prompt you for:
@@ -137,23 +144,48 @@ This will prompt you for:
 - **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
 - **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 
-The configuration is saved to `squid.config.json` in your current directory. This file can be committed to your repository to share project settings with your team.
-
 **Example session:**
 ```
 $ squid init
-INFO: Initializing squid configuration...
+INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
 ? Log Level: info
 
-Configuration:
+Configuration saved to: "squid.config.json"
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
   Log Level: info
 ```
+
+#### Non-Interactive Mode
+
+You can also provide configuration values via command-line arguments to skip the interactive prompts:
+
+```bash
+# Initialize with all parameters
+squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level info
+
+# Initialize in a specific directory with parameters
+squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level debug
+
+# Partial parameters (will prompt for missing values)
+squid init --url http://127.0.0.1:1234/v1 --model gpt-4
+# Will still prompt for API Key and Log Level
+
+# Include API key for cloud services
+squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-here --log-level info
+```
+
+**Available options:**
+- `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
+- `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+- `--api-key <KEY>` - API Key (optional for local models)
+- `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
+
+The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
 
 ### Option 2: Manual Configuration
 
