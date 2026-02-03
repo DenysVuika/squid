@@ -213,6 +213,9 @@ squid ask "What is Rust?"
 # With additional context using -m
 squid ask "Explain Rust" -m "Focus on memory safety"
 
+# Use a custom system prompt
+squid ask "Explain Rust" -p custom-prompt.md
+
 # Disable streaming for complete response at once (useful for scripting)
 squid ask "Explain async/await in Rust" --no-stream
 ```
@@ -227,6 +230,9 @@ squid ask -f sample-files/sample.txt "What are the key features mentioned?"
 
 # With additional context using -m
 squid ask -f src/main.rs "What does this do?" -m "Focus on error handling"
+
+# Use a custom system prompt for specialized analysis
+squid ask -f src/main.rs "Review this" -p expert-reviewer-prompt.md
 
 # Disable streaming for complete response
 squid ask -f code.rs --no-stream "Explain what this code does"
@@ -270,6 +276,9 @@ squid ask "Analyze the main.rs file for me"
 # LLM can write files
 squid ask "Create a hello.txt file with 'Hello, World!'"
 # You'll be prompted with a preview: "Allow writing to file: hello.txt?"
+
+# Use custom prompts with tool calling
+squid ask -p expert-coder.md "Read Cargo.toml and suggest optimizations"
 
 # LLM can search for patterns in files using grep
 squid ask "Search for all TODO comments in the src directory"
