@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Default level is `info` (recommended for most users)
   - Config file setting takes precedence over `LOG_LEVEL` environment variable
 
+### Removed
+
+- **Run Command**: Removed unimplemented `squid run` command from CLI
+  - Command was never fully implemented and had no practical use
+  - Simplified CLI interface to focus on core features (init, ask, review)
+  - Updated documentation to remove all references to the run command
+
 ## [0.3.0] - 2026-02-02
 
 ### Changed

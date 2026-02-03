@@ -336,15 +336,7 @@ squid review sample-files/example.html -m "Focus on accessibility"
 
 See **[tests/README.md](tests/README.md)** for complete testing documentation and **[sample-files/README.md](sample-files/README.md)** for details on each example file.
 
-### Other Commands
 
-```bash
-# Initialize a project (placeholder)
-squid init
-
-# Run a command (placeholder)
-squid run <command>
-```
 
 ## Examples
 

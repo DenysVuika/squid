@@ -409,11 +409,6 @@ struct Cli {
 enum Commands {
     /// Initialize a new project
     Init,
-    /// Run a specific command
-    Run {
-        /// The command to run
-        command: String,
-    },
     /// Ask a question to the LLM
     Ask {
         /// The question to ask
@@ -520,13 +515,6 @@ async fn main() {
                 _ => {
                     error!("Configuration initialization cancelled or failed");
                 }
-            }
-        }
-        Commands::Run { command } => {
-            info!("Running command: {}", command);
-            debug!("This is a debug message while running the command.");
-            if command == "fail" {
-                error!("An error occurred while executing the command.");
             }
         }
         Commands::Ask {
