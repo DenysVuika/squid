@@ -18,8 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - See `docs/PROMPTS.md` for detailed guide on creating custom prompts
 
 - **Init Command**: Interactive configuration setup via `squid init`
+  - Accepts optional directory parameter (defaults to current directory)
+  - Usage: `squid init` or `squid init /path/to/project`
+  - Creates directory if it doesn't exist
   - Prompts for API URL, API Model, optional API Key, and Log Level
-  - Creates `squid.config.json` in the current directory for project settings
+  - Creates `squid.config.json` in the specified directory for project settings
   - Configuration file can be committed to share team settings (like `.eslintrc`, `.prettierrc`)
   - Configuration file takes precedence over environment variables
   - Falls back to `.env` variables if config file doesn't exist

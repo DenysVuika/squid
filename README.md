@@ -128,7 +128,12 @@ You can configure squid in two ways:
 Use the `init` command to create a `squid.config.json` file interactively:
 
 ```bash
+# Initialize in current directory
 squid init
+
+# Initialize in a specific directory
+squid init ./my-project
+squid init /path/to/project
 ```
 
 This will prompt you for:
@@ -137,12 +142,12 @@ This will prompt you for:
 - **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
 - **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 
-The configuration is saved to `squid.config.json` in your current directory. This file can be committed to your repository to share project settings with your team.
+The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
 
 **Example session:**
 ```
 $ squid init
-INFO: Initializing squid configuration...
+INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
