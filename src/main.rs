@@ -408,7 +408,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new project
-    Init,
+    Init {
+        /// Directory to initialize (defaults to current directory)
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
     /// Ask a question to the LLM
     Ask {
         /// The question to ask
@@ -447,7 +451,7 @@ async fn main() {
 
     // Load config early to initialize logger with correct log level
     // For init command, we'll use defaults since config doesn't exist yet
-    let app_config = if matches!(cli.command, Commands::Init) {
+    let app_config = if matches!(cli.command, Commands::Init { .. }) {
         config::Config::default()
     } else {
         config::Config::load()
@@ -456,8 +460,16 @@ async fn main() {
     logger::init(Some(&app_config.log_level));
 
     match &cli.command {
-        Commands::Init => {
-            info!("Initializing squid configuration...");
+        Commands::Init { dir } => {
+            info!("Initializing squid configuration in {:?}...", dir);
+
+            // Create directory if it doesn't exist
+            if !dir.exists() {
+                if let Err(e) = std::fs::create_dir_all(dir) {
+                    error!("Failed to create directory {:?}: {}", dir, e);
+                    return;
+                }
+            }
 
             let default_config = config::Config::default();
 
@@ -494,10 +506,11 @@ async fn main() {
                         log_level: level.to_string(),
                     };
 
-                    match config.save() {
+                    match config.save_to_dir(dir) {
                         Ok(_) => {
-                            info!("✓ Configuration saved to squid.config.json");
-                            println!("\nConfiguration:");
+                            let config_path = dir.join("squid.config.json");
+                            info!("✓ Configuration saved to {:?}", config_path);
+                            println!("\nConfiguration saved to: {:?}", config_path);
                             println!("  API URL: {}", config.api_url);
                             println!("  API Model: {}", config.api_model);
                             if config.api_key.is_some() {

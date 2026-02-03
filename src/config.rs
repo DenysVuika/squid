@@ -80,12 +80,12 @@ impl Config {
         }
     }
 
-    /// Save configuration to squid.config.json in the current directory
-    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = PathBuf::from("squid.config.json");
+    /// Save configuration to squid.config.json in the specified directory
+    pub fn save_to_dir(&self, dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        let config_path = dir.join("squid.config.json");
         let json = serde_json::to_string_pretty(self)?;
         fs::write(&config_path, json)?;
-        info!("Configuration saved to squid.config.json");
+        info!("Configuration saved to {:?}", config_path);
         Ok(())
     }
 
