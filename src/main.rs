@@ -20,12 +20,17 @@ mod config;
 mod logger;
 mod tools;
 
+const PERSONA: &str = include_str!("./assets/persona.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+
+fn combine_prompts(task_prompt: &str) -> String {
+    format!("{}\n\n{}", PERSONA, task_prompt)
+}
 
 fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
     if let Some(extension) = file_path.extension() {
@@ -67,7 +72,8 @@ async fn ask_llm_streaming(
         question.to_string()
     };
 
-    let system_message = system_prompt.unwrap_or(ASK_PROMPT);
+    let default_prompt = combine_prompts(ASK_PROMPT);
+    let system_message = system_prompt.unwrap_or(&default_prompt);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
@@ -264,7 +270,8 @@ async fn ask_llm(
         question.to_string()
     };
 
-    let system_message = system_prompt.unwrap_or(ASK_PROMPT);
+    let default_prompt = combine_prompts(ASK_PROMPT);
+    let system_message = system_prompt.unwrap_or(&default_prompt);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
@@ -679,6 +686,7 @@ async fn main() {
             };
 
             let review_prompt = get_review_prompt_for_file(file);
+            let combined_review_prompt = combine_prompts(review_prompt);
             debug!("Using review prompt for file type");
 
             let question = if let Some(msg) = message {
@@ -691,7 +699,7 @@ async fn main() {
                 match ask_llm(
                     &question,
                     Some(&file_content),
-                    Some(review_prompt),
+                    Some(&combined_review_prompt),
                     &app_config,
                 )
                 .await
@@ -707,7 +715,7 @@ async fn main() {
                 if let Err(e) = ask_llm_streaming(
                     &question,
                     Some(&file_content),
-                    Some(review_prompt),
+                    Some(&combined_review_prompt),
                     &app_config,
                 )
                 .await

@@ -1,4 +1,6 @@
-You are an expert Rust code reviewer. Analyze the following code and provide constructive feedback focusing on:
+## Rust Code Review Instructions
+
+Analyze the following Rust code and provide constructive feedback focusing on:
 
 **Rust Idioms & Best Practices:**
 - Proper use of ownership, borrowing, and lifetimes

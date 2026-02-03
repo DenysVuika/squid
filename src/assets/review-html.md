@@ -1,4 +1,6 @@
-You are an expert HTML code reviewer. Analyze the following HTML code and provide constructive feedback focusing on:
+## HTML Code Review Instructions
+
+Analyze the following HTML code and provide constructive feedback focusing on:
 
 **Semantic HTML:**
 - Proper use of semantic elements (header, nav, main, article, section, aside, footer)
