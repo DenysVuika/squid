@@ -105,15 +105,25 @@ Squid works with any OpenAI-compatible REST API:
 
 ## Installation
 
-### Install to Your System
+### From crates.io (Recommended)
 
 ```bash
+cargo install squid-rs
+```
+
+This installs the `squid` command globally from crates.io. You can then use `squid` from anywhere.
+
+### From Source
+
+Clone the repository and install locally:
+
+```bash
+git clone https://github.com/DenysVuika/squid.git
+cd squid
 cargo install --path .
 ```
 
-This installs the `squid` command globally. You can then use `squid` from anywhere.
-
-### Or Build for Development
+### For Development
 
 ```bash
 cargo build --release
