@@ -682,7 +682,7 @@ async fn main() {
                             } else {
                                 println!("🦑: I couldn't read that file - {}", e);
                             }
-                            error!("Failed to read file {}: {}", file_path.display(), e);
+                            debug!("Failed to read file {}: {}", file_path.display(), e);
                             return;
                         }
                     },
@@ -697,7 +697,7 @@ async fn main() {
                         return;
                     }
                     Err(e) => {
-                        error!("Path validation failed: {}", e);
+                        debug!("Path validation failed: {}", e);
                         println!("🦑: I can't access that file - {}", e);
                         return;
                     }
@@ -722,7 +722,7 @@ async fn main() {
                         } else {
                             println!("🦑: I couldn't read that prompt file - {}", e);
                         }
-                        error!(
+                        debug!(
                             "Failed to read custom prompt file {}: {}",
                             prompt_path.display(),
                             e
@@ -792,7 +792,7 @@ async fn main() {
                         } else {
                             println!("🦑: I couldn't read that file - {}", e);
                         }
-                        error!("Failed to read file {}: {}", file.display(), e);
+                        debug!("Failed to read file {}: {}", file.display(), e);
                         return;
                     }
                 },
@@ -807,7 +807,7 @@ async fn main() {
                     return;
                 }
                 Err(e) => {
-                    error!("Path validation failed: {}", e);
+                    debug!("Path validation failed: {}", e);
                     println!("🦑: I can't access that file - {}", e);
                     return;
                 }

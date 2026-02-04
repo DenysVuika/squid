@@ -65,7 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Other errors: "🦑: I couldn't read that file - [error details]"
   - Replaces technical "ERROR: Failed to read file: No such file or directory (os error 2)" messages
   - Applies to `ask -f`, `review`, and custom `--prompt` file reading
-  - Technical details still logged for debugging (visible with `--log-level debug`)
+  - Technical details logged at `debug` level only (not visible with default `error` log level)
+  - Clean user experience - only friendly messages shown by default
 
 - **Improved Streaming Output**: Cleaner formatting for assistant responses
   - Leading newlines are stripped from streaming responses
