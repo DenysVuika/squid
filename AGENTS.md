@@ -30,15 +30,15 @@ When making changes, **ALWAYS** consider updates to:
 
 ### Documentation Anti-Patterns
 
-❌ Don't create excessive documentation files
-❌ Don't duplicate information across multiple files
-❌ Don't create documentation for the sake of documentation
-❌ Don't leave orphaned or outdated docs
-❌ **Don't create summary documents** - information should be in README/CHANGELOG
-❌ **Don't create multiple guides for one feature** - one concise doc is enough
-❌ **Don't document the obvious** - code should be self-documenting where possible
-❌ **Don't generate folder/file structure diagrams** - they're hard to maintain and go out of sync
-❌ **Don't include ASCII trees** unless absolutely critical for understanding
+- ❌ Don't create excessive documentation files
+- ❌ Don't duplicate information across multiple files
+- ❌ Don't create documentation for the sake of documentation
+- ❌ Don't leave orphaned or outdated docs
+- ❌ **Don't create summary documents** - information should be in README/CHANGELOG
+- ❌ **Don't create multiple guides for one feature** - one concise doc is enough
+- ❌ **Don't document the obvious** - code should be self-documenting where possible
+- ❌ **Don't generate folder/file structure diagrams** - they're hard to maintain and go out of sync
+- ❌ **Don't include ASCII trees** unless absolutely critical for understanding
 
 ## File Organization
 
