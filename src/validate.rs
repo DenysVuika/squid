@@ -214,7 +214,20 @@ impl PathValidator {
 
     /// Check if a path matches a glob-like pattern
     fn matches_pattern(&self, path: &str, pattern: &str) -> bool {
-        // Convert glob pattern to regex
+        // If pattern has no path separator, match against filename only
+        // This allows ".env" to match "/path/to/.env" like .gitignore does
+        if !pattern.contains('/') && !pattern.starts_with("**") {
+            if let Some(filename) = std::path::Path::new(path).file_name() {
+                let filename_str = filename.to_string_lossy();
+                let regex_pattern = Self::glob_to_regex(pattern);
+                if let Ok(regex) = Regex::new(&regex_pattern) {
+                    return regex.is_match(&filename_str);
+                }
+            }
+            return false;
+        }
+
+        // For patterns with paths, match against full path
         let regex_pattern = Self::glob_to_regex(pattern);
 
         if let Ok(regex) = Regex::new(&regex_pattern) {
@@ -313,15 +326,37 @@ mod tests {
             "**/*.log".to_string(),
             "**/target/**".to_string(),
             "**/node_modules/**".to_string(),
+            ".env".to_string(),
+            "*.tmp".to_string(),
         ];
         let validator = PathValidator::with_ignore_file(Some(patterns));
 
-        // These would be ignored
+        // These would be ignored (full path patterns)
         assert!(validator.is_ignored(Path::new("/some/path/debug.log")));
         assert!(validator.is_ignored(Path::new("/project/target/debug/binary")));
         assert!(validator.is_ignored(Path::new("/app/node_modules/package/index.js")));
 
+        // These would be ignored (filename-only patterns)
+        assert!(validator.is_ignored(Path::new("/project/.env")));
+        assert!(validator.is_ignored(Path::new("/some/path/test.tmp")));
+
         // These would not be ignored
         assert!(!validator.is_ignored(Path::new("/some/path/file.txt")));
+    }
+
+    #[test]
+    fn test_env_file_blocked() {
+        let patterns = vec![".env".to_string()];
+        let validator = PathValidator::with_ignore_file(Some(patterns));
+
+        // .env in current directory should be blocked
+        let current_dir = std::env::current_dir().unwrap();
+        let env_path = current_dir.join(".env");
+        assert!(validator.is_ignored(&env_path));
+
+        // .env in any subdirectory should also be blocked
+        assert!(validator.is_ignored(Path::new("/project/.env")));
+        assert!(validator.is_ignored(Path::new("/home/user/project/.env")));
+        assert!(validator.is_ignored(Path::new("./subdir/.env")));
     }
 }

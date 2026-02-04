@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **.squidignore Support**: Project-specific file and directory ignore patterns
   - Works like `.gitignore` - one pattern per line, `#` for comments
   - Glob pattern support: `*.log`, `**/*.rs`, `target/`, `node_modules/**`
+  - Filename-only patterns (e.g., `.env`, `*.tmp`) match anywhere in path tree
   - Automatic enforcement - files cannot be accessed even if user approves
   - Patterns loaded from `.squidignore` file in project root
   - Included `.squidignore.example` with common patterns
