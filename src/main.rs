@@ -22,6 +22,7 @@ mod tools;
 mod validate;
 
 const PERSONA: &str = include_str!("./assets/persona.md");
+const TOOLS: &str = include_str!("./assets/tools.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
@@ -31,7 +32,7 @@ const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
 const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 fn combine_prompts(task_prompt: &str) -> String {
-    format!("{}\n\n{}", PERSONA, task_prompt)
+    format!("{}\n\n{}\n\n{}", PERSONA, TOOLS, task_prompt)
 }
 
 fn get_review_prompt_for_file(file_path: &Path) -> &'static str {

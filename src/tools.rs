@@ -1,4 +1,5 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
+use chrono::{Local, Utc};
 use console::style;
 use inquire::Confirm;
 use log::{debug, error, info, warn};
@@ -78,6 +79,24 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 }))
                 .build()
                 .expect("Failed to build grep function"),
+        }),
+        ChatCompletionTools::Function(ChatCompletionTool {
+            function: FunctionObjectArgs::default()
+                .name("now")
+                .description("Get the current date and time in RFC 3339 format. Only use this when the user specifically asks for it or when current datetime is needed.")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "timezone": {
+                            "type": "string",
+                            "description": "The timezone to use for the datetime. Options: 'utc' for UTC time or 'local' for local time.",
+                            "enum": ["utc", "local"]
+                        }
+                    },
+                    "required": ["timezone"]
+                }))
+                .build()
+                .expect("Failed to build now function"),
         }),
     ]
 }
@@ -285,6 +304,14 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                 style(path).green()
             )
         }
+        "now" => {
+            let timezone = args["timezone"].as_str().unwrap_or("utc");
+            format!(
+                "Can I {}?\n  🕐 Timezone: {}",
+                style("get the current date and time").yellow(),
+                style(timezone).cyan()
+            )
+        }
         _ => format!("Can I execute: {}?", style(name).yellow()),
     };
 
@@ -403,6 +430,20 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                             json!({"error": format!("Grep failed: {}", e)})
                         }
                     }
+                }
+                "now" => {
+                    let timezone = args["timezone"].as_str().unwrap_or("utc");
+
+                    let datetime_str = match timezone {
+                        "local" => Local::now().to_rfc3339(),
+                        _ => Utc::now().to_rfc3339(), // Default to UTC
+                    };
+
+                    info!(
+                        "Returning current datetime: {} ({})",
+                        datetime_str, timezone
+                    );
+                    json!({"content": format!("The current datetime is {}.", datetime_str)})
                 }
                 _ => {
                     warn!("Unknown tool called: {}", name);

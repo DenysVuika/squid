@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Datetime Tool**: New `now` tool for getting current date and time
+  - Returns datetime in RFC 3339 format (e.g., `2026-02-04T19:19:31.783006+00:00`)
+  - Supports both UTC and local timezones
+  - LLM can now answer "what time is it?" and similar datetime queries
+  - Similar to Claude's datetime functionality
+  - User approval required before execution (consistent with other tools)
+
+### Changed
+
+- **Enhanced Tool Availability**: Tools (read_file, write_file, grep, now) are now available in code review commands
+  - Previously tools were only available in `ask` command
+  - Now you can use tools during code reviews for deeper analysis
+  - More consistent and powerful AI assistance across all commands
+
 ## [0.5.0] - 2026-02-04
 
 ### Added
