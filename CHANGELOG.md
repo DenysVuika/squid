@@ -11,96 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Init Command Creates .squidignore**: The `squid init` command now automatically creates a `.squidignore` file
-  - Creates file with default patterns from `.squidignore.example` template
-  - Skips creation if `.squidignore` already exists (won't overwrite)
-  - Embedded template using `include_str!` for portability
-  - Provides helpful feedback about file creation or existing file usage
-
-- **Path Validation Security**: Multi-layered security for file system operations
-  - Whitelist/blacklist validation automatically blocks sensitive system directories
-  - Default blacklist includes `/etc`, `/root`, `~/.ssh`, `~/.aws`, `~/.gnupg`, etc.
-  - Default whitelist restricts operations to current directory and subdirectories
-  - **Validation happens BEFORE user approval prompts** - blocked files never prompt user
-  - Clear error messages explain why access was denied
-  - New `validate.rs` module with `PathValidator` for secure path handling
-  - Windows-specific blacklist for `C:\Windows`, `C:\Program Files`, etc.
-
-- **.squidignore Support**: Project-specific file and directory ignore patterns
+- **.squidignore Support**: Protect sensitive files with project-specific ignore patterns
   - Works like `.gitignore` - one pattern per line, `#` for comments
   - Glob pattern support: `*.log`, `**/*.rs`, `target/`, `node_modules/**`
-  - Filename-only patterns (e.g., `.env`, `*.tmp`) match anywhere in path tree
-  - **Checked BEFORE user approval** - ignored files never prompt user
-  - Automatic enforcement - files cannot be accessed even if user approves
-  - Patterns loaded from `.squidignore` file in project root
-  - Included `.squidignore.example` with common patterns
-  - Auto-created by `squid init` command for convenience
-  - Friendly, personalized error messages when files are blocked
+  - Automatically prevents the AI from accessing ignored files
+  - Run `squid init` to create a `.squidignore` file with sensible defaults
+  - Example patterns: `.env`, `*.key`, `**/.git/**`, `node_modules/**`
 
-- **Enhanced Security Documentation**: Comprehensive security guide
-  - Updated `docs/SECURITY.md` with path validation and ignore patterns documentation
-  - Three-layer security model clearly explained (validation → ignore → approval)
-  - Example workflows and security scenarios with friendly error messages
-  - Pattern syntax reference and best practices
-  - Security layers diagram for visual understanding
+- **Enhanced Security**: Automatic protection for sensitive system files
+  - Blocks access to system directories like `/etc`, `/root`, `~/.ssh`, `~/.aws`
+  - Protects Windows system folders like `C:\Windows`, `C:\Program Files`
+  - Blocks sensitive files before asking for your approval
+  - Works alongside `.squidignore` for comprehensive protection
 
-- **Friendly Error Messages**: Path validation errors are now conversational
-  - Instead of technical errors, the assistant explains why it can't access files
-  - Returned as `content` (not `error`) so LLM can relay them directly without additional explanation
-  - Example: "I cannot access '.env' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files."
-  - Different messages for different validation failures (ignored, blacklisted, not whitelisted)
-  - Technical error details logged at debug level (default log level is `error`, keeping output clean)
+- **Friendly Error Messages**: Clear, conversational feedback when things go wrong
+  - File not found: "🦑: I can't find that file. Please check the path and try again."
+  - Permission denied: "🦑: I don't have permission to read that file."
+  - Blocked files: "I cannot access '.env' because it's protected by the project's .squidignore file."
+  - No more cryptic technical error messages
 
 ### Fixed
 
-- **Security: Path validation for direct file access**: The `ask -f` and `review` commands now validate file paths before reading
-  - Previously, the `-f` flag in `ask` command bypassed path validation that protects tool-based operations
-  - The `review` command also read files directly without validation
-  - Both commands now use `PathValidator` to check against blacklist and `.squidignore` patterns
-  - Files blocked by validation are rejected with friendly error messages
-  - This closes a security gap where sensitive files could be read directly via command flags
-  - **Note:** LLM still makes tool call requests for blocked files (it doesn't know beforehand which are blocked), but requests are rejected instantly without user interaction, and the friendly message is relayed to the user
+- **Security Gap Closed**: The `ask -f` and `review` commands now respect security rules
+  - Previously could bypass `.squidignore` and path validation
+  - Now properly blocks sensitive files before reading them
+  - Provides friendly error messages explaining why access was denied
 
-- **Friendly file error messages**: File access errors now show personalized, helpful messages
-  - File not found: "🦑: I can't find that file. Please check the path and try again."
-  - Permission denied: "🦑: I don't have permission to read that file."
-  - Other errors: "🦑: I couldn't read that file - [error details]"
-  - Replaces technical "ERROR: Failed to read file: No such file or directory (os error 2)" messages
-  - Applies to `ask -f`, `review`, and custom `--prompt` file reading
-  - Technical details logged at `debug` level only (not visible with default `error` log level)
-  - Clean user experience - only friendly messages shown by default
-
-- **Improved Streaming Output**: Cleaner formatting for assistant responses
-  - Leading newlines are stripped from streaming responses
-  - Content now appears directly after `🦑:` emoji without extra blank lines
-  - Applies to both initial responses and follow-up responses after tool calls
+- **Cleaner Output**: Improved formatting for better readability
+  - Removed extra blank lines in assistant responses
+  - Content appears directly after `🦑:` emoji
+  - Smoother streaming experience
 
 ### Changed
 
-- **Code cleanup**: Removed unused `PathDoesNotExist` error variant from `PathValidationError`
-  - This error type was defined but never used in the codebase
-  - File read errors (not found, permission denied) are handled separately with friendly user messages
-  - Removed compiler warnings about dead code
-
-- **README Privacy Emphasis**: Updated README to highlight privacy and local-first nature
-  - Main description now mentions "Privacy-focused and local-first - your code never leaves your hardware when using local models"
-  - New "Privacy & Local-First" section explains data privacy options
-  - Clarifies distinction between local models (LM Studio/Ollama) and cloud APIs
-  - Emphasizes user control over data and privacy choices
-  - Tool calling section notes that all file operations happen locally with local models
-
-- **Tool Calling Signature**: `call_tool()` now requires `Config` parameter
-  - Enables future extensibility for configuration-based features
-  - Updated both `ask_llm_streaming()` and `ask_llm()` to pass config to tools
-  - Config cloned for async tool execution in spawned tasks
-
-### Security
-
-- **Hardened File System Access**: All file operations now validated against security rules
-  - `read_file`, `write_file`, and `grep` tools use path validation
-  - Prevents access to system directories without user prompt
-  - Prevents access to ignored files without user prompt
-  - Three-layer defense: path validation → ignore patterns → user approval
+- **Documentation Updates**: Improved README and security documentation
+  - Emphasizes privacy-focused and local-first design
+  - Clarifies data privacy with local models vs. cloud APIs
+  - Comprehensive security guide with examples and best practices
 
 ## [0.4.0] - 2026-02-03
 
