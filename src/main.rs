@@ -662,13 +662,34 @@ async fn main() {
             info!("Q: {}", full_question);
 
             let file_content = if let Some(file_path) = file {
-                match std::fs::read_to_string(file_path) {
-                    Ok(content) => {
-                        info!("Read file content ({} bytes)", content.len());
-                        Some(content)
+                // Validate path before reading
+                let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+                let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+                match validator.validate(file_path) {
+                    Ok(_) => match std::fs::read_to_string(file_path) {
+                        Ok(content) => {
+                            info!("Read file content ({} bytes)", content.len());
+                            Some(content)
+                        }
+                        Err(e) => {
+                            error!("Failed to read file: {}", e);
+                            return;
+                        }
+                    },
+                    Err(validate::PathValidationError::PathIgnored(_)) => {
+                        println!("🦑: I can't access that file - it's in your .squidignore list.");
+                        return;
+                    }
+                    Err(validate::PathValidationError::PathNotAllowed(_)) => {
+                        println!(
+                            "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+                        );
+                        return;
                     }
                     Err(e) => {
-                        error!("Failed to read file: {}", e);
+                        error!("Path validation failed: {}", e);
+                        println!("🦑: I can't access that file - {}", e);
                         return;
                     }
                 }
@@ -729,13 +750,34 @@ async fn main() {
         } => {
             info!("Reviewing file: {:?}", file);
 
-            let file_content = match std::fs::read_to_string(file) {
-                Ok(content) => {
-                    info!("Read file content ({} bytes)", content.len());
-                    content
+            // Validate path before reading
+            let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+            let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+            let file_content = match validator.validate(file) {
+                Ok(_) => match std::fs::read_to_string(file) {
+                    Ok(content) => {
+                        info!("Read file content ({} bytes)", content.len());
+                        content
+                    }
+                    Err(e) => {
+                        error!("Failed to read file: {}", e);
+                        return;
+                    }
+                },
+                Err(validate::PathValidationError::PathIgnored(_)) => {
+                    println!("🦑: I can't access that file - it's in your .squidignore list.");
+                    return;
+                }
+                Err(validate::PathValidationError::PathNotAllowed(_)) => {
+                    println!(
+                        "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+                    );
+                    return;
                 }
                 Err(e) => {
-                    error!("Failed to read file: {}", e);
+                    error!("Path validation failed: {}", e);
+                    println!("🦑: I can't access that file - {}", e);
                     return;
                 }
             };

@@ -283,6 +283,44 @@ This is a test file.
 (Y/n)
 ```
 
+## Direct File Access Commands
+
+In addition to LLM tool calls, squid provides direct file access via command-line flags:
+- `ask -f <file>` - Passes file content directly to the LLM with your question
+- `review <file>` - Reads file for code review
+
+**Security measures:**
+- **Path validation applied BEFORE reading** - Same whitelist/blacklist and `.squidignore` checks as tool calls
+- **No user approval prompt** - Validation happens immediately when command runs
+- **Friendly error messages** - Clear explanation if file is blocked
+- **Cannot bypass security** - No way to override validation rules
+
+**Example blocked access:**
+```bash
+$ squid ask -f .env "what's in this file?"
+🦑: I can't access that file - it's in your .squidignore list.
+
+$ squid review ~/.ssh/id_rsa
+🦑: I can't access that file - it's outside the project directory or in a protected system location.
+```
+
+**Example allowed access:**
+```bash
+$ squid ask -f src/main.rs "explain this code"
+# File is validated, then read and passed to LLM
+# No approval prompt needed - you explicitly requested it via -f flag
+```
+
+**Why direct file access is safe:**
+1. You explicitly specify the file path in the command
+2. Same security validation as tool calls (blacklist, whitelist, .squidignore)
+3. Path validation happens before file is read
+4. Clear error messages if access is denied
+
+**Key difference from tool calls:**
+- Tool calls: LLM decides what to read → validation → user approval → read
+- Direct access: You decide what to read → validation → read (no approval needed since you chose the file)
+
 ## Best Practices
 
 ### ✅ DO

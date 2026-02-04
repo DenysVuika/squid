@@ -48,6 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Example: "I cannot access '.env' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files."
   - Different messages for different validation failures (ignored, blacklisted, not whitelisted)
   - Technical error details logged at debug level (default log level is `error`, keeping output clean)
+
+### Fixed
+
+- **Security: Path validation for direct file access**: The `ask -f` and `review` commands now validate file paths before reading
+  - Previously, the `-f` flag in `ask` command bypassed path validation that protects tool-based operations
+  - The `review` command also read files directly without validation
+  - Both commands now use `PathValidator` to check against blacklist and `.squidignore` patterns
+  - Files blocked by validation are rejected with friendly error messages
+  - This closes a security gap where sensitive files could be read directly via command flags
   - **Note:** LLM still makes tool call requests for blocked files (it doesn't know beforehand which are blocked), but requests are rejected instantly without user interaction, and the friendly message is relayed to the user
 
 - **Improved Streaming Output**: Cleaner formatting for assistant responses
