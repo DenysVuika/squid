@@ -32,7 +32,8 @@ This multi-layered approach prevents unauthorized or unintended file system acce
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 3. squid validates path (whitelist/blacklist + .squidignore)│
-│    → If blocked: Error returned to LLM (NO user prompt)     │
+│    → If blocked: Friendly message returned to LLM           │
+│                  (NO user prompt, LLM relays message)       │
 │    → If allowed: Continue to step 4                         │
 └───────────────────────┬─────────────────────────────────────┘
                         │
@@ -53,6 +54,8 @@ This multi-layered approach prevents unauthorized or unintended file system acce
 │    • Press N → Tool skipped, error sent to LLM              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Note:** The LLM will still make tool call requests for protected files because it doesn't know which files are blocked beforehand. However, these requests are rejected instantly without user interaction, and the LLM receives a friendly message to relay to the user.
 
 ## Security Features
 
@@ -86,11 +89,14 @@ All file system operations are validated against whitelist and blacklist rules *
 ```bash
 squid ask "Read /etc/passwd"
 
-# Response (from LLM):
-# 🦑: I'm afraid I cannot access '/etc/passwd'. This is a sensitive system 
-# file or directory that's protected for security reasons.
-# 
-# (User is NOT prompted - access automatically denied)
+# What happens:
+# 1. LLM requests to read /etc/passwd
+# 2. Path validation blocks it (blacklisted)
+# 3. Friendly message returned to LLM (no user prompt)
+# 4. LLM relays the message:
+#
+# 🦑: I cannot access '/etc/passwd' because it's a protected system file 
+# or directory. Access to this location is blocked for security reasons.
 ```
 
 ### 📂 Ignore Patterns (.squidignore)
@@ -152,11 +158,15 @@ echo ".env" >> .squidignore
 
 squid ask "Read debug.log"
 
-# Response (from LLM):
-# 🦑: I'm terribly sorry, but I'm not allowed to access 'debug.log'. This file 
-# is in the project's .squidignore list, which means it's protected from access.
-# 
-# (User is NOT prompted - access automatically denied)
+# What happens:
+# 1. LLM requests to read debug.log
+# 2. Path validation blocks it (.squidignore pattern match)
+# 3. Friendly message returned to LLM (no user prompt)
+# 4. LLM relays the message:
+#
+# 🦑: I cannot access 'debug.log' because it's protected by the project's 
+# .squidignore file. This is a security measure to prevent access to 
+# sensitive files.
 ```
 
 
@@ -309,12 +319,15 @@ Path: .env
 ```
 
 **What happens:**
-- Path validation checks `.env` against `.squidignore`
-- `.env` is blocked automatically (in default `.squidignore`)
-- **You are NOT prompted** - access denied immediately
-- LLM receives friendly message: "I'm terribly sorry, but I'm not allowed to access '.env'. This file is in the project's .squidignore list, which means it's protected from access."
-- LLM explains to user why it cannot access the file
-- Your sensitive data stays protected without user interaction needed
+1. LLM requests to read `.env` (doesn't know it's blocked)
+2. Path validation checks `.env` against `.squidignore`
+3. `.env` is blocked automatically (in default `.squidignore`)
+4. **You are NOT prompted** - access denied immediately
+5. LLM receives friendly message: "I cannot access '.env' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files."
+6. LLM relays the message to the user
+7. Your sensitive data stays protected without user interaction needed
+
+**Note:** The LLM will still consume tokens for the initial request and the follow-up response, but no sensitive data is ever accessed.
 
 ### Scenario 2: Validating Write Operations
 

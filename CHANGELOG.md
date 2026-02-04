@@ -43,10 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Security layers diagram for visual understanding
 
 - **Friendly Error Messages**: Path validation errors are now conversational
-  - Instead of technical errors, the assistant politely explains why it can't access files
-  - Example: "I'm terribly sorry, but I'm not allowed to access '.env'. This file is in the project's .squidignore list, which means it's protected from access."
-  - Matches the squid assistant's friendly personality
+  - Instead of technical errors, the assistant explains why it can't access files
+  - Returned as `content` (not `error`) so LLM can relay them directly without additional explanation
+  - Example: "I cannot access '.env' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files."
   - Different messages for different validation failures (ignored, blacklisted, not whitelisted)
+  - Technical error details logged at debug level (default log level is `error`, keeping output clean)
+  - **Note:** LLM still makes tool call requests for blocked files (it doesn't know beforehand which are blocked), but requests are rejected instantly without user interaction, and the friendly message is relayed to the user
+
+- **Improved Streaming Output**: Cleaner formatting for assistant responses
+  - Leading newlines are stripped from streaming responses
+  - Content now appears directly after `🦑:` emoji without extra blank lines
+  - Applies to both initial responses and follow-up responses after tool calls
 
 ### Changed
 

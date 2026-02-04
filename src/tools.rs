@@ -1,7 +1,7 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
 use console::style;
 use inquire::Confirm;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use serde_json::json;
 use walkdir::WalkDir;
@@ -215,11 +215,11 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
             match validator.validate(std::path::Path::new(path)) {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    error!("Path validation failed for {}: {}", name, e);
+                    debug!("Path validation failed for {}: {}", name, e);
                     let friendly_message = match e {
                         crate::validate::PathValidationError::PathIgnored(_) => {
                             format!(
-                                "I'm terribly sorry, but I'm not allowed to access '{}'. This file is in the project's .squidignore list, which means it's protected from access.",
+                                "I cannot access '{}' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files.",
                                 path
                             )
                         }
@@ -227,7 +227,7 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                             if msg.contains("blacklisted") =>
                         {
                             format!(
-                                "I'm afraid I cannot access '{}'. This is a sensitive system file or directory that's protected for security reasons.",
+                                "I cannot access '{}' because it's a protected system file or directory. Access to this location is blocked for security reasons.",
                                 path
                             )
                         }
@@ -235,18 +235,15 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                             if msg.contains("not whitelisted") =>
                         {
                             format!(
-                                "I'm sorry, but I can only access files within the current project directory. The file '{}' is outside my allowed workspace.",
+                                "I cannot access '{}' because it's outside the current project directory. I can only access files within the current workspace for security reasons.",
                                 path
                             )
                         }
                         _ => {
-                            format!(
-                                "I'm unable to access '{}' due to security restrictions: {}",
-                                path, e
-                            )
+                            format!("I cannot access '{}' due to security restrictions.", path)
                         }
                     };
-                    return json!({"error": friendly_message});
+                    return json!({"content": friendly_message});
                 }
             }
         }

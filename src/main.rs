@@ -113,6 +113,7 @@ async fn ask_llm_streaming(
     let mut execution_handles = Vec::new();
     let mut lock = io::stdout().lock();
     write!(lock, "\n🦑: ")?;
+    let mut first_content = true;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -134,7 +135,13 @@ async fn ask_llm_streaming(
 
         for choice in response.choices {
             if let Some(content) = &choice.delta.content {
-                write!(lock, "{}", content)?;
+                let content_to_write = if first_content {
+                    first_content = false;
+                    content.trim_start_matches('\n')
+                } else {
+                    content.as_str()
+                };
+                write!(lock, "{}", content_to_write)?;
             }
 
             if let Some(tool_call_chunks) = choice.delta.tool_calls {
@@ -224,6 +231,7 @@ async fn ask_llm_streaming(
             .build()?;
 
         let mut follow_up_stream = client.chat().create_stream(follow_up_request).await?;
+        let mut first_followup_content = true;
 
         while let Some(result) = follow_up_stream.next().await {
             let response = result?;
@@ -245,7 +253,13 @@ async fn ask_llm_streaming(
 
             for choice in response.choices {
                 if let Some(content) = &choice.delta.content {
-                    write!(lock, "{}", content)?;
+                    let content_to_write = if first_followup_content {
+                        first_followup_content = false;
+                        content.trim_start_matches('\n')
+                    } else {
+                        content.as_str()
+                    };
+                    write!(lock, "{}", content_to_write)?;
                 }
             }
             lock.flush()?;
