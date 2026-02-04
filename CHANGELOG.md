@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Similar to Claude's datetime functionality
   - User approval required before execution (consistent with other tools)
 
+### Changed
+
+- **Enhanced Tool Availability**: Tools (read_file, write_file, grep, now) are now available in code review commands
+  - Previously tools were only available in `ask` command
+  - Now you can use tools during code reviews for deeper analysis
+  - More consistent and powerful AI assistance across all commands
+
 ## [0.5.0] - 2026-02-04
 
 ### Added

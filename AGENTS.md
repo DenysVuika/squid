@@ -64,29 +64,33 @@ These files control LLM behavior and are **critical**:
 
 ### Modular Prompt Architecture
 
-Squid uses a **modular composition** system (as of v0.4.0):
+Squid uses a **modular composition** system (as of v0.4.0, enhanced in v0.6.0):
 
 - `persona.md` - **Shared personality** definition (auto-prepended to all prompts)
-- `ask-prompt.md` - Tool usage instructions for the `ask` command
+- `tools.md` - **Tool usage instructions** (auto-included in all prompts)
+- `ask-prompt.md` - Task-specific instructions for the `ask` command
 - `code-review.md` - Generic code review criteria
 - `review-*.md` - Language-specific review prompts
 
-At runtime, prompts are composed as: `persona.md` + task-specific prompt
+At runtime, prompts are composed as: `persona.md` + `tools.md` + task-specific prompt
 
 **Benefits:**
-- Single source of truth for AI personality
-- Consistent tone across all commands
-- Easier maintenance (update persona once)
-- Task prompts focus only on instructions
+- Single source of truth for AI personality and tool knowledge
+- Tools available to ALL commands (ask, review, etc.)
+- Consistent tone and behavior across all commands
+- Easier maintenance (update persona or tools once, affects all prompts)
+- Task prompts focus only on command-specific instructions
+- Tools can potentially be excluded via config flag in the future
 
 **When updating:**
 - **persona.md** - Defines who the assistant is (role, personality, tone)
+- **tools.md** - Defines what tools are available and how to use them
 - **Task prompts** - Define what to do (instructions, guidelines, examples)
 - Be explicit and clear
 - Use examples
 - Test with the actual LLM
 - Consider edge cases
-- Update tool descriptions when adding new tools
+- Update `tools.md` when adding new tools (not individual task prompts)
 
 ## Testing
 
@@ -102,6 +106,35 @@ At runtime, prompts are composed as: `persona.md` + task-specific prompt
 - Group related changes in CHANGELOG under appropriate sections:
   - Added, Changed, Deprecated, Removed, Fixed, Security
 
+### CHANGELOG Guidelines
+
+**IMPORTANT:** CHANGELOG entries must be **user-focused**, not technical.
+
+**DO:**
+- ✅ Describe what users can now do that they couldn't before
+- ✅ Explain new features and their benefits
+- ✅ Focus on behavior changes users will notice
+- ✅ Use user-friendly language (avoid internal implementation terms)
+- ✅ Explain the "why" and "what" from a user perspective
+
+**DON'T:**
+- ❌ Mention internal architecture changes (e.g., "refactored X into Y")
+- ❌ Describe file structure changes (e.g., "moved tools.md to assets/")
+- ❌ Reference code organization (e.g., "extracted function into module")
+- ❌ Include implementation details users won't see or care about
+- ❌ Use technical jargon that only developers would understand
+
+**Examples:**
+
+❌ **Bad** (technical): "Modular Tools Architecture: Extracted tool documentation into separate tools.md file"
+✅ **Good** (user-focused): "Enhanced Tool Availability: Tools are now available in code review commands"
+
+❌ **Bad** (technical): "Refactored prompt composition to use include_str! macro"
+✅ **Good** (user-focused): "Faster startup time and reduced memory usage"
+
+❌ **Bad** (technical): "Updated combine_prompts() to include TOOLS constant"
+✅ **Good** (user-focused): "AI assistant now has consistent tool knowledge across all commands"
+
 ## Tool Development
 
 When adding new tools to `src/tools.rs`:
@@ -109,7 +142,7 @@ When adding new tools to `src/tools.rs`:
 1. Add tool definition to `get_tools()`
 2. Add approval prompt in `call_tool()`
 3. Add execution logic in `call_tool()` match statement
-4. **Update `src/assets/ask-prompt.md`** with tool documentation (instructions only)
+4. **Update `src/assets/tools.md`** with tool documentation (instructions and examples)
 5. Consider if `persona.md` needs updates (usually not - it's about personality, not tools)
 6. Update README.md with examples
 7. Update CHANGELOG.md
