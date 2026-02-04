@@ -12,13 +12,14 @@ use async_openai::{
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 mod config;
 mod logger;
 mod tools;
+mod validate;
 
 const PERSONA: &str = include_str!("./assets/persona.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
@@ -27,6 +28,7 @@ const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 fn combine_prompts(task_prompt: &str) -> String {
     format!("{}\n\n{}", PERSONA, task_prompt)
@@ -111,6 +113,7 @@ async fn ask_llm_streaming(
     let mut execution_handles = Vec::new();
     let mut lock = io::stdout().lock();
     write!(lock, "\n🦑: ")?;
+    let mut first_content = true;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -132,7 +135,13 @@ async fn ask_llm_streaming(
 
         for choice in response.choices {
             if let Some(content) = &choice.delta.content {
-                write!(lock, "{}", content)?;
+                let content_to_write = if first_content {
+                    first_content = false;
+                    content.trim_start_matches('\n')
+                } else {
+                    content.as_str()
+                };
+                write!(lock, "{}", content_to_write)?;
             }
 
             if let Some(tool_call_chunks) = choice.delta.tool_calls {
@@ -167,8 +176,10 @@ async fn ask_llm_streaming(
                     let args = tool_call.function.arguments.clone();
                     let tool_call_id = tool_call.id.clone();
 
+                    let config_clone = app_config.clone();
                     let handle = tokio::spawn(async move {
-                        let result: serde_json::Value = tools::call_tool(&name, &args).await;
+                        let result: serde_json::Value =
+                            tools::call_tool(&name, &args, &config_clone).await;
                         (tool_call_id, result)
                     });
                     execution_handles.push(handle);
@@ -220,6 +231,7 @@ async fn ask_llm_streaming(
             .build()?;
 
         let mut follow_up_stream = client.chat().create_stream(follow_up_request).await?;
+        let mut first_followup_content = true;
 
         while let Some(result) = follow_up_stream.next().await {
             let response = result?;
@@ -241,7 +253,13 @@ async fn ask_llm_streaming(
 
             for choice in response.choices {
                 if let Some(content) = &choice.delta.content {
-                    write!(lock, "{}", content)?;
+                    let content_to_write = if first_followup_content {
+                        first_followup_content = false;
+                        content.trim_start_matches('\n')
+                    } else {
+                        content.as_str()
+                    };
+                    write!(lock, "{}", content_to_write)?;
                 }
             }
             lock.flush()?;
@@ -336,8 +354,10 @@ async fn ask_llm(
                 let args = tc.function.arguments.clone();
                 let tool_call_clone = tool_call.clone();
 
+                let config_clone = app_config.clone();
                 let handle = tokio::spawn(async move {
-                    let result: serde_json::Value = tools::call_tool(&name, &args).await;
+                    let result: serde_json::Value =
+                        tools::call_tool(&name, &args, &config_clone).await;
                     (tool_call_clone, result)
                 });
                 handles.push(handle);
@@ -599,6 +619,27 @@ async fn main() {
                         println!("  API Key: [not set]");
                     }
                     println!("  Log Level: {}", config.log_level);
+
+                    // Create .squidignore file if it doesn't exist
+                    let squidignore_path = dir.join(".squidignore");
+                    if !squidignore_path.exists() {
+                        match std::fs::write(&squidignore_path, SQUIDIGNORE_TEMPLATE) {
+                            Ok(_) => {
+                                info!("✓ Created .squidignore file at {:?}", squidignore_path);
+                                println!("\n✓ Created .squidignore with default patterns");
+                                println!(
+                                    "  Edit this file to customize which files squid should ignore"
+                                );
+                            }
+                            Err(e) => {
+                                warn!("Failed to create .squidignore: {}", e);
+                                println!("\n⚠ Could not create .squidignore: {}", e);
+                            }
+                        }
+                    } else {
+                        info!(".squidignore already exists, skipping creation");
+                        println!("\n✓ Using existing .squidignore file");
+                    }
                 }
                 Err(e) => {
                     error!("Failed to save configuration: {}", e);
@@ -621,13 +662,43 @@ async fn main() {
             info!("Q: {}", full_question);
 
             let file_content = if let Some(file_path) = file {
-                match std::fs::read_to_string(file_path) {
-                    Ok(content) => {
-                        info!("Read file content ({} bytes)", content.len());
-                        Some(content)
+                // Validate path before reading
+                let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+                let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+                match validator.validate(file_path) {
+                    Ok(_) => match std::fs::read_to_string(file_path) {
+                        Ok(content) => {
+                            info!("Read file content ({} bytes)", content.len());
+                            Some(content)
+                        }
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::NotFound {
+                                println!(
+                                    "🦑: I can't find that file. Please check the path and try again."
+                                );
+                            } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                                println!("🦑: I don't have permission to read that file.");
+                            } else {
+                                println!("🦑: I couldn't read that file - {}", e);
+                            }
+                            debug!("Failed to read file {}: {}", file_path.display(), e);
+                            return;
+                        }
+                    },
+                    Err(validate::PathValidationError::PathIgnored(_)) => {
+                        println!("🦑: I can't access that file - it's in your .squidignore list.");
+                        return;
+                    }
+                    Err(validate::PathValidationError::PathNotAllowed(_)) => {
+                        println!(
+                            "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+                        );
+                        return;
                     }
                     Err(e) => {
-                        error!("Failed to read file: {}", e);
+                        debug!("Path validation failed: {}", e);
+                        println!("🦑: I can't access that file - {}", e);
                         return;
                     }
                 }
@@ -642,7 +713,20 @@ async fn main() {
                         Some(content)
                     }
                     Err(e) => {
-                        error!("Failed to read custom prompt file: {}", e);
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            println!(
+                                "🦑: I can't find that custom prompt file. Please check the path and try again."
+                            );
+                        } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            println!("🦑: I don't have permission to read that prompt file.");
+                        } else {
+                            println!("🦑: I couldn't read that prompt file - {}", e);
+                        }
+                        debug!(
+                            "Failed to read custom prompt file {}: {}",
+                            prompt_path.display(),
+                            e
+                        );
                         return;
                     }
                 }
@@ -688,13 +772,43 @@ async fn main() {
         } => {
             info!("Reviewing file: {:?}", file);
 
-            let file_content = match std::fs::read_to_string(file) {
-                Ok(content) => {
-                    info!("Read file content ({} bytes)", content.len());
-                    content
+            // Validate path before reading
+            let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+            let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+            let file_content = match validator.validate(file) {
+                Ok(_) => match std::fs::read_to_string(file) {
+                    Ok(content) => {
+                        info!("Read file content ({} bytes)", content.len());
+                        content
+                    }
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            println!(
+                                "🦑: I can't find that file. Please check the path and try again."
+                            );
+                        } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            println!("🦑: I don't have permission to read that file.");
+                        } else {
+                            println!("🦑: I couldn't read that file - {}", e);
+                        }
+                        debug!("Failed to read file {}: {}", file.display(), e);
+                        return;
+                    }
+                },
+                Err(validate::PathValidationError::PathIgnored(_)) => {
+                    println!("🦑: I can't access that file - it's in your .squidignore list.");
+                    return;
+                }
+                Err(validate::PathValidationError::PathNotAllowed(_)) => {
+                    println!(
+                        "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+                    );
+                    return;
                 }
                 Err(e) => {
-                    error!("Failed to read file: {}", e);
+                    debug!("Path validation failed: {}", e);
+                    println!("🦑: I can't access that file - {}", e);
                     return;
                 }
             };

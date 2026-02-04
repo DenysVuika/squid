@@ -1,0 +1,73 @@
+# .squidignore - Patterns for files/directories to ignore in squid operations
+# This file works like .gitignore - one pattern per line
+# Lines starting with # are comments
+
+# Build outputs
+target/
+dist/
+build/
+out/
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+/tmp/
+logs/
+
+# Environment and secrets
+.env
+.env.*
+*.key
+*.pem
+secrets/
+credentials/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large media files (optional)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.iso
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Git directory (prevent reading .git internals)
+.git/
+
+# Project-specific patterns
+# Add your own patterns below:

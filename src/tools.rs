@@ -1,10 +1,13 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
 use console::style;
 use inquire::Confirm;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use serde_json::json;
 use walkdir::WalkDir;
+
+use crate::config::Config;
+use crate::validate::PathValidator;
 
 /// Get the list of available tools for the LLM
 pub fn get_tools() -> Vec<ChatCompletionTools> {
@@ -184,8 +187,8 @@ fn execute_grep(
     Ok(results)
 }
 
-/// Execute a tool call with user approval
-pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
+/// Execute a tool call with user approval and path validation
+pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
     // Parse arguments first to display them to the user
@@ -195,6 +198,56 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
             error!("Failed to parse tool arguments: {}", e);
             return json!({"error": format!("Invalid arguments: {}", e)});
         }
+    };
+
+    // Initialize path validator with ignore patterns from .squidignore
+    let ignore_patterns = PathValidator::load_ignore_patterns();
+    let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
+        None
+    } else {
+        Some(ignore_patterns)
+    });
+
+    // Validate paths BEFORE asking for user approval
+    let validated_path = match name {
+        "read_file" | "write_file" | "grep" => {
+            let path = args["path"].as_str().unwrap_or("");
+            match validator.validate(std::path::Path::new(path)) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    debug!("Path validation failed for {}: {}", name, e);
+                    let friendly_message = match e {
+                        crate::validate::PathValidationError::PathIgnored(_) => {
+                            format!(
+                                "I cannot access '{}' because it's protected by the project's .squidignore file. This is a security measure to prevent access to sensitive files.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("blacklisted") =>
+                        {
+                            format!(
+                                "I cannot access '{}' because it's a protected system file or directory. Access to this location is blocked for security reasons.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("not whitelisted") =>
+                        {
+                            format!(
+                                "I cannot access '{}' because it's outside the current project directory. I can only access files within the current workspace for security reasons.",
+                                path
+                            )
+                        }
+                        _ => {
+                            format!("I cannot access '{}' due to security restrictions.", path)
+                        }
+                    };
+                    return json!({"content": friendly_message});
+                }
+            }
+        }
+        _ => None,
     };
 
     // Ask for user approval with styled formatting
@@ -250,62 +303,72 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
             // User approved, proceed with tool execution
             match name {
                 "read_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
-                    match std::fs::read_to_string(path) {
+                    let validated_path = validated_path.unwrap();
+
+                    match std::fs::read_to_string(&validated_path) {
                         Ok(content) => {
-                            info!("Successfully read file: {} ({} bytes)", path, content.len());
+                            info!(
+                                "Successfully read file: {} ({} bytes)",
+                                validated_path.display(),
+                                content.len()
+                            );
                             json!({"content": content})
                         }
                         Err(e) => {
-                            warn!("Failed to read file {}: {}", path, e);
+                            warn!("Failed to read file {}: {}", validated_path.display(), e);
                             json!({"error": format!("Failed to read file: {}", e)})
                         }
                     }
                 }
                 "write_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
+                    let validated_path = validated_path.unwrap();
                     let content = args["content"].as_str().unwrap_or("");
 
-                    match std::fs::write(path, content) {
+                    match std::fs::write(&validated_path, content) {
                         Ok(_) => {
                             info!(
                                 "Successfully wrote file: {} ({} bytes)",
-                                path,
+                                validated_path.display(),
                                 content.len()
                             );
-                            json!({"success": true, "message": format!("File written successfully: {}", path)})
+                            json!({"success": true, "message": format!("File written successfully: {}", validated_path.display())})
                         }
                         Err(e) => {
-                            warn!("Failed to write file {}: {}", path, e);
+                            warn!("Failed to write file {}: {}", validated_path.display(), e);
                             json!({"error": format!("Failed to write file: {}", e)})
                         }
                     }
                 }
                 "grep" => {
+                    let validated_path = validated_path.unwrap();
                     let pattern = args["pattern"].as_str().unwrap_or("");
-                    let path = args["path"].as_str().unwrap_or("");
                     let case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
                     let max_results = args["max_results"].as_i64().unwrap_or(50) as usize;
 
-                    match execute_grep(pattern, path, case_sensitive, max_results) {
+                    match execute_grep(
+                        pattern,
+                        validated_path.to_str().unwrap_or(""),
+                        case_sensitive,
+                        max_results,
+                    ) {
                         Ok(results) => {
                             info!(
                                 "Grep found {} results for pattern '{}' in {}",
                                 results.len(),
                                 pattern,
-                                path
+                                validated_path.display()
                             );
 
                             // Format results as readable text for better LLM comprehension
                             if results.is_empty() {
-                                json!({"message": format!("No matches found for pattern '{}' in {}", pattern, path)})
+                                json!({"message": format!("No matches found for pattern '{}' in {}", pattern, validated_path.display())})
                             } else {
                                 let mut formatted_results = format!(
                                     "Found {} match{} for pattern '{}' in {}:\n\n",
                                     results.len(),
                                     if results.len() == 1 { "" } else { "es" },
                                     pattern,
-                                    path
+                                    validated_path.display()
                                 );
 
                                 for result in &results {
@@ -331,7 +394,12 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
                             }
                         }
                         Err(e) => {
-                            warn!("Grep failed for pattern '{}' in {}: {}", pattern, path, e);
+                            warn!(
+                                "Grep failed for pattern '{}' in {}: {}",
+                                pattern,
+                                validated_path.display(),
+                                e
+                            );
                             json!({"error": format!("Grep failed: {}", e)})
                         }
                     }
