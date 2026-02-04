@@ -75,6 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **README Privacy Emphasis**: Updated README to highlight privacy and local-first nature
+  - Main description now mentions "Privacy-focused and local-first - your code never leaves your hardware when using local models"
+  - New "Privacy & Local-First" section explains data privacy options
+  - Clarifies distinction between local models (LM Studio/Ollama) and cloud APIs
+  - Emphasizes user control over data and privacy choices
+  - Tool calling section notes that all file operations happen locally with local models
+
 - **Tool Calling Signature**: `call_tool()` now requires `Config` parameter
   - Enables future extensibility for configuration-based features
   - Updated both `ask_llm_streaming()` and `ask_llm()` to pass config to tools

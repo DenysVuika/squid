@@ -1,6 +1,6 @@
 # squid 🦑
 
-An AI-powered command-line tool for code reviews and suggestions. 
+An AI-powered command-line tool for code reviews and suggestions. Privacy-focused and local-first - your code never leaves your hardware when using local models.
 
 ## Features
 
@@ -15,6 +15,22 @@ An AI-powered command-line tool for code reviews and suggestions.
 - 🦑 Friendly squid assistant personality with professional responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services
+
+## Privacy & Local-First
+
+**Your code never leaves your hardware** when using local LLM services (LM Studio, Ollama, etc.).
+
+- 🔒 **Complete Privacy** - Run models entirely on your own machine
+- 🏠 **Local-First** - No data sent to external servers with local models
+- 🛡️ **You Control Your Data** - Choose between local models (private) or cloud APIs (convenient)
+- 🔐 **Secure by Default** - Multi-layered security prevents unauthorized file access
+
+**Privacy Options:**
+- **Maximum Privacy**: Use LM Studio or Ollama - everything runs locally, no internet required for inference
+- **Cloud Convenience**: Use OpenAI or other cloud providers - data sent to their servers for processing
+- **Your Choice**: Squid works with both - you decide based on your privacy needs
+
+All file operations require your explicit approval, regardless of which LLM service you use.
 
 ## Prerequisites
 
@@ -362,6 +378,7 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
 - 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
+- 🔐 **Privacy preserved** - With local models (LM Studio/Ollama), all file operations happen locally on your machine
 
 **Using .squidignore:**
 
