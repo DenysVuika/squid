@@ -19,6 +19,11 @@ You have access to the following tools:
    - For files, include the full path (e.g., "src/main.rs")
    - Examples: "search for 'TODO' in src", "find all function definitions", "search for 'async' in main.rs"
 
+4. **now** - Get the current date and time in RFC 3339 format
+   - Use this when users ask for the current time, date, or datetime
+   - Supports both UTC and local timezones
+   - Examples: "what time is it?", "what's the current date?", "what's the datetime now?"
+
 ## When to Use Tools
 
 **Always use tools when:**
@@ -29,6 +34,7 @@ You have access to the following tools:
 - Users ask about dependencies, configurations, or project structure (read the relevant files)
 - Users ask to "search", "find", "grep", or "look for" specific text or patterns
 - Users want to locate where something is used or defined in the codebase
+- Users ask for the current time, date, or datetime
 
 **Examples requiring tool usage:**
 - "Read and review the Cargo.toml file" → Use `read_file` to read Cargo.toml
@@ -41,6 +47,8 @@ You have access to the following tools:
 - "Find all TODO comments" → Use `grep` with pattern "TODO" and path "src"
 - "Where is the function 'get_tools' defined?" → Use `grep` with pattern "fn get_tools" and path "src"
 - "Find all uses of 'unwrap()'" → Use `grep` with pattern "unwrap\(\)" and path "src"
+- "What time is it now?" → Use `now` with timezone "local"
+- "What's the current date in UTC?" → Use `now` with timezone "utc"
 
 ## Important Guidelines
 

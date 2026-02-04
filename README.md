@@ -8,6 +8,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
 - 🔧 Tool calling support (file read/write/search operations) with multi-layered security
+- 🕐 **Datetime awareness** - LLM can access current date and time (UTC or local)
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
@@ -360,6 +361,12 @@ squid ask "Show me all error handling patterns in src/tools.rs"
 # You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
 # Results show file path, line number, and matched content
 
+# LLM can get current date and time
+squid ask "What time is it now?"
+squid ask "What's the current date?"
+# You'll be prompted: "Allow getting current date and time? (Y/n)"
+# Returns datetime in RFC 3339 format
+
 # Use --no-stream for non-streaming mode
 squid ask --no-stream "Read Cargo.toml and list all dependencies"
 ```
@@ -368,6 +375,7 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 - 📖 **read_file** - Read file contents from the filesystem
 - 📝 **write_file** - Write content to files
 - 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
+- 🕐 **now** - Get current date and time in RFC 3339 format (UTC or local timezone)
 
 **Key Features:**
 - 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language

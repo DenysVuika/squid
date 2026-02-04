@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 async-openai = { version = "0.32", features = ["chat-completion"] }
+chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 console = "0.15"
 dotenvy = "0.15.7"

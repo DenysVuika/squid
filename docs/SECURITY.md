@@ -283,6 +283,22 @@ This is a test file.
 (Y/n)
 ```
 
+### now
+
+**Purpose:** Get current date and time in RFC 3339 format
+
+**Security measures:**
+- Shows which timezone will be used (UTC or local)
+- No sensitive data access - only system time
+- Logged with timezone information
+
+**Example prompt:**
+```
+Allow getting current date and time?
+Timezone: utc
+(Y/n)
+```
+
 ## Direct File Access Commands
 
 In addition to LLM tool calls, squid provides direct file access via command-line flags:
