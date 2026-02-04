@@ -208,6 +208,21 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
         Some(ignore_patterns)
     });
 
+    // Validate paths BEFORE asking for user approval
+    let validated_path = match name {
+        "read_file" | "write_file" | "grep" => {
+            let path = args["path"].as_str().unwrap_or("");
+            match validator.validate(std::path::Path::new(path)) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    error!("Path validation failed for {}: {}", name, e);
+                    return json!({"error": format!("Security: {}", e)});
+                }
+            }
+        }
+        _ => None,
+    };
+
     // Ask for user approval with styled formatting
     let approval_message = match name {
         "read_file" => {
@@ -261,16 +276,7 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
             // User approved, proceed with tool execution
             match name {
                 "read_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
-
-                    // Validate path before reading
-                    let validated_path = match validator.validate(std::path::Path::new(path)) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            error!("Path validation failed for read_file: {}", e);
-                            return json!({"error": format!("Security: {}", e)});
-                        }
-                    };
+                    let validated_path = validated_path.unwrap();
 
                     match std::fs::read_to_string(&validated_path) {
                         Ok(content) => {
@@ -288,17 +294,8 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                     }
                 }
                 "write_file" => {
-                    let path = args["path"].as_str().unwrap_or("");
+                    let validated_path = validated_path.unwrap();
                     let content = args["content"].as_str().unwrap_or("");
-
-                    // Validate path before writing
-                    let validated_path = match validator.validate(std::path::Path::new(path)) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            error!("Path validation failed for write_file: {}", e);
-                            return json!({"error": format!("Security: {}", e)});
-                        }
-                    };
 
                     match std::fs::write(&validated_path, content) {
                         Ok(_) => {
@@ -316,23 +313,14 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                     }
                 }
                 "grep" => {
+                    let validated_path = validated_path.unwrap();
                     let pattern = args["pattern"].as_str().unwrap_or("");
-                    let path = args["path"].as_str().unwrap_or("");
                     let case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
                     let max_results = args["max_results"].as_i64().unwrap_or(50) as usize;
 
-                    // Validate path before searching
-                    let validated_path = match validator.validate(std::path::Path::new(path)) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            error!("Path validation failed for grep: {}", e);
-                            return json!({"error": format!("Security: {}", e)});
-                        }
-                    };
-
                     match execute_grep(
                         pattern,
-                        validated_path.to_str().unwrap_or(path),
+                        validated_path.to_str().unwrap_or(""),
                         case_sensitive,
                         max_results,
                     ) {
@@ -341,19 +329,19 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                                 "Grep found {} results for pattern '{}' in {}",
                                 results.len(),
                                 pattern,
-                                path
+                                validated_path.display()
                             );
 
                             // Format results as readable text for better LLM comprehension
                             if results.is_empty() {
-                                json!({"message": format!("No matches found for pattern '{}' in {}", pattern, path)})
+                                json!({"message": format!("No matches found for pattern '{}' in {}", pattern, validated_path.display())})
                             } else {
                                 let mut formatted_results = format!(
                                     "Found {} match{} for pattern '{}' in {}:\n\n",
                                     results.len(),
                                     if results.len() == 1 { "" } else { "es" },
                                     pattern,
-                                    path
+                                    validated_path.display()
                                 );
 
                                 for result in &results {
@@ -379,7 +367,12 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                             }
                         }
                         Err(e) => {
-                            warn!("Grep failed for pattern '{}' in {}: {}", pattern, path, e);
+                            warn!(
+                                "Grep failed for pattern '{}' in {}: {}",
+                                pattern,
+                                validated_path.display(),
+                                e
+                            );
                             json!({"error": format!("Grep failed: {}", e)})
                         }
                     }

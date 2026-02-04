@@ -31,7 +31,14 @@ This multi-layered approach prevents unauthorized or unintended file system acce
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. squid intercepts tool call and prompts user              │
+│ 3. squid validates path (whitelist/blacklist + .squidignore)│
+│    → If blocked: Error returned to LLM (NO user prompt)     │
+│    → If allowed: Continue to step 4                         │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. squid prompts user for approval                          │
 │                                                             │
 │    ┌───────────────────────────────────────────────────┐    │
 │    │ Allow reading file: README.md? (Y/n)              │    │
@@ -41,7 +48,7 @@ This multi-layered approach prevents unauthorized or unintended file system acce
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. User makes decision                                      │
+│ 5. User makes decision                                      │
 │    • Press Y → Tool executes, result sent to LLM            │
 │    • Press N → Tool skipped, error sent to LLM              │
 └─────────────────────────────────────────────────────────────┘
@@ -297,10 +304,12 @@ Tool: read_file
 Path: .env
 ```
 
-**Your response:**
-- Press `N` to deny
-- LLM receives error, cannot access `.env`
-- Your sensitive data stays protected
+**What happens:**
+- Path validation checks `.env` against `.squidignore`
+- `.env` is blocked automatically (in default `.squidignore`)
+- **You are NOT prompted** - access denied immediately
+- LLM receives error: "Security: Path is ignored by .squidignore"
+- Your sensitive data stays protected without user interaction needed
 
 ### Scenario 2: Validating Write Operations
 
@@ -332,9 +341,11 @@ squid ask "Read all .rs files in src/ and create a summary"
 
 **LLM behavior:**
 - Requests to read each file individually
+- Path validation passes for project files
 - You approve each one: src/main.rs ✓, src/lib.rs ✓, etc.
+- If LLM tries to read ignored files (e.g., `target/`), they're blocked automatically
 - Finally requests to write summary.txt
-- You review the summary content
+- Path validation passes, you review the summary content
 - Approve if it looks correct
 
 ## Logging and Audit

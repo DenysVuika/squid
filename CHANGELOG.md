@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Whitelist/blacklist validation automatically blocks sensitive system directories
   - Default blacklist includes `/etc`, `/root`, `~/.ssh`, `~/.aws`, `~/.gnupg`, etc.
   - Default whitelist restricts operations to current directory and subdirectories
-  - Validation happens before user approval prompts for automatic rejection
+  - **Validation happens BEFORE user approval prompts** - blocked files never prompt user
   - Clear error messages explain why access was denied
   - New `validate.rs` module with `PathValidator` for secure path handling
   - Windows-specific blacklist for `C:\Windows`, `C:\Program Files`, etc.
@@ -28,11 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works like `.gitignore` - one pattern per line, `#` for comments
   - Glob pattern support: `*.log`, `**/*.rs`, `target/`, `node_modules/**`
   - Filename-only patterns (e.g., `.env`, `*.tmp`) match anywhere in path tree
+  - **Checked BEFORE user approval** - ignored files never prompt user
   - Automatic enforcement - files cannot be accessed even if user approves
   - Patterns loaded from `.squidignore` file in project root
   - Included `.squidignore.example` with common patterns
   - Auto-created by `squid init` command for convenience
-  - Validation layer sits between path validation and user approval
 
 - **Enhanced Security Documentation**: Comprehensive security guide
   - Updated `docs/SECURITY.md` with path validation and ignore patterns documentation
