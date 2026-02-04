@@ -673,7 +673,16 @@ async fn main() {
                             Some(content)
                         }
                         Err(e) => {
-                            error!("Failed to read file: {}", e);
+                            if e.kind() == std::io::ErrorKind::NotFound {
+                                println!(
+                                    "🦑: I can't find that file. Please check the path and try again."
+                                );
+                            } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                                println!("🦑: I don't have permission to read that file.");
+                            } else {
+                                println!("🦑: I couldn't read that file - {}", e);
+                            }
+                            error!("Failed to read file {}: {}", file_path.display(), e);
                             return;
                         }
                     },
@@ -704,7 +713,20 @@ async fn main() {
                         Some(content)
                     }
                     Err(e) => {
-                        error!("Failed to read custom prompt file: {}", e);
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            println!(
+                                "🦑: I can't find that custom prompt file. Please check the path and try again."
+                            );
+                        } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            println!("🦑: I don't have permission to read that prompt file.");
+                        } else {
+                            println!("🦑: I couldn't read that prompt file - {}", e);
+                        }
+                        error!(
+                            "Failed to read custom prompt file {}: {}",
+                            prompt_path.display(),
+                            e
+                        );
                         return;
                     }
                 }
@@ -761,7 +783,16 @@ async fn main() {
                         content
                     }
                     Err(e) => {
-                        error!("Failed to read file: {}", e);
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            println!(
+                                "🦑: I can't find that file. Please check the path and try again."
+                            );
+                        } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            println!("🦑: I don't have permission to read that file.");
+                        } else {
+                            println!("🦑: I couldn't read that file - {}", e);
+                        }
+                        error!("Failed to read file {}: {}", file.display(), e);
                         return;
                     }
                 },

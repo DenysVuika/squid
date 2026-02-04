@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This closes a security gap where sensitive files could be read directly via command flags
   - **Note:** LLM still makes tool call requests for blocked files (it doesn't know beforehand which are blocked), but requests are rejected instantly without user interaction, and the friendly message is relayed to the user
 
+- **Friendly file error messages**: File access errors now show personalized, helpful messages
+  - File not found: "🦑: I can't find that file. Please check the path and try again."
+  - Permission denied: "🦑: I don't have permission to read that file."
+  - Other errors: "🦑: I couldn't read that file - [error details]"
+  - Replaces technical "ERROR: Failed to read file: No such file or directory (os error 2)" messages
+  - Applies to `ask -f`, `review`, and custom `--prompt` file reading
+  - Technical details still logged for debugging (visible with `--log-level debug`)
+
 - **Improved Streaming Output**: Cleaner formatting for assistant responses
   - Leading newlines are stripped from streaming responses
   - Content now appears directly after `🦑:` emoji without extra blank lines
