@@ -216,7 +216,37 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                 Ok(p) => Some(p),
                 Err(e) => {
                     error!("Path validation failed for {}: {}", name, e);
-                    return json!({"error": format!("Security: {}", e)});
+                    let friendly_message = match e {
+                        crate::validate::PathValidationError::PathIgnored(_) => {
+                            format!(
+                                "I'm terribly sorry, but I'm not allowed to access '{}'. This file is in the project's .squidignore list, which means it's protected from access.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("blacklisted") =>
+                        {
+                            format!(
+                                "I'm afraid I cannot access '{}'. This is a sensitive system file or directory that's protected for security reasons.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("not whitelisted") =>
+                        {
+                            format!(
+                                "I'm sorry, but I can only access files within the current project directory. The file '{}' is outside my allowed workspace.",
+                                path
+                            )
+                        }
+                        _ => {
+                            format!(
+                                "I'm unable to access '{}' due to security restrictions: {}",
+                                path, e
+                            )
+                        }
+                    };
+                    return json!({"error": friendly_message});
                 }
             }
         }

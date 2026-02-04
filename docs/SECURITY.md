@@ -86,8 +86,10 @@ All file system operations are validated against whitelist and blacklist rules *
 ```bash
 squid ask "Read /etc/passwd"
 
-# Response:
-# Error: Security: Path is in blacklisted directory: /etc/passwd
+# Response (from LLM):
+# 🦑: I'm afraid I cannot access '/etc/passwd'. This is a sensitive system 
+# file or directory that's protected for security reasons.
+# 
 # (User is NOT prompted - access automatically denied)
 ```
 
@@ -150,8 +152,10 @@ echo ".env" >> .squidignore
 
 squid ask "Read debug.log"
 
-# Response:
-# Error: Security: Path is ignored by .squidignore: /path/to/debug.log
+# Response (from LLM):
+# 🦑: I'm terribly sorry, but I'm not allowed to access 'debug.log'. This file 
+# is in the project's .squidignore list, which means it's protected from access.
+# 
 # (User is NOT prompted - access automatically denied)
 ```
 
@@ -308,7 +312,8 @@ Path: .env
 - Path validation checks `.env` against `.squidignore`
 - `.env` is blocked automatically (in default `.squidignore`)
 - **You are NOT prompted** - access denied immediately
-- LLM receives error: "Security: Path is ignored by .squidignore"
+- LLM receives friendly message: "I'm terribly sorry, but I'm not allowed to access '.env'. This file is in the project's .squidignore list, which means it's protected from access."
+- LLM explains to user why it cannot access the file
 - Your sensitive data stays protected without user interaction needed
 
 ### Scenario 2: Validating Write Operations

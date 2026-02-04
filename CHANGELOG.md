@@ -33,13 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Patterns loaded from `.squidignore` file in project root
   - Included `.squidignore.example` with common patterns
   - Auto-created by `squid init` command for convenience
+  - Friendly, personalized error messages when files are blocked
 
 - **Enhanced Security Documentation**: Comprehensive security guide
   - Updated `docs/SECURITY.md` with path validation and ignore patterns documentation
   - Three-layer security model clearly explained (validation → ignore → approval)
-  - Example workflows and security scenarios
+  - Example workflows and security scenarios with friendly error messages
   - Pattern syntax reference and best practices
   - Security layers diagram for visual understanding
+
+- **Friendly Error Messages**: Path validation errors are now conversational
+  - Instead of technical errors, the assistant politely explains why it can't access files
+  - Example: "I'm terribly sorry, but I'm not allowed to access '.env'. This file is in the project's .squidignore list, which means it's protected from access."
+  - Matches the squid assistant's friendly personality
+  - Different messages for different validation failures (ignored, blacklisted, not whitelisted)
 
 ### Changed
 
