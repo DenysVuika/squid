@@ -19,6 +19,7 @@ use std::path::PathBuf;
 /// - Use `api_key: None` in config file for local models (LM Studio, Ollama)
 /// - For cloud services (OpenAI, etc.), omit `api_key` from config and set it via `.env`
 /// - Default `log_level` is `error` (minimal noise)
+/// - Use `.squidignore` file for project-wide ignore patterns
 ///
 /// **Configuration Priority:**
 /// 1. `squid.config.json` (if exists) - project settings

@@ -1,12 +1,18 @@
 # Security Features
 
-This document describes the security features implemented in `squid` to protect users during LLM interactions with tool calling capabilities.
+This document describes the security features implemented in `squid` to protect users during LLM interactions with tool calling capabilities, including path validation and ignore patterns.
 
 > **Quick Start:** See the "Tool Calling (with Security Approval)" section in the main [README.md](../README.md) for examples.
 
 ## Overview
 
-When the LLM requests to use tools (such as reading, writing, or searching files), `squid` requires explicit user approval before executing any operation. This prevents unauthorized or unintended file system access.
+When the LLM requests to use tools (such as reading, writing, or searching files), `squid` provides multiple layers of security:
+
+1. **Path Validation** - Whitelist/blacklist rules prevent access to sensitive system directories
+2. **Ignore Patterns** - `.squidignore` file blocks access to specific files and directories  
+3. **User Approval** - Explicit confirmation required before executing any operation
+
+This multi-layered approach prevents unauthorized or unintended file system access.
 
 ## Tool Approval Flow
 
@@ -42,6 +48,107 @@ When the LLM requests to use tools (such as reading, writing, or searching files
 ```
 
 ## Security Features
+
+### 🛡️ Path Validation (Whitelist/Blacklist)
+
+All file system operations are validated against whitelist and blacklist rules **before** requesting user approval.
+
+**Default Whitelist:**
+- Current directory (`.`) and subdirectories
+- Current working directory path
+
+**Default Blacklist (System Paths):**
+- `/etc`, `/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`
+- `/root`, `/var`, `/sys`, `/proc`
+- `C:\Windows`, `C:\Program Files` (Windows)
+
+**Default Blacklist (Sensitive User Files):**
+- `~/.ssh/` - SSH keys
+- `~/.gnupg/` - GPG keys
+- `~/.aws/` - AWS credentials
+- `~/.config/gcloud/` - Google Cloud credentials
+
+**Behavior:**
+- Paths outside the whitelist are **automatically rejected**
+- Paths in the blacklist are **automatically rejected**
+- User is **never prompted** for rejected paths
+- Clear error messages explain why access was denied
+
+**Example:**
+
+```bash
+squid ask "Read /etc/passwd"
+
+# Response:
+# Error: Security: Path is in blacklisted directory: /etc/passwd
+# (User is NOT prompted - access automatically denied)
+```
+
+### 📂 Ignore Patterns (.squidignore)
+
+Use a `.squidignore` file in your project root to specify files and directories that should never be accessed by squid tools. This works like `.gitignore`.
+
+**Creating .squidignore:**
+
+```bash
+# .squidignore - One pattern per line
+# Lines starting with # are comments
+
+# Build outputs
+target/
+dist/
+*.o
+
+# Dependencies  
+node_modules/
+__pycache__/
+
+# Secrets
+.env
+*.key
+*.pem
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+```
+
+**Pattern Syntax:**
+
+- `*.txt` - All .txt files in any directory
+- `**/*.log` - All .log files recursively
+- `target/` - Entire target directory
+- `node_modules/**` - node_modules and all contents
+- `# comment` - Comments start with #
+
+**Priority:**
+
+Ignore patterns are checked **after** whitelist/blacklist but **before** user approval:
+
+```
+1. Path validation (whitelist/blacklist) ← Automatic
+2. Ignore patterns (.squidignore)        ← Automatic  
+3. User approval prompt                  ← Manual
+```
+
+**Example:**
+
+```bash
+# Create .squidignore
+echo "*.log" > .squidignore
+echo ".env" >> .squidignore
+
+squid ask "Read debug.log"
+
+# Response:
+# Error: Security: Path is ignored by .squidignore: /path/to/debug.log
+# (User is NOT prompted - access automatically denied)
+```
+
+
 
 ### 🔒 User Approval Required
 
@@ -281,16 +388,67 @@ If `squid` is run in a non-interactive environment (e.g., piped input, CI/CD), t
 
 This is intentional - tools require human approval and cannot run unattended.
 
+## Security Layers Summary
+
+Squid employs **three layers of security** for file operations:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Layer 1: Path Validation (Whitelist/Blacklist)      │
+│ ✓ Blocks system directories (/etc, /root, etc.)     │
+│ ✓ Blocks sensitive files (~/.ssh, ~/.aws, etc.)     │
+│ ✓ Only allows current directory and subdirectories  │
+│ → Automatic rejection, no user prompt               │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│ Layer 2: Ignore Patterns (.squidignore)             │
+│ ✓ Blocks files matching .squidignore patterns       │
+│ ✓ Configurable per-project rules                    │
+│ ✓ Works like .gitignore                             │
+│ → Automatic rejection, no user prompt               │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│ Layer 3: User Approval                              │
+│ ✓ Explicit Y/N prompt for each operation            │
+│ ✓ Content preview for write operations              │
+│ ✓ Full transparency of tool arguments               │
+│ → Manual approval required                          │
+└─────────────────────────────────────────────────────┘
+```
+
+**Example Flow:**
+
+```bash
+squid ask "Read all files in my project and create a summary"
+
+# Attempt 1: Read ~/.ssh/id_rsa
+# → Layer 1 blocks (blacklisted path)
+# ✗ Automatic rejection
+
+# Attempt 2: Read node_modules/package/index.js  
+# → Layer 2 blocks (in .squidignore)
+# ✗ Automatic rejection
+
+# Attempt 3: Read src/main.rs
+# → Layers 1&2 pass
+# → Layer 3 prompts user
+# ? Allow reading file: src/main.rs? (Y/n)
+```
+
 ## Future Enhancements
 
 Potential future security features (not yet implemented):
 
-- [ ] Whitelist/blacklist for file paths
 - [ ] Automatic approval for specific safe operations
 - [ ] Audit log file for all tool executions
 - [ ] Configuration option to disable tools entirely
 - [ ] Sandboxing or restricted file system access
 - [ ] Rate limiting for tool calls
+- [ ] Custom whitelist paths via configuration
 
 ## Reporting Security Issues
 
@@ -303,11 +461,13 @@ If you discover a security vulnerability in `squid`, please report it responsibl
 
 ## Summary
 
-The tool approval system in `squid` provides:
+The security system in `squid` provides:
 
-✅ **User Control** - You approve every file operation  
+✅ **Path Validation** - Automatic blocking of system and sensitive directories  
+✅ **Ignore Patterns** - Project-specific file blocking via .squidignore  
+✅ **User Control** - Final approval for every file operation  
 ✅ **Transparency** - See what's being accessed and written  
 ✅ **Logging** - Complete audit trail of all operations  
-✅ **Prevention** - Stop unintended or malicious actions  
+✅ **Prevention** - Multi-layered defense against unintended or malicious actions  
 
-Your security is our priority. Use `squid` with confidence knowing you're in control.
+Your security is our priority. Use `squid` with confidence knowing you're protected at multiple levels.

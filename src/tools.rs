@@ -6,6 +6,9 @@ use regex::Regex;
 use serde_json::json;
 use walkdir::WalkDir;
 
+use crate::config::Config;
+use crate::validate::PathValidator;
+
 /// Get the list of available tools for the LLM
 pub fn get_tools() -> Vec<ChatCompletionTools> {
     vec![
@@ -184,8 +187,8 @@ fn execute_grep(
     Ok(results)
 }
 
-/// Execute a tool call with user approval
-pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
+/// Execute a tool call with user approval and path validation
+pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
     // Parse arguments first to display them to the user
@@ -196,6 +199,14 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
             return json!({"error": format!("Invalid arguments: {}", e)});
         }
     };
+
+    // Initialize path validator with ignore patterns from .squidignore
+    let ignore_patterns = PathValidator::load_ignore_patterns();
+    let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
+        None
+    } else {
+        Some(ignore_patterns)
+    });
 
     // Ask for user approval with styled formatting
     let approval_message = match name {
@@ -251,13 +262,27 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
             match name {
                 "read_file" => {
                     let path = args["path"].as_str().unwrap_or("");
-                    match std::fs::read_to_string(path) {
+
+                    // Validate path before reading
+                    let validated_path = match validator.validate(std::path::Path::new(path)) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            error!("Path validation failed for read_file: {}", e);
+                            return json!({"error": format!("Security: {}", e)});
+                        }
+                    };
+
+                    match std::fs::read_to_string(&validated_path) {
                         Ok(content) => {
-                            info!("Successfully read file: {} ({} bytes)", path, content.len());
+                            info!(
+                                "Successfully read file: {} ({} bytes)",
+                                validated_path.display(),
+                                content.len()
+                            );
                             json!({"content": content})
                         }
                         Err(e) => {
-                            warn!("Failed to read file {}: {}", path, e);
+                            warn!("Failed to read file {}: {}", validated_path.display(), e);
                             json!({"error": format!("Failed to read file: {}", e)})
                         }
                     }
@@ -266,17 +291,26 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
                     let path = args["path"].as_str().unwrap_or("");
                     let content = args["content"].as_str().unwrap_or("");
 
-                    match std::fs::write(path, content) {
+                    // Validate path before writing
+                    let validated_path = match validator.validate(std::path::Path::new(path)) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            error!("Path validation failed for write_file: {}", e);
+                            return json!({"error": format!("Security: {}", e)});
+                        }
+                    };
+
+                    match std::fs::write(&validated_path, content) {
                         Ok(_) => {
                             info!(
                                 "Successfully wrote file: {} ({} bytes)",
-                                path,
+                                validated_path.display(),
                                 content.len()
                             );
-                            json!({"success": true, "message": format!("File written successfully: {}", path)})
+                            json!({"success": true, "message": format!("File written successfully: {}", validated_path.display())})
                         }
                         Err(e) => {
-                            warn!("Failed to write file {}: {}", path, e);
+                            warn!("Failed to write file {}: {}", validated_path.display(), e);
                             json!({"error": format!("Failed to write file: {}", e)})
                         }
                     }
@@ -287,7 +321,21 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
                     let case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
                     let max_results = args["max_results"].as_i64().unwrap_or(50) as usize;
 
-                    match execute_grep(pattern, path, case_sensitive, max_results) {
+                    // Validate path before searching
+                    let validated_path = match validator.validate(std::path::Path::new(path)) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            error!("Path validation failed for grep: {}", e);
+                            return json!({"error": format!("Security: {}", e)});
+                        }
+                    };
+
+                    match execute_grep(
+                        pattern,
+                        validated_path.to_str().unwrap_or(path),
+                        case_sensitive,
+                        max_results,
+                    ) {
                         Ok(results) => {
                             info!(
                                 "Grep found {} results for pattern '{}' in {}",

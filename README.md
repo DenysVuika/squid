@@ -7,8 +7,9 @@ An AI-powered command-line tool for code reviews and suggestions.
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
-- 🔧 Tool calling support (file read/write/search operations) with security approval
-- 🔒 User approval required for all tool executions (read/write files)
+- 🔧 Tool calling support (file read/write/search operations) with multi-layered security
+- 🔒 Path validation (whitelist/blacklist) and .squidignore support
+- 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
 - 🎨 **Enhanced UI** with styled prompts, emoji icons, and color-coded information
 - 🦑 Friendly squid assistant personality with professional responses
@@ -170,6 +171,9 @@ Configuration saved to: "squid.config.json"
   API Model: local-model
   API Key: [not set]
   Log Level: info
+
+✓ Created .squidignore with default patterns
+  Edit this file to customize which files squid should ignore
 ```
 
 #### Non-Interactive Mode
@@ -306,9 +310,16 @@ The review command automatically selects the appropriate review prompt based on 
 
 
 
-### Tool Calling (with Security Approval)
+### Tool Calling (with Multi-Layered Security)
 
-The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions. For security, you'll be prompted to approve each tool execution:
+The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions. 
+
+**Security Layers:**
+1. **Path Validation** - Automatically blocks system directories (`/etc`, `/root`, `~/.ssh`, etc.)
+2. **Ignore Patterns** - `.squidignore` file blocks specified files/directories (like `.gitignore`)
+3. **User Approval** - Manual confirmation required for each operation
+
+For details, see [Security Features](docs/SECURITY.md).
 
 ```bash
 # LLM intelligently reads files when you ask about them
@@ -344,11 +355,28 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 
 **Key Features:**
 - 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
+- 🛡️ **Path validation** - Automatic blocking of system and sensitive directories
+- 📂 **Ignore patterns** - `.squidignore` file for project-specific file blocking
 - 🔒 **Security approval** - All tool executions require user confirmation
 - 📋 **Content preview** - File write operations show what will be written
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
 - 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
+
+**Using .squidignore:**
+
+Create a `.squidignore` file in your project root to block specific files and directories:
+
+```bash
+# .squidignore - Works like .gitignore
+*.log
+.env
+target/
+node_modules/
+__pycache__/
+```
+
+Patterns are automatically enforced - the LLM cannot access ignored files even if approved.
 
 ## Documentation
 

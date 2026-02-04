@@ -12,13 +12,14 @@ use async_openai::{
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 mod config;
 mod logger;
 mod tools;
+mod validate;
 
 const PERSONA: &str = include_str!("./assets/persona.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
@@ -27,6 +28,7 @@ const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 fn combine_prompts(task_prompt: &str) -> String {
     format!("{}\n\n{}", PERSONA, task_prompt)
@@ -167,8 +169,10 @@ async fn ask_llm_streaming(
                     let args = tool_call.function.arguments.clone();
                     let tool_call_id = tool_call.id.clone();
 
+                    let config_clone = app_config.clone();
                     let handle = tokio::spawn(async move {
-                        let result: serde_json::Value = tools::call_tool(&name, &args).await;
+                        let result: serde_json::Value =
+                            tools::call_tool(&name, &args, &config_clone).await;
                         (tool_call_id, result)
                     });
                     execution_handles.push(handle);
@@ -336,8 +340,10 @@ async fn ask_llm(
                 let args = tc.function.arguments.clone();
                 let tool_call_clone = tool_call.clone();
 
+                let config_clone = app_config.clone();
                 let handle = tokio::spawn(async move {
-                    let result: serde_json::Value = tools::call_tool(&name, &args).await;
+                    let result: serde_json::Value =
+                        tools::call_tool(&name, &args, &config_clone).await;
                     (tool_call_clone, result)
                 });
                 handles.push(handle);
@@ -599,6 +605,27 @@ async fn main() {
                         println!("  API Key: [not set]");
                     }
                     println!("  Log Level: {}", config.log_level);
+
+                    // Create .squidignore file if it doesn't exist
+                    let squidignore_path = dir.join(".squidignore");
+                    if !squidignore_path.exists() {
+                        match std::fs::write(&squidignore_path, SQUIDIGNORE_TEMPLATE) {
+                            Ok(_) => {
+                                info!("✓ Created .squidignore file at {:?}", squidignore_path);
+                                println!("\n✓ Created .squidignore with default patterns");
+                                println!(
+                                    "  Edit this file to customize which files squid should ignore"
+                                );
+                            }
+                            Err(e) => {
+                                warn!("Failed to create .squidignore: {}", e);
+                                println!("\n⚠ Could not create .squidignore: {}", e);
+                            }
+                        }
+                    } else {
+                        info!(".squidignore already exists, skipping creation");
+                        println!("\n✓ Using existing .squidignore file");
+                    }
                 }
                 Err(e) => {
                     error!("Failed to save configuration: {}", e);

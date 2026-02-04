@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Init Command Creates .squidignore**: The `squid init` command now automatically creates a `.squidignore` file
+  - Creates file with default patterns from `.squidignore.example` template
+  - Skips creation if `.squidignore` already exists (won't overwrite)
+  - Embedded template using `include_str!` for portability
+  - Provides helpful feedback about file creation or existing file usage
+
+- **Path Validation Security**: Multi-layered security for file system operations
+  - Whitelist/blacklist validation automatically blocks sensitive system directories
+  - Default blacklist includes `/etc`, `/root`, `~/.ssh`, `~/.aws`, `~/.gnupg`, etc.
+  - Default whitelist restricts operations to current directory and subdirectories
+  - Validation happens before user approval prompts for automatic rejection
+  - Clear error messages explain why access was denied
+  - New `validate.rs` module with `PathValidator` for secure path handling
+  - Windows-specific blacklist for `C:\Windows`, `C:\Program Files`, etc.
+
+- **.squidignore Support**: Project-specific file and directory ignore patterns
+  - Works like `.gitignore` - one pattern per line, `#` for comments
+  - Glob pattern support: `*.log`, `**/*.rs`, `target/`, `node_modules/**`
+  - Automatic enforcement - files cannot be accessed even if user approves
+  - Patterns loaded from `.squidignore` file in project root
+  - Included `.squidignore.example` with common patterns
+  - Auto-created by `squid init` command for convenience
+  - Validation layer sits between path validation and user approval
+
+- **Enhanced Security Documentation**: Comprehensive security guide
+  - Updated `docs/SECURITY.md` with path validation and ignore patterns documentation
+  - Three-layer security model clearly explained (validation → ignore → approval)
+  - Example workflows and security scenarios
+  - Pattern syntax reference and best practices
+  - Security layers diagram for visual understanding
+
+### Changed
+
+- **Tool Calling Signature**: `call_tool()` now requires `Config` parameter
+  - Enables future extensibility for configuration-based features
+  - Updated both `ask_llm_streaming()` and `ask_llm()` to pass config to tools
+  - Config cloned for async tool execution in spawned tasks
+
+### Security
+
+- **Hardened File System Access**: All file operations now validated against security rules
+  - `read_file`, `write_file`, and `grep` tools use path validation
+  - Prevents access to system directories without user prompt
+  - Prevents access to ignored files without user prompt
+  - Three-layer defense: path validation → ignore patterns → user approval
+
 ## [0.4.0] - 2026-02-03
 
 ### Fixed
