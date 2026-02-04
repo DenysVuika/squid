@@ -1,10 +1,18 @@
 [package]
-name = "squid"
+name = "squid-rs"
 version = "0.4.0"
 description = "An AI-powered command-line tool for code reviews and suggestions."
+repository = "https://github.com/DenysVuika/squid"
 authors = ["Denys Vuika <denys.vuika@gmail.com>"]
 license = "Apache-2.0"
 edition = "2024"
+keywords = ["ai", "code-review", "command-line", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[[bin]]
+name = "squid"
+path = "src/main.rs"
 
 [dependencies]
 async-openai = { version = "0.32", features = ["chat-completion"] }
