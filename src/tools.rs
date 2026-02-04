@@ -202,7 +202,7 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
         "read_file" => {
             let path = args["path"].as_str().unwrap_or("unknown");
             format!(
-                "🦑 Can I {}?\n  📄 File: {}",
+                "Can I {}?\n  📄 File: {}",
                 style("read this file").yellow(),
                 style(path).green()
             )
@@ -216,7 +216,7 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
                 content.to_string()
             };
             format!(
-                "🦑 Can I {}?\n  📄 File: {}\n  📝 Content preview:\n{}",
+                "Can I {}?\n  📄 File: {}\n  📝 Content preview:\n{}",
                 style("write to this file").yellow(),
                 style(path).green(),
                 style(&preview).dim()
@@ -226,13 +226,13 @@ pub async fn call_tool(name: &str, args: &str) -> serde_json::Value {
             let pattern = args["pattern"].as_str().unwrap_or("unknown");
             let path = args["path"].as_str().unwrap_or("unknown");
             format!(
-                "🦑 Can I {}?\n  🔍 Pattern: {}\n  📂 Path: {}",
+                "Can I {}?\n  🔍 Pattern: {}\n  📂 Path: {}",
                 style("search for this pattern").yellow(),
                 style(pattern).magenta(),
                 style(path).green()
             )
         }
-        _ => format!("🦑 Can I execute: {}?", style(name).yellow()),
+        _ => format!("Can I execute: {}?", style(name).yellow()),
     };
 
     let approved = Confirm::new(&approval_message)
