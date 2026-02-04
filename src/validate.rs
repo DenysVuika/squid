@@ -8,8 +8,6 @@ use thiserror::Error;
 pub enum PathValidationError {
     #[error("Path is not allowed: {0}")]
     PathNotAllowed(String),
-    #[error("Path does not exist: {0}")]
-    PathDoesNotExist(String),
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
     #[error("Path is ignored by .squidignore: {0}")]
@@ -271,12 +269,14 @@ impl PathValidator {
     }
 
     /// Add a custom whitelist path
+    #[allow(dead_code)]
     pub fn add_whitelist(&mut self, path: PathBuf) {
         debug!("Adding to whitelist: {}", path.display());
         self.whitelist.push(path);
     }
 
     /// Add a custom blacklist path
+    #[allow(dead_code)]
     pub fn add_blacklist(&mut self, path: PathBuf) {
         debug!("Adding to blacklist: {}", path.display());
         self.blacklist.push(path);

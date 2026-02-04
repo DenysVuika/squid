@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Code cleanup**: Removed unused `PathDoesNotExist` error variant from `PathValidationError`
+  - This error type was defined but never used in the codebase
+  - File read errors (not found, permission denied) are handled separately with friendly user messages
+  - Removed compiler warnings about dead code
+
 - **README Privacy Emphasis**: Updated README to highlight privacy and local-first nature
   - Main description now mentions "Privacy-focused and local-first - your code never leaves your hardware when using local models"
   - New "Privacy & Local-First" section explains data privacy options
