@@ -201,6 +201,11 @@ API_KEY=not-needed
 API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-key-here
+
+# For Mistral API
+API_URL=https://api.mistral.ai/v1
+API_MODEL=devstral-2512
+API_KEY=your-mistral-api-key-here
 ```
 
 ## Tool Calling with Security Approval

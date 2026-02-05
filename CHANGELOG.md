@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mistral API Support**: Squid now officially supports Mistral's cloud API
+  - Works seamlessly with Mistral's OpenAI-compatible endpoint
+  - Example configuration: `API_URL=https://api.mistral.ai/v1`, `API_MODEL=devstral-2512`
+  - All Mistral models supported (devstral, mistral-large, mistral-small, etc.)
+  - See README.md for complete setup instructions and examples
+
 - **Datetime Tool**: New `now` tool for getting current date and time
   - Returns datetime in RFC 3339 format (e.g., `2026-02-04T19:19:31.783006+00:00`)
   - Supports both UTC and local timezones

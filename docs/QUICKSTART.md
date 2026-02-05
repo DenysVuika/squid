@@ -70,7 +70,15 @@ Use OpenAI's cloud service:
 2. Add credits to your account
 3. Choose a model: `gpt-4`, `gpt-4-turbo`, or `gpt-3.5-turbo`
 
-#### Option D: Other OpenAI-Compatible APIs
+#### Option D: Mistral API
+
+Use Mistral's cloud service:
+
+1. Get API key from https://console.mistral.ai/
+2. Choose a model: `devstral-2512`, `mistral-large-latest`, or `mistral-small-latest`
+3. Mistral API is OpenAI-compatible, so it works seamlessly
+
+#### Option E: Other OpenAI-Compatible APIs
 
 Any OpenAI-compatible REST API works:
 - OpenRouter (https://openrouter.ai/)
@@ -112,13 +120,13 @@ INFO: Initializing squid configuration...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
-? Log Level: info
+? Log Level: error
 
 Configuration:
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
-  Log Level: info
+  Log Level: error
 ```
 
 ### Option B: Manual Configuration
@@ -131,7 +139,7 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
-LOG_LEVEL=info
+LOG_LEVEL=error
 ```
 
 ### For Ollama
@@ -140,16 +148,25 @@ LOG_LEVEL=info
 API_URL=http://localhost:11434/v1
 API_MODEL=qwen2.5-coder
 API_KEY=not-needed
-LOG_LEVEL=info
+LOG_LEVEL=error
 ```
 
 ### For OpenAI
 
-```bash
+```env
 API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
-LOG_LEVEL=info
+LOG_LEVEL=error
+```
+
+### For Mistral API
+
+```env
+API_URL=https://api.mistral.ai/v1
+API_MODEL=devstral-2512
+API_KEY=your-mistral-api-key-here
+LOG_LEVEL=error
 ```
 
 ### For Other Providers
@@ -370,6 +387,9 @@ squid ask "Create a hello.txt file with 'Hello, World!'"
 - **OpenAI**: 
   - Check your API key is valid and has credits
   - Verify URL: `https://api.openai.com/v1`
+- **Mistral API**:
+  - Check your API key is valid
+  - Verify URL: `https://api.mistral.ai/v1`
 - **All providers**: Verify `API_URL`, `API_MODEL`, and `API_KEY` in your `.env` file
 
 ### Response not relevant to file
@@ -428,5 +448,6 @@ squid review --help
    - **LM Studio**: Model loaded, local server started
    - **Ollama**: `ollama serve` running, model pulled
    - **OpenAI**: API key valid, account has credits
+   - **Mistral API**: API key valid
 
 Happy coding! 🦑

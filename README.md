@@ -15,7 +15,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🎨 **Enhanced UI** with styled prompts, emoji icons, color-coded information
 - 🦑 Friendly squid assistant personality with professional responses
 - ⚙️ Configurable via environment variables
-- 🔌 Works with LM Studio, OpenAI, and other compatible services
+- 🔌 Works with LM Studio, OpenAI, Ollama, Mistral, and other compatible services
 
 ## Privacy & Local-First
 
@@ -113,7 +113,15 @@ Use OpenAI's cloud API for access to GPT models:
 2. **Add credits** to your OpenAI account
 3. **Choose a model**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
 
-### Option D: Other OpenAI-Compatible Services
+### Option D: Mistral API
+
+Use Mistral's cloud API for access to their powerful models:
+
+1. **Get an API key** from https://console.mistral.ai/
+2. **Choose a model**: `devstral-2512`, `mistral-large-latest`, `mistral-small-latest`, etc.
+3. **Configure**: Mistral API is OpenAI-compatible, so it works seamlessly with Squid
+
+### Option E: Other OpenAI-Compatible Services
 
 Squid works with any OpenAI-compatible REST API:
 - **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
@@ -181,13 +189,13 @@ INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
-? Log Level: info
+? Log Level: error
 
 Configuration saved to: "squid.config.json"
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
-  Log Level: info
+  Log Level: error
 
 ✓ Created .squidignore with default patterns
   Edit this file to customize which files squid should ignore
@@ -199,17 +207,17 @@ You can also provide configuration values via command-line arguments to skip the
 
 ```bash
 # Initialize with all parameters
-squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level info
+squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
 
 # Initialize in a specific directory with parameters
-squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level debug
+squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level error
 
 # Partial parameters (will prompt for missing values)
 squid init --url http://127.0.0.1:1234/v1 --model gpt-4
 # Will still prompt for API Key and Log Level
 
 # Include API key for cloud services
-squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-here --log-level info
+squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-here --log-level error
 ```
 
 **Available options:**
@@ -500,6 +508,23 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid ask -f mycode.rs "Review this code for potential improvements"
    # Use --no-stream for scripting
    result=$(squid ask --no-stream "Generate a function name")
+   ```
+
+### Using with Mistral API
+
+1. Get your API key from https://console.mistral.ai/
+2. Set up your `.env`:
+   ```bash
+   API_URL=https://api.mistral.ai/v1
+   API_MODEL=devstral-2512
+   API_KEY=your-mistral-api-key-here
+   ```
+3. Run:
+   ```bash
+   squid ask "Write a function to parse JSON"
+   # Or use code review
+   squid review myfile.py
+   # Mistral models work great for code-related tasks
    ```
 
 ## License
