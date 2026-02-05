@@ -89,11 +89,11 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                     "properties": {
                         "timezone": {
                             "type": "string",
-                            "description": "The timezone to use for the datetime. Options: 'utc' for UTC time or 'local' for local time.",
+                            "description": "The timezone to use for the datetime. Options: 'local' for local time (default, use for most queries) or 'utc' for UTC time.",
                             "enum": ["utc", "local"]
                         }
                     },
-                    "required": ["timezone"]
+                    "required": []
                 }))
                 .build()
                 .expect("Failed to build now function"),
@@ -550,11 +550,11 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                     }
                 }
                 "now" => {
-                    let timezone = args["timezone"].as_str().unwrap_or("utc");
+                    let timezone = args["timezone"].as_str().unwrap_or("local");
 
                     let datetime_str = match timezone {
-                        "local" => Local::now().to_rfc3339(),
-                        _ => Utc::now().to_rfc3339(), // Default to UTC
+                        "utc" => Utc::now().to_rfc3339(),
+                        _ => Local::now().to_rfc3339(), // Default to local
                     };
 
                     info!(
