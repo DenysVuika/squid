@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Config Version Warnings**: Get notified when your config file is outdated
+  - Shows ⚠️ warning when config doesn't match current app version
+  - Suggests running `squid init` to update
+
+- **Smart Config Updates**: Re-running `squid init` preserves your settings
+  - Uses existing values as defaults in prompts
+  - Keeps your tool permissions (allow/deny lists)
+  - Easy way to update config without starting from scratch
+
 - **Tool Permissions**: Configure which tools can run automatically or should be blocked
   - New `permissions` section in `squid.config.json` with `allow` and `deny` arrays
   - Interactive prompts now offer: Yes (once), No (skip), Always (auto-allow), Never (auto-deny)
