@@ -44,7 +44,7 @@ Before you begin, you'll need:
 
 2. **An OpenAI-compatible LLM service** (choose one):
 
-<details>
+<details open>
 <summary><b>Option A: LM Studio (Recommended for Local Development)</b></summary>
 
 [LM Studio](https://lmstudio.ai/) provides a user-friendly interface for running local LLMs.
@@ -460,7 +460,8 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 
 ## Examples
 
-### Using with LM Studio
+<details open>
+<summary><b>Using with LM Studio</b></summary>
 
 1. Download and install LM Studio from https://lmstudio.ai/
 2. Download the recommended model: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
@@ -481,7 +482,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid ask --no-stream "Quick question"
    ```
 
-### Using with Ollama
+</details>
+
+<details>
+<summary><b>Using with Ollama</b></summary>
 
 1. Install Ollama from https://ollama.com/
 2. Start Ollama service:
@@ -507,7 +511,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid ask --no-stream "Quick question"
    ```
 
-### Using with OpenAI
+</details>
+
+<details>
+<summary><b>Using with OpenAI</b></summary>
 
 1. Get your API key from https://platform.openai.com/api-keys
 2. Set up your `.env`:
@@ -525,7 +532,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    result=$(squid ask --no-stream "Generate a function name")
    ```
 
-### Using with Mistral API
+</details>
+
+<details>
+<summary><b>Using with Mistral API</b></summary>
 
 1. Get your API key from https://console.mistral.ai/
 2. Set up your `.env`:
@@ -541,6 +551,8 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid review myfile.py
    # Mistral models work great for code-related tasks
    ```
+
+</details>
 
 ## License
 
