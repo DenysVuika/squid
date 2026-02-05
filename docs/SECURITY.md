@@ -397,6 +397,55 @@ Timezone: utc
 (Y/n)
 ```
 
+### bash
+
+**Purpose:** Execute safe, non-destructive bash commands for system inspection
+
+**Security measures:**
+- Automatic blocking of dangerous commands before user approval
+- Blocked patterns: `rm -rf`, `rm -f`, `sudo`, `chmod`, `dd`, `mkfs`, `fdisk`, `curl`, `wget`, `kill`, `pkill`, `killall`
+- Shows exact command and timeout before approval
+- Configurable timeout (default: 10 seconds, max: 60 seconds)
+- Command execution wrapped in timeout protection
+- Logged with command and execution status
+
+**Allowed use cases:**
+- Information gathering: `ls`, `ls -la`, `pwd`
+- Git inspection: `git status`, `git log`, `git branch`
+- File viewing: `cat file.txt`, `head`, `tail`
+- System info: `echo`, `date`, `uname`
+- Search operations: `find`, command-line `grep`
+
+**Example prompt:**
+```
+Allow executing bash command?
+Command: ls -la
+Timeout: 10 seconds
+(Y/n)
+```
+
+**Security notes:**
+- Commands are executed in a shell subprocess with timeout protection
+- Dangerous commands are blocked **before** user approval is requested
+- Even if a command is in the allow list, dangerous patterns are still blocked
+- Path validation does not apply (bash operates on the shell level)
+- Users should review commands carefully before approval
+
+**Example of blocked command:**
+```bash
+squid ask "Delete all temporary files with rm -rf /tmp/*"
+
+# What happens:
+# 1. LLM requests to execute: rm -rf /tmp/*
+# 2. Security check detects "rm -rf" pattern
+# 3. Command is blocked immediately (no user prompt)
+# 4. Error returned to LLM:
+#
+# 🦑: Command blocked for security reasons. The command contains a 
+# dangerous pattern: 'rm -rf'. Commands like rm, sudo, chmod, dd, curl, 
+# wget, and kill operations are not allowed.
+```
+
 ## Direct File Access Commands
 
 In addition to LLM tool calls, squid provides direct file access via command-line flags:

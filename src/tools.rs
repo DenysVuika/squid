@@ -5,6 +5,9 @@ use inquire::Select;
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde_json::json;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use tokio::time::timeout;
 use walkdir::WalkDir;
 
 use crate::config::Config;
@@ -98,6 +101,29 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 .build()
                 .expect("Failed to build now function"),
         }),
+        ChatCompletionTools::Function(ChatCompletionTool {
+            function: FunctionObjectArgs::default()
+                .name("bash")
+                .description("Execute a bash command. Only use this for safe, non-destructive commands like ls, git status, cat, etc. Dangerous commands (rm, sudo, chmod, dd, curl, wget, kill) are automatically blocked.")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "The bash command to execute (e.g., 'ls -la', 'git status', 'cat file.txt')"
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum execution time in seconds (default: 10, max: 60)",
+                            "minimum": 1,
+                            "maximum": 60
+                        }
+                    },
+                    "required": ["command"]
+                }))
+                .build()
+                .expect("Failed to build bash function"),
+        }),
     ]
 }
 
@@ -132,6 +158,39 @@ fn search_file(
 }
 
 // Execute grep search
+async fn execute_bash(command: &str, timeout_secs: u64) -> Result<String, String> {
+    let output = timeout(
+        Duration::from_secs(timeout_secs),
+        tokio::task::spawn_blocking({
+            let command = command.to_string();
+            move || {
+                Command::new("sh")
+                    .arg("-c")
+                    .arg(&command)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+            }
+        }),
+    )
+    .await
+    .map_err(|_| format!("Command timed out after {} seconds", timeout_secs))?
+    .map_err(|e| format!("Failed to spawn command: {}", e))?
+    .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Command failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.trim().to_string())
+}
+
 fn execute_grep(
     pattern: &str,
     path: &str,
@@ -380,6 +439,16 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                     style(timezone).cyan()
                 )
             }
+            "bash" => {
+                let command = args["command"].as_str().unwrap_or("unknown");
+                let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
+                format!(
+                    "Can I {}?\n  💻 Command: {}\n  ⏱️  Timeout: {} seconds",
+                    style("execute this bash command").yellow(),
+                    style(command).magenta(),
+                    style(timeout_secs).cyan()
+                )
+            }
             _ => format!("Can I execute: {}?", style(name).yellow()),
         };
 
@@ -562,6 +631,41 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                         datetime_str, timezone
                     );
                     json!({"content": format!("The current datetime is {}.", datetime_str)})
+                }
+                "bash" => {
+                    let command = args["command"].as_str().unwrap_or("");
+                    let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
+
+                    // Security: Block dangerous commands
+                    let dangerous_patterns = [
+                        "rm -rf", "rm -f", "sudo ", "chmod ", "dd ", "mkfs", "fdisk", "> /dev/",
+                        "curl", "wget", "kill ", "pkill", "killall",
+                    ];
+
+                    for pattern in &dangerous_patterns {
+                        if command.contains(pattern) {
+                            warn!("Blocked dangerous bash command: {}", command);
+                            return json!({
+                                "error": format!(
+                                    "Command blocked for security reasons. The command contains a dangerous pattern: '{}'. Commands like rm, sudo, chmod, dd, curl, wget, and kill operations are not allowed.",
+                                    pattern
+                                ),
+                                "skipped": true
+                            });
+                        }
+                    }
+
+                    // Execute the command
+                    match execute_bash(command, timeout_secs).await {
+                        Ok(output) => {
+                            info!("Bash command executed successfully: {}", command);
+                            json!({"content": format!("Command executed successfully:\n\n{}", output)})
+                        }
+                        Err(e) => {
+                            warn!("Bash command failed: {}: {}", command, e);
+                            json!({"error": format!("Command failed: {}", e)})
+                        }
+                    }
                 }
                 _ => {
                     warn!("Unknown tool called: {}", name);

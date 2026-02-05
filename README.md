@@ -7,7 +7,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
-- 🔧 Tool calling support (file read/write/search operations) with multi-layered security
+- 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
 - 🕐 **Datetime awareness** - LLM can access current date and time (UTC or local)
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
@@ -407,6 +407,13 @@ squid ask "What's the current date?"
 # You'll be prompted: "Allow getting current date and time? (Y/n)"
 # Returns datetime in RFC 3339 format
 
+# LLM can execute safe bash commands
+squid ask "What files are in this directory?"
+squid ask "Show me the git status"
+squid ask "List all .rs files in src/"
+# You'll be prompted: "Allow executing bash command: [command]? (Y/n)"
+# Dangerous commands (rm, sudo, chmod, dd, curl, wget, kill) are automatically blocked
+
 # Use --no-stream for non-streaming mode
 squid ask --no-stream "Read Cargo.toml and list all dependencies"
 ```
@@ -416,6 +423,7 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 - 📝 **write_file** - Write content to files
 - 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
 - 🕐 **now** - Get current date and time in RFC 3339 format (UTC or local timezone)
+- 💻 **bash** - Execute safe, non-destructive bash commands (ls, git status, cat, etc.)
 
 **Key Features:**
 - 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
@@ -426,6 +434,7 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
 - 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
+- 💻 **Bash execution** - Run safe, read-only commands for system inspection (dangerous commands blocked)
 - 🔐 **Privacy preserved** - With local models (LM Studio/Ollama), all file operations happen locally on your machine
 
 **Using .squidignore:**

@@ -13,7 +13,8 @@ squid/
 │   ├── test-config.sh      # Configuration tests
 │   ├── test-grep.sh        # Grep functionality tests
 │   ├── test-custom-prompt.sh  # Custom prompt tests
-│   └── test-permissions.sh # Tool permissions tests
+│   ├── test-permissions.sh # Tool permissions tests
+│   └── test-bash.sh        # Bash tool tests
 ├── sample-files/       # Example files with intentional issues
 │   ├── example.rs      # Rust example
 │   ├── example.ts      # TypeScript example
@@ -138,6 +139,33 @@ Automated test script that demonstrates the tool permissions feature (allow/deny
 
 ---
 
+### 💻 Bash Tool Test (`test-bash.sh`)
+
+Test script that demonstrates the bash tool functionality and security features.
+
+**Usage:**
+```bash
+# From the project root
+./tests/test-bash.sh
+```
+
+**What it tests:**
+- ✅ Safe commands (ls, git status, pwd, echo)
+- ✅ Custom timeout configuration
+- ✅ Security blocking of dangerous commands (rm, sudo, chmod, dd, curl, wget, kill)
+- ✅ Natural language command interpretation
+- ✅ Permission system integration
+
+**Output:** Shows execution results for safe commands and verifies that dangerous commands are blocked.
+
+**Features demonstrated:**
+- Safe, read-only commands execute successfully
+- Dangerous commands are automatically blocked before user approval
+- Configurable timeout for long-running commands
+- Integration with allow/deny permission lists
+
+---
+
 ### 🎭 Custom Prompt Test (`test-custom-prompt.sh`)
 
 Automated test script that validates the custom system prompt feature (`-p`/`--prompt` flag).
@@ -187,6 +215,7 @@ rm my-prompt.md
    chmod +x tests/test-grep.sh
    chmod +x tests/test-custom-prompt.sh
    chmod +x tests/test-permissions.sh
+   chmod +x tests/test-bash.sh
    ```
 
 ### Run All Tests
@@ -209,6 +238,9 @@ rm my-prompt.md
 
 # Permissions tests (automated)
 ./tests/test-permissions.sh
+
+# Bash tool tests (interactive)
+./tests/test-bash.sh
 ```
 
 ### Run Specific Tests
