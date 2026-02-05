@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-05
+
 ### Added
 
 - **Config Version Warnings**: Get notified when your config file is outdated
@@ -51,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Enhanced Tool Availability**: Tools now available in code review commands (previously only in `ask`)
+
+### Security
+
+- **Mandatory Dangerous Command Blocking**: Bash tool security cannot be bypassed
+  - Dangerous commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked**
+  - Blocking happens at code level before any permission checks or user approval
+  - Cannot be bypassed by adding to allow list or any configuration setting
+  - See [Security Documentation](docs/SECURITY.md#bash) for details
 
 ## [0.5.0] - 2026-02-04
 
