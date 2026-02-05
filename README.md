@@ -287,6 +287,23 @@ API_KEY=not-needed
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
 
+- `permissions`: Tool execution permissions (optional)
+  - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
+  - `deny`: Array of tool names that are completely blocked (default: `[]`)
+  - Example:
+    ```json
+    "permissions": {
+      "allow": ["now", "read_file", "grep"],
+      "deny": ["write_file"]
+    }
+    ```
+  - When prompted for tool approval, you can choose:
+    - **Yes (this time)** - Allow once, ask again next time
+    - **No (skip)** - Deny once, ask again next time
+    - **Always** - Add to allow list and auto-save config
+    - **Never** - Add to deny list and auto-save config
+  - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
+
 ## Usage
 
 > **Note:** The examples below use the `squid` command (after installation with `cargo install --path .`).  

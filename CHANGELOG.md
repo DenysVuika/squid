@@ -9,27 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Mistral API Support**: Squid now officially supports Mistral's cloud API
-  - Works seamlessly with Mistral's OpenAI-compatible endpoint
-  - Example configuration: `API_URL=https://api.mistral.ai/v1`, `API_MODEL=devstral-2512`
-  - All Mistral models supported (devstral, mistral-large, mistral-small, etc.)
-  - See README.md for complete setup instructions and examples
+- **Tool Permissions**: Configure which tools can run automatically or should be blocked
+  - New `permissions` section in `squid.config.json` with `allow` and `deny` arrays
+  - Interactive prompts now offer: Yes (once), No (skip), Always (auto-allow), Never (auto-deny)
+  - Choosing Always/Never automatically saves to config file
+  - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
 
-- **Datetime Tool**: New `now` tool for getting current date and time
-  - Returns datetime in RFC 3339 format (e.g., `2026-02-04T19:19:31.783006+00:00`)
-  - Supports both UTC and local timezones
-  - LLM can now answer "what time is it?" and similar datetime queries
-  - Similar to Claude's datetime functionality
-  - User approval required before execution (consistent with other tools)
+- **Mistral API Support**: Works with Mistral's OpenAI-compatible endpoint
+  - Example: `API_URL=https://api.mistral.ai/v1`, `API_MODEL=devstral-2512`
+  - Supports all Mistral models
 
-- **Loading Spinner**: Shows "Waiting for squid..." in streaming mode (avoids interfering with piped output in `--no-stream`)
+- **Datetime Tool**: New `now` tool for current date/time queries
+  - Supports UTC and local timezones
+  - Returns RFC 3339 format
+
+- **Loading Spinner**: Shows "Waiting for squid..." during streaming responses
 
 ### Changed
 
-- **Enhanced Tool Availability**: Tools (read_file, write_file, grep, now) are now available in code review commands
-  - Previously tools were only available in `ask` command
-  - Now you can use tools during code reviews for deeper analysis
-  - More consistent and powerful AI assistance across all commands
+- **Enhanced Tool Availability**: Tools now available in code review commands (previously only in `ask`)
 
 ## [0.5.0] - 2026-02-04
 

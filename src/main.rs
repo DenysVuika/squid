@@ -630,6 +630,7 @@ async fn main() {
                 api_model: final_model,
                 api_key: final_api_key,
                 log_level: final_log_level,
+                permissions: config::Permissions::default(),
             };
 
             match config.save_to_dir(dir) {
