@@ -44,7 +44,8 @@ Before you begin, you'll need:
 
 2. **An OpenAI-compatible LLM service** (choose one):
 
-### Option A: LM Studio (Recommended for Local Development)
+<details open>
+<summary><b>Option A: LM Studio (Recommended for Local Development)</b></summary>
 
 [LM Studio](https://lmstudio.ai/) provides a user-friendly interface for running local LLMs.
 
@@ -65,7 +66,10 @@ Before you begin, you'll need:
 - `deepseek-coder` - Code-focused
 - Any other model compatible with your hardware
 
-### Option B: Ollama (Lightweight CLI Option)
+</details>
+
+<details>
+<summary><b>Option B: Ollama (Lightweight CLI Option)</b></summary>
 
 [Ollama](https://ollama.com/) is a lightweight, command-line tool for running LLMs.
 
@@ -105,7 +109,10 @@ Before you begin, you'll need:
 - `llama3.1` - General purpose
 - See all at https://ollama.com/library
 
-### Option C: OpenAI API
+</details>
+
+<details>
+<summary><b>Option C: OpenAI API</b></summary>
 
 Use OpenAI's cloud API for access to GPT models:
 
@@ -113,7 +120,10 @@ Use OpenAI's cloud API for access to GPT models:
 2. **Add credits** to your OpenAI account
 3. **Choose a model**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
 
-### Option D: Mistral API
+</details>
+
+<details>
+<summary><b>Option D: Mistral API</b></summary>
 
 Use Mistral's cloud API for access to their powerful models:
 
@@ -121,13 +131,18 @@ Use Mistral's cloud API for access to their powerful models:
 2. **Choose a model**: `devstral-2512`, `mistral-large-latest`, `mistral-small-latest`, etc.
 3. **Configure**: Mistral API is OpenAI-compatible, so it works seamlessly with Squid
 
-### Option E: Other OpenAI-Compatible Services
+</details>
+
+<details>
+<summary><b>Option E: Other OpenAI-Compatible Services</b></summary>
 
 Squid works with any OpenAI-compatible REST API:
 - **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
 - **Together AI** (https://together.ai/) - Fast inference
 - **Anyscale** (https://anyscale.com/) - Enterprise solutions
 - **Local APIs** - Any custom OpenAI-compatible endpoint
+
+</details>
 
 ## Installation
 
@@ -445,7 +460,8 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 
 ## Examples
 
-### Using with LM Studio
+<details open>
+<summary><b>Using with LM Studio</b></summary>
 
 1. Download and install LM Studio from https://lmstudio.ai/
 2. Download the recommended model: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
@@ -466,7 +482,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid ask --no-stream "Quick question"
    ```
 
-### Using with Ollama
+</details>
+
+<details>
+<summary><b>Using with Ollama</b></summary>
 
 1. Install Ollama from https://ollama.com/
 2. Start Ollama service:
@@ -492,7 +511,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid ask --no-stream "Quick question"
    ```
 
-### Using with OpenAI
+</details>
+
+<details>
+<summary><b>Using with OpenAI</b></summary>
 
 1. Get your API key from https://platform.openai.com/api-keys
 2. Set up your `.env`:
@@ -510,7 +532,10 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    result=$(squid ask --no-stream "Generate a function name")
    ```
 
-### Using with Mistral API
+</details>
+
+<details>
+<summary><b>Using with Mistral API</b></summary>
 
 1. Get your API key from https://console.mistral.ai/
 2. Set up your `.env`:
@@ -526,6 +551,8 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
    squid review myfile.py
    # Mistral models work great for code-related tasks
    ```
+
+</details>
 
 ## License
 
