@@ -36,6 +36,7 @@ impl Default for Permissions {
 /// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 /// - `api_key`: Optional API key (use `None` for local models)
 /// - `log_level`: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+/// - `version`: Config file version (matches app version when created)
 ///
 /// **Best Practices:**
 /// - Commit `squid.config.json` to your repository to share project settings with your team
@@ -58,6 +59,8 @@ pub struct Config {
     pub log_level: String,
     #[serde(default)]
     pub permissions: Permissions,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 fn default_log_level() -> String {
@@ -72,6 +75,7 @@ impl Default for Config {
             api_key: None,
             log_level: default_log_level(),
             permissions: Permissions::default(),
+            version: None,
         }
     }
 }
@@ -86,6 +90,10 @@ impl Config {
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_json::from_str::<Config>(&content) {
                     Ok(config) => {
+                        // Check version and warn if outdated
+                        if let Some(warning) = config.version_warning() {
+                            eprintln!("\n{}\n", warning);
+                        }
                         return config;
                     }
                     Err(e) => {
@@ -106,13 +114,46 @@ impl Config {
             api_key: std::env::var("API_KEY").ok(),
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
             permissions: Permissions::default(),
+            version: None,
+        }
+    }
+
+    /// Get the current application version
+    pub fn app_version() -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
+
+    /// Check if the config version matches the current app version
+    /// Returns None if no version is set (old config), Some(true) if matches, Some(false) if outdated
+    pub fn is_version_current(&self) -> Option<bool> {
+        self.version.as_ref().map(|v| v == &Self::app_version())
+    }
+
+    /// Get a warning message if the config is outdated
+    pub fn version_warning(&self) -> Option<String> {
+        match self.is_version_current() {
+            Some(false) => Some(format!(
+                "⚠️  Warning: Config file version ({}) doesn't match app version ({}). Consider running 'squid init' to update.",
+                self.version.as_ref().unwrap(),
+                Self::app_version()
+            )),
+            None => Some(format!(
+                "⚠️  Warning: Config file has no version field (created with an older version). Consider running 'squid init' to update to version {}.",
+                Self::app_version()
+            )),
+            Some(true) => None,
         }
     }
 
     /// Save configuration to squid.config.json in the specified directory
     pub fn save_to_dir(&self, dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         let config_path = dir.join("squid.config.json");
-        let json = serde_json::to_string_pretty(self)?;
+
+        // Create a copy with the current version set
+        let mut config_to_save = self.clone();
+        config_to_save.version = Some(Self::app_version());
+
+        let json = serde_json::to_string_pretty(&config_to_save)?;
         fs::write(&config_path, json)?;
         info!("Configuration saved to {:?}", config_path);
         Ok(())
@@ -182,6 +223,7 @@ mod tests {
         assert_eq!(config.log_level, "error");
         assert_eq!(config.permissions.allow, vec!["now".to_string()]);
         assert_eq!(config.permissions.deny.len(), 0);
+        assert_eq!(config.version, None);
     }
 
     #[test]
@@ -226,5 +268,46 @@ mod tests {
 
         assert!(config.permissions.allow.contains(&"read_file".to_string()));
         assert!(!config.permissions.deny.contains(&"read_file".to_string()));
+    }
+
+    #[test]
+    fn test_app_version() {
+        let version = Config::app_version();
+        assert!(!version.is_empty());
+        assert_eq!(version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn test_is_version_current() {
+        let mut config = Config::default();
+
+        // No version set
+        assert_eq!(config.is_version_current(), None);
+
+        // Current version
+        config.version = Some(Config::app_version());
+        assert_eq!(config.is_version_current(), Some(true));
+
+        // Outdated version
+        config.version = Some("0.1.0".to_string());
+        assert_eq!(config.is_version_current(), Some(false));
+    }
+
+    #[test]
+    fn test_version_warning() {
+        let mut config = Config::default();
+
+        // No version - should warn
+        assert!(config.version_warning().is_some());
+
+        // Current version - no warning
+        config.version = Some(Config::app_version());
+        assert!(config.version_warning().is_none());
+
+        // Outdated version - should warn
+        config.version = Some("0.1.0".to_string());
+        let warning = config.version_warning();
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("0.1.0"));
     }
 }

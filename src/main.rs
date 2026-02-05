@@ -633,6 +633,7 @@ async fn main() {
                 api_key: final_api_key,
                 log_level: final_log_level,
                 permissions: config::Permissions::default(),
+                version: None, // Will be set automatically by save_to_dir()
             };
 
             match config.save_to_dir(dir) {
