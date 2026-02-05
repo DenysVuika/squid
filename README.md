@@ -12,7 +12,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
-- 🎨 **Enhanced UI** with styled prompts, emoji icons, and color-coded information
+- 🎨 **Enhanced UI** with styled prompts, emoji icons, color-coded information
 - 🦑 Friendly squid assistant personality with professional responses
 - ⚙️ Configurable via environment variables
 - 🔌 Works with LM Studio, OpenAI, and other compatible services

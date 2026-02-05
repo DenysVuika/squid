@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Similar to Claude's datetime functionality
   - User approval required before execution (consistent with other tools)
 
+- **Loading Spinner**: Shows "Waiting for squid..." in streaming mode (avoids interfering with piped output in `--no-stream`)
+
 ### Changed
 
 - **Enhanced Tool Availability**: Tools (read_file, write_file, grep, now) are now available in code review commands

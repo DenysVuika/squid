@@ -12,6 +12,7 @@ use async_openai::{
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use futures::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error, info, warn};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -109,12 +110,22 @@ async fn ask_llm_streaming(
 
     debug!("Sending streaming request...");
 
+    // Show spinner while waiting for the first response
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.cyan} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Waiting for squid...");
+    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
+
     let mut stream = client.chat().create_stream(request).await?;
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
     let mut execution_handles = Vec::new();
     let mut lock = io::stdout().lock();
-    write!(lock, "\n🦑: ")?;
     let mut first_content = true;
+    let mut spinner_active = true;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -136,6 +147,13 @@ async fn ask_llm_streaming(
 
         for choice in response.choices {
             if let Some(content) = &choice.delta.content {
+                // Clear spinner and write prompt on first content
+                if spinner_active {
+                    spinner.finish_and_clear();
+                    write!(lock, "\n🦑: ")?;
+                    spinner_active = false;
+                }
+
                 let content_to_write = if first_content {
                     first_content = false;
                     content.trim_start_matches('\n')
@@ -172,6 +190,13 @@ async fn ask_llm_streaming(
             }
 
             if matches!(choice.finish_reason, Some(FinishReason::ToolCalls)) {
+                // Clear spinner if still active (tool calls without content)
+                if spinner_active {
+                    spinner.finish_and_clear();
+                    write!(lock, "\n🦑: ")?;
+                    spinner_active = false;
+                }
+
                 for tool_call in tool_calls.iter() {
                     let name = tool_call.function.name.clone();
                     let args = tool_call.function.arguments.clone();
