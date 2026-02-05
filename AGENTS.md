@@ -1,175 +1,101 @@
-# Instructions for AI Agents
-
-This file contains guidelines for AI coding assistants working on this project. Following the [agents.md](https://agents.md/) specification.
+# AI Coding Agents Guidelines
 
 ## Documentation Philosophy
 
-### Minimal Documentation Set
+### **Minimal Documentation**
+Only maintain these files:
+- **README.md** (main project documentation)
+- **CHANGELOG.md** (version history)
+- **src/assets/*.md** (LLM system prompts)
+- **docs/** (only for complex features, kept to a minimum)
 
-**IMPORTANT:** Keep documentation **absolutely minimal** and focused. Only generate/update these files:
+**Avoid:**
+- Summary files (SUMMARY.md, COMPLETION.md)
+- Redundant or duplicate documentation
+- Implementation details unless critical
+- ASCII trees or folder diagrams
 
-1. **README.md** - Main project documentation (always keep updated)
-2. **CHANGELOG.md** - Version history and release notes (always keep updated)
-3. **src/assets/*.md** - System prompts for the LLM (critical for behavior)
-4. **docs/** - Additional documentation **only when absolutely necessary** (keep to bare minimum)
-
-**DO NOT CREATE:**
-- ❌ Summary documents (SUMMARY.md, COMPLETION.md, CHANGES.md, etc.)
-- ❌ Multiple documentation files for the same feature
-- ❌ "Quick test" or "quick start" files if README.md suffices
-- ❌ Implementation details documents unless truly needed for complex features
-- ❌ Redundant documentation that repeats README.md or CHANGELOG.md
-
-### Critical Update Areas
-
-When making changes, **ALWAYS** consider updates to:
-
-✅ **README.md** - Update features, usage examples, and documentation links
-✅ **CHANGELOG.md** - Add to unreleased section or appropriate version
-✅ **src/assets/*.md** - Update system prompts if tool behavior changes
-
-### Documentation Anti-Patterns
-
-- ❌ Don't create excessive documentation files
-- ❌ Don't duplicate information across multiple files
-- ❌ Don't create documentation for the sake of documentation
-- ❌ Don't leave orphaned or outdated docs
-- ❌ **Don't create summary documents** - information should be in README/CHANGELOG
-- ❌ **Don't create multiple guides for one feature** - one concise doc is enough
-- ❌ **Don't document the obvious** - code should be self-documenting where possible
-- ❌ **Don't generate folder/file structure diagrams** - they're hard to maintain and go out of sync
-- ❌ **Don't include ASCII trees** unless absolutely critical for understanding
+---
 
 ## File Organization
 
-- **Root** - Only essential files (README, CHANGELOG, LICENSE, etc.)
-- **docs/** - All markdown documentation goes here
-- **tests/** - Test scripts and test-related code only (no MD files)
-- **src/assets/** - System prompts and LLM instructions
-- **sample-files/** - Example files for testing code review features
+| Directory       | Purpose                                      |
+|-----------------|----------------------------------------------|
+| **Root**        | Essential files (README, CHANGELOG, LICENSE) |
+| **docs/**       | Minimal additional documentation             |
+| **tests/**      | Test scripts (no markdown)                   |
+| **src/assets/** | LLM system prompts                           |
+| **sample-files/** | Example files for testing                  |
 
-## When Adding New Features
+---
 
-1. **Code first** - Implement the feature
-2. **Update prompts** - If it's a tool or command, update `src/assets/*.md`
-3. **Update README.md** - Add feature to list and usage examples (this should be enough for most features)
-4. **Update CHANGELOG.md** - Add to unreleased section
-5. **Optional docs** - Only create ONE additional doc in docs/ if the feature is complex and README.md isn't sufficient
-   - Name it clearly (e.g., `FEATURE_NAME.md`, not `FEATURE_SUMMARY.md` or `FEATURE_GUIDE.md`)
-   - Keep it concise and focused on understanding the feature, not implementation details
+## Feature Development Workflow
 
-## System Prompts (src/assets/*.md)
+1. **Implement** the feature in code.
+2. **Update prompts** in `src/assets/*.md` if behavior changes.
+3. **Update README.md** with usage examples.
+4. **Update CHANGELOG.md** (unreleased section).
+5. **Optional**: Add **one** doc in `docs/` if the feature is complex.
 
-These files control LLM behavior and are **critical**:
+**Naming**: Use `FEATURE_NAME.md` (no "summary" or "guide" suffixes).
 
-### Modular Prompt Architecture
+---
 
-Squid uses a **modular composition** system (as of v0.4.0, enhanced in v0.6.0):
+## System Prompts (`src/assets/*.md`)
 
-- `persona.md` - **Shared personality** definition (auto-prepended to all prompts)
-- `tools.md` - **Tool usage instructions** (auto-included in all prompts)
-- `ask-prompt.md` - Task-specific instructions for the `ask` command
-- `code-review.md` - Generic code review criteria
-- `review-*.md` - Language-specific review prompts
+### **Modular Architecture**
+- **`persona.md`**: Shared personality (auto-prepended).
+- **`tools.md`**: Tool instructions (auto-included).
+- **Task-specific**: `ask-prompt.md`, `code-review.md`, `review-*.md`.
 
-At runtime, prompts are composed as: `persona.md` + `tools.md` + task-specific prompt
+**Composition**: `persona.md` + `tools.md` + task-specific prompt.
 
-**Benefits:**
-- Single source of truth for AI personality and tool knowledge
-- Tools available to ALL commands (ask, review, etc.)
-- Consistent tone and behavior across all commands
-- Easier maintenance (update persona or tools once, affects all prompts)
-- Task prompts focus only on command-specific instructions
-- Tools can potentially be excluded via config flag in the future
+**Update Rules**:
+- **`persona.md`**: Role, tone, and personality.
+- **`tools.md`**: Tool availability and usage.
+- **Task prompts**: Command-specific instructions.
 
-**When updating:**
-- **persona.md** - Defines who the assistant is (role, personality, tone)
-- **tools.md** - Defines what tools are available and how to use them
-- **Task prompts** - Define what to do (instructions, guidelines, examples)
-- Be explicit and clear
-- Use examples
-- Test with the actual LLM
-- Consider edge cases
-- Update `tools.md` when adding new tools (not individual task prompts)
+---
 
 ## Testing
+- **Location**: `tests/` (executable scripts, well-commented).
+- **Docs**: `docs/` (only if necessary).
+- **Preference**: Automated tests > manual instructions.
 
-- Test scripts go in `tests/` directory
-- Test documentation goes in `docs/` directory
-- Keep test scripts executable and well-commented
-- Automated tests preferred over manual instructions
+---
 
 ## Version Control
+- Follow [Semantic Versioning](https://semver.org/).
+- **CHANGELOG.md**: User-focused entries (no technical jargon).
 
-- Follow [Semantic Versioning](https://semver.org/)
-- Update CHANGELOG.md for all notable changes
-- Group related changes in CHANGELOG under appropriate sections:
-  - Added, Changed, Deprecated, Removed, Fixed, Security
+**Good Example**:
+✅ "Enhanced Tool Availability: Tools are now available in code review commands."
 
-### CHANGELOG Guidelines
+**Bad Example**:
+❌ "Refactored prompt composition to use `include_str!` macro."
 
-**IMPORTANT:** CHANGELOG entries must be **user-focused**, not technical.
-
-**DO:**
-- ✅ Describe what users can now do that they couldn't before
-- ✅ Explain new features and their benefits
-- ✅ Focus on behavior changes users will notice
-- ✅ Use user-friendly language (avoid internal implementation terms)
-- ✅ Explain the "why" and "what" from a user perspective
-
-**DON'T:**
-- ❌ Mention internal architecture changes (e.g., "refactored X into Y")
-- ❌ Describe file structure changes (e.g., "moved tools.md to assets/")
-- ❌ Reference code organization (e.g., "extracted function into module")
-- ❌ Include implementation details users won't see or care about
-- ❌ Use technical jargon that only developers would understand
-
-**Examples:**
-
-❌ **Bad** (technical): "Modular Tools Architecture: Extracted tool documentation into separate tools.md file"
-✅ **Good** (user-focused): "Enhanced Tool Availability: Tools are now available in code review commands"
-
-❌ **Bad** (technical): "Refactored prompt composition to use include_str! macro"
-✅ **Good** (user-focused): "Faster startup time and reduced memory usage"
-
-❌ **Bad** (technical): "Updated combine_prompts() to include TOOLS constant"
-✅ **Good** (user-focused): "AI assistant now has consistent tool knowledge across all commands"
+---
 
 ## Tool Development
+1. Add tool to `src/tools.rs` (`get_tools()`, `call_tool()`).
+2. Update `src/assets/tools.md` with instructions.
+3. Update **README.md** and **CHANGELOG.md**.
+4. Update security docs if needed (`docs/SECURITY*.md`).
 
-When adding new tools to `src/tools.rs`:
-
-1. Add tool definition to `get_tools()`
-2. Add approval prompt in `call_tool()`
-3. Add execution logic in `call_tool()` match statement
-4. **Update `src/assets/tools.md`** with tool documentation (instructions and examples)
-5. Consider if `persona.md` needs updates (usually not - it's about personality, not tools)
-6. Update README.md with examples
-7. Update CHANGELOG.md
-8. Update security docs if relevant (docs/SECURITY*.md)
+---
 
 ## Project-Specific Notes
+- **CLI tool** for AI-powered code assistance.
+- **Security**: All file operations require user approval.
+- **Compatibility**: LM Studio and OpenAI APIs.
+- **Streaming**: Must be maintained.
 
-- This is a CLI tool for AI-powered code assistance
-- Security is important - all file operations require user approval
-- Tool calling is a core feature
-- LM Studio and OpenAI compatibility required
-- Streaming support must be maintained
+---
 
-## Documentation Philosophy Summary
+## Documentation Summary
+- **README.md**: Comprehensive enough to minimize additional docs.
+- **CHANGELOG.md**: Tracks user-facing changes.
+- **src/assets/*.md**: Controls LLM behavior.
+- **docs/**: Only for complex features (one doc per feature max).
 
-**Minimal is better.** The goal is to have just enough documentation to understand and use the features, nothing more.
-
-- **README.md** should be comprehensive enough that users rarely need other docs
-- **CHANGELOG.md** tracks what changed and when
-- **src/assets/*.md** controls LLM behavior
-- **docs/** is for truly complex features that can't fit concisely in README.md
-- **One feature = one doc maximum** (if any doc beyond README is even needed)
-- **No summaries, no completion docs, no redundant guides**
-
-## Questions?
-
-See existing files for patterns and examples:
-- README.md for documentation style
-- CHANGELOG.md for change tracking format
-- src/assets/ask-prompt.md for prompt engineering patterns
+**Goal**: Just enough documentation to understand and use features—nothing more.
