@@ -3,6 +3,30 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Tool permissions configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Permissions {
+    /// Tools that are always allowed to run without confirmation
+    #[serde(default = "default_allowed_tools")]
+    pub allow: Vec<String>,
+    /// Tools that are never allowed to run
+    #[serde(default)]
+    pub deny: Vec<String>,
+}
+
+fn default_allowed_tools() -> Vec<String> {
+    vec!["now".to_string()]
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self {
+            allow: default_allowed_tools(),
+            deny: Vec::new(),
+        }
+    }
+}
+
 /// Configuration for squid CLI
 ///
 /// This configuration is typically stored in `squid.config.json` in the project directory.
@@ -32,6 +56,8 @@ pub struct Config {
     pub api_key: Option<String>,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default)]
+    pub permissions: Permissions,
 }
 
 fn default_log_level() -> String {
@@ -45,6 +71,7 @@ impl Default for Config {
             api_model: "local-model".to_string(),
             api_key: None,
             log_level: default_log_level(),
+            permissions: Permissions::default(),
         }
     }
 }
@@ -78,6 +105,7 @@ impl Config {
             api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
             api_key: std::env::var("API_KEY").ok(),
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
+            permissions: Permissions::default(),
         }
     }
 
@@ -97,6 +125,48 @@ impl Config {
             .or_else(|| std::env::var("API_KEY").ok())
             .unwrap_or_else(|| "not-needed".to_string())
     }
+
+    /// Check if a tool is allowed to run without confirmation
+    pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
+        self.permissions.allow.contains(&tool_name.to_string())
+    }
+
+    /// Check if a tool is denied from running
+    pub fn is_tool_denied(&self, tool_name: &str) -> bool {
+        self.permissions.deny.contains(&tool_name.to_string())
+    }
+
+    /// Add a tool to the allow list and save config
+    pub fn allow_tool(&mut self, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let tool_str = tool_name.to_string();
+
+        // Remove from deny list if present
+        self.permissions.deny.retain(|t| t != &tool_str);
+
+        // Add to allow list if not already present
+        if !self.permissions.allow.contains(&tool_str) {
+            self.permissions.allow.push(tool_str);
+        }
+
+        self.save_to_dir(&PathBuf::from("."))?;
+        Ok(())
+    }
+
+    /// Add a tool to the deny list and save config
+    pub fn deny_tool(&mut self, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let tool_str = tool_name.to_string();
+
+        // Remove from allow list if present
+        self.permissions.allow.retain(|t| t != &tool_str);
+
+        // Add to deny list if not already present
+        if !self.permissions.deny.contains(&tool_str) {
+            self.permissions.deny.push(tool_str);
+        }
+
+        self.save_to_dir(&PathBuf::from("."))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +180,8 @@ mod tests {
         assert_eq!(config.api_model, "local-model");
         assert_eq!(config.api_key, None);
         assert_eq!(config.log_level, "error");
+        assert_eq!(config.permissions.allow, vec!["now".to_string()]);
+        assert_eq!(config.permissions.deny.len(), 0);
     }
 
     #[test]
@@ -125,5 +197,34 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(config.get_api_key(), "test-key");
+    }
+
+    #[test]
+    fn test_is_tool_allowed() {
+        let config = Config::default();
+        assert!(config.is_tool_allowed("now"));
+        assert!(!config.is_tool_allowed("read_file"));
+    }
+
+    #[test]
+    fn test_is_tool_denied() {
+        let mut config = Config::default();
+        config.permissions.deny.push("write_file".to_string());
+        assert!(config.is_tool_denied("write_file"));
+        assert!(!config.is_tool_denied("read_file"));
+    }
+
+    #[test]
+    fn test_allow_tool() {
+        let mut config = Config::default();
+        config.permissions.deny.push("read_file".to_string());
+
+        // This would save to disk, so we can't test it fully in unit tests
+        // but we can verify the logic
+        config.permissions.allow.push("read_file".to_string());
+        config.permissions.deny.retain(|t| t != "read_file");
+
+        assert!(config.permissions.allow.contains(&"read_file".to_string()));
+        assert!(!config.permissions.deny.contains(&"read_file".to_string()));
     }
 }

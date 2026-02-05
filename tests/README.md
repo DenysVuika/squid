@@ -12,7 +12,8 @@ squid/
 │   ├── test-reviews.sh     # Code review tests
 │   ├── test-config.sh      # Configuration tests
 │   ├── test-grep.sh        # Grep functionality tests
-│   └── test-custom-prompt.sh  # Custom prompt tests
+│   ├── test-custom-prompt.sh  # Custom prompt tests
+│   └── test-permissions.sh # Tool permissions tests
 ├── sample-files/       # Example files with intentional issues
 │   ├── example.rs      # Rust example
 │   ├── example.ts      # TypeScript example
@@ -110,6 +111,33 @@ Test script for the grep/search functionality.
 
 ---
 
+### 🎛️ Permissions Test (`test-permissions.sh`)
+
+Automated test script that demonstrates the tool permissions feature (allow/deny lists).
+
+**Usage:**
+```bash
+# From the project root
+./tests/test-permissions.sh
+```
+
+**What it tests:**
+- ✅ Default permissions configuration
+- ✅ Allow list behavior (auto-approval)
+- ✅ Deny list behavior (auto-blocking)
+- ✅ Configuration file structure examples
+- ✅ Interactive prompt options (Always/Never)
+
+**Output:** Shows example configurations and explains how the permissions system works.
+
+**Features demonstrated:**
+- Tools in the allow list run without user confirmation
+- Tools in the deny list are blocked immediately
+- Interactive prompts offer four choices: Yes, No, Always, Never
+- Always/Never options auto-save to squid.config.json
+
+---
+
 ### 🎭 Custom Prompt Test (`test-custom-prompt.sh`)
 
 Automated test script that validates the custom system prompt feature (`-p`/`--prompt` flag).
@@ -158,6 +186,7 @@ rm my-prompt.md
    chmod +x tests/test-config.sh
    chmod +x tests/test-grep.sh
    chmod +x tests/test-custom-prompt.sh
+   chmod +x tests/test-permissions.sh
    ```
 
 ### Run All Tests
@@ -177,6 +206,9 @@ rm my-prompt.md
 
 # Custom prompt tests (automated)
 ./tests/test-custom-prompt.sh
+
+# Permissions tests (automated)
+./tests/test-permissions.sh
 ```
 
 ### Run Specific Tests

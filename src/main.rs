@@ -150,13 +150,14 @@ async fn ask_llm_streaming(
                 // Clear spinner and write prompt on first content
                 if spinner_active {
                     spinner.finish_and_clear();
-                    write!(lock, "\n🦑: ")?;
+                    writeln!(lock)?;
+                    write!(lock, "🦑: ")?;
                     spinner_active = false;
                 }
 
                 let content_to_write = if first_content {
                     first_content = false;
-                    content.trim_start_matches('\n')
+                    content.trim_start()
                 } else {
                     content.as_str()
                 };
@@ -193,7 +194,8 @@ async fn ask_llm_streaming(
                 // Clear spinner if still active (tool calls without content)
                 if spinner_active {
                     spinner.finish_and_clear();
-                    write!(lock, "\n🦑: ")?;
+                    writeln!(lock)?;
+                    write!(lock, "🦑: ")?;
                     spinner_active = false;
                 }
 
@@ -281,7 +283,7 @@ async fn ask_llm_streaming(
                 if let Some(content) = &choice.delta.content {
                     let content_to_write = if first_followup_content {
                         first_followup_content = false;
-                        content.trim_start_matches('\n')
+                        content.trim_start()
                     } else {
                         content.as_str()
                     };
@@ -630,6 +632,7 @@ async fn main() {
                 api_model: final_model,
                 api_key: final_api_key,
                 log_level: final_log_level,
+                permissions: config::Permissions::default(),
             };
 
             match config.save_to_dir(dir) {

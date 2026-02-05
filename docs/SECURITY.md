@@ -185,6 +185,104 @@ squid ask "Search for passwords in the project"
 # → You control whether this happens
 ```
 
+### 🎛️ Tool Permissions (Allow/Deny Lists)
+
+Configure which tools can run automatically (without confirmation) or should never run at all using the `permissions` section in `squid.config.json`.
+
+**Configuration:**
+
+```json
+{
+  "api_url": "http://127.0.0.1:1234/v1",
+  "api_model": "local-model",
+  "log_level": "info",
+  "permissions": {
+    "allow": ["now"],
+    "deny": []
+  }
+}
+```
+
+**Fields:**
+- `allow` - Tools that run automatically without user confirmation
+- `deny` - Tools that are completely blocked and will never run
+
+**Default Behavior:**
+- The `now` tool is allowed by default (safe, read-only, no file access)
+- All other tools require confirmation on first use
+
+**Interactive Permission Management:**
+
+When prompted for tool approval, you have four options:
+
+```bash
+Can I read this file?
+  📄 File: config.json
+
+❯ Yes (this time)
+  No (skip)
+  Always (add to allow list)
+  Never (add to deny list)
+```
+
+**Options:**
+- **Yes (this time)** - Allow once, ask again next time
+- **No (skip)** - Deny once, ask again next time  
+- **Always (add to allow list)** - Allow this tool permanently, auto-save to config
+- **Never (add to deny list)** - Block this tool permanently, auto-save to config
+
+**Example Workflow:**
+
+```bash
+# First time using read_file
+squid ask "Read README.md"
+# → Select "Always" from the prompt
+# ✓ Tool 'read_file' added to allow list in squid.config.json
+
+# Now read_file runs automatically
+squid ask "Read package.json"
+# → No prompt, executes immediately
+
+# Block a dangerous tool
+squid ask "Write to /etc/hosts"
+# → Select "Never" from the prompt
+# ✓ Tool 'write_file' added to deny list in squid.config.json
+
+# Future write attempts are blocked
+squid ask "Create a new file"
+# → Blocked immediately, no prompt shown
+# 🦑: Tool 'write_file' is denied by configuration
+```
+
+**Permission Priority:**
+
+1. **Deny list** (highest priority) - Tool is blocked immediately
+2. **Allow list** - Tool runs without confirmation
+3. **Default** - User is prompted for approval
+
+**Security Notes:**
+- Permissions are stored in `squid.config.json` (committed to your repo)
+- Allow/deny choices are saved automatically when you select Always/Never
+- You can manually edit the config file to modify permissions
+- Denied tools return an error to the LLM without user interaction
+- Path validation still applies to allowed tools (whitelist/blacklist/.squidignore)
+
+**Example Configuration:**
+
+```json
+{
+  "permissions": {
+    "allow": ["now", "read_file", "grep"],
+    "deny": ["write_file"]
+  }
+}
+```
+
+This configuration:
+- ✅ Auto-approves read operations and searches (safe for most projects)
+- ❌ Blocks all write operations (maximum safety)
+- 🕐 Auto-approves time queries (no security impact)
+
 ### 📋 Content Preview for Write Operations
 
 When the LLM attempts to write a file, you see a preview of the content before approving:

@@ -1,7 +1,7 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
 use chrono::{Local, Utc};
 use console::style;
-use inquire::Confirm;
+use inquire::Select;
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde_json::json;
@@ -89,11 +89,11 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                     "properties": {
                         "timezone": {
                             "type": "string",
-                            "description": "The timezone to use for the datetime. Options: 'utc' for UTC time or 'local' for local time.",
+                            "description": "The timezone to use for the datetime. Options: 'local' for local time (default, use for most queries) or 'utc' for UTC time.",
                             "enum": ["utc", "local"]
                         }
                     },
-                    "required": ["timezone"]
+                    "required": []
                 }))
                 .build()
                 .expect("Failed to build now function"),
@@ -101,104 +101,139 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
     ]
 }
 
-/// Search a single file for pattern matches
+// Helper function to search in a single file
 fn search_file(
     path: &std::path::Path,
     regex: &Regex,
-    results: &mut Vec<serde_json::Value>,
     max_results: usize,
-) -> Result<(), String> {
+    results: &mut Vec<serde_json::Value>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if results.len() >= max_results {
         return Ok(());
     }
 
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let content = std::fs::read_to_string(path)?;
 
     for (line_num, line) in content.lines().enumerate() {
-        if results.len() >= max_results {
-            break;
-        }
-
         if regex.is_match(line) {
             results.push(json!({
                 "file": path.display().to_string(),
                 "line": line_num + 1,
-                "content": line.trim()
+                "content": line
             }));
+
+            if results.len() >= max_results {
+                break;
+            }
         }
     }
 
     Ok(())
 }
 
-/// Execute grep search for a pattern in files
+// Execute grep search
 fn execute_grep(
     pattern: &str,
     path: &str,
     case_sensitive: bool,
     max_results: usize,
-) -> Result<Vec<serde_json::Value>, String> {
-    // Compile regex pattern
+) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
     let regex = if case_sensitive {
-        Regex::new(pattern).map_err(|e| format!("Invalid regex pattern: {}", e))?
+        Regex::new(pattern)?
     } else {
-        Regex::new(&format!("(?i){}", pattern))
-            .map_err(|e| format!("Invalid regex pattern: {}", e))?
+        Regex::new(&format!("(?i){}", pattern))?
     };
 
     let mut results = Vec::new();
-    let path_obj = std::path::Path::new(path);
+    let search_path = std::path::Path::new(path);
 
-    if !path_obj.exists() {
-        return Err(format!("Path does not exist: {}", path));
-    }
-
-    // Determine if we're searching a file or directory
-    if path_obj.is_file() {
-        search_file(&path_obj, &regex, &mut results, max_results)?;
+    // Initialize path validator with ignore patterns
+    let ignore_patterns = PathValidator::load_ignore_patterns();
+    let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
+        None
     } else {
+        Some(ignore_patterns)
+    });
+
+    if search_path.is_file() {
+        // Search in a single file
+        search_file(search_path, &regex, max_results, &mut results)?;
+    } else if search_path.is_dir() {
         // Search recursively in directory
-        for entry in WalkDir::new(path)
+        for entry in WalkDir::new(search_path)
             .follow_links(false)
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if results.len() >= max_results {
-                break;
+            let entry_path = entry.path();
+
+            // Skip if not a file
+            if !entry_path.is_file() {
+                continue;
             }
 
-            if entry.file_type().is_file() {
-                // Skip binary files and common non-text files
-                if let Some(ext) = entry.path().extension() {
-                    let ext_str = ext.to_string_lossy().to_lowercase();
-                    if matches!(
-                        ext_str.as_str(),
-                        "jpg"
-                            | "jpeg"
-                            | "png"
-                            | "gif"
-                            | "bmp"
-                            | "ico"
-                            | "pdf"
-                            | "zip"
-                            | "tar"
-                            | "gz"
-                            | "exe"
-                            | "dll"
-                            | "so"
-                            | "dylib"
-                            | "bin"
-                            | "dat"
-                    ) {
-                        continue;
-                    }
-                }
+            // Skip if path validation fails (respects .squidignore)
+            if validator.validate(entry_path).is_err() {
+                debug!(
+                    "Skipping ignored path during grep: {}",
+                    entry_path.display()
+                );
+                continue;
+            }
 
-                if let Err(e) = search_file(entry.path(), &regex, &mut results, max_results) {
-                    // Log error but continue searching other files
-                    warn!("Error searching {}: {}", entry.path().display(), e);
+            // Skip binary files and common non-text files by extension
+            if let Some(ext) = entry_path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                if matches!(
+                    ext_str.as_str(),
+                    "jpg"
+                        | "jpeg"
+                        | "png"
+                        | "gif"
+                        | "bmp"
+                        | "ico"
+                        | "webp"
+                        | "pdf"
+                        | "zip"
+                        | "tar"
+                        | "gz"
+                        | "rar"
+                        | "7z"
+                        | "exe"
+                        | "dll"
+                        | "so"
+                        | "dylib"
+                        | "bin"
+                        | "dat"
+                        | "mp4"
+                        | "mov"
+                        | "avi"
+                        | "mkv"
+                        | "iso"
+                        | "db"
+                        | "sqlite"
+                        | "sqlite3"
+                ) {
+                    debug!("Skipping binary file during grep: {}", entry_path.display());
+                    continue;
                 }
+            }
+
+            // Skip empty files
+            if let Ok(metadata) = entry_path.metadata() {
+                if metadata.len() == 0 {
+                    continue;
+                }
+            }
+
+            // Try to search the file
+            if let Err(e) = search_file(entry_path, &regex, max_results, &mut results) {
+                debug!("Skipping file {} due to error: {}", entry_path.display(), e);
+                continue;
+            }
+
+            if results.len() >= max_results {
+                break;
             }
         }
     }
@@ -206,9 +241,34 @@ fn execute_grep(
     Ok(results)
 }
 
-/// Execute a tool call with user approval and path validation
-pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::Value {
+/// Permission choices for tool execution
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PermissionChoice {
+    Yes,
+    No,
+    Always,
+    Never,
+}
+
+impl std::fmt::Display for PermissionChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PermissionChoice::Yes => write!(f, "Yes (this time)"),
+            PermissionChoice::No => write!(f, "No (skip)"),
+            PermissionChoice::Always => write!(f, "Always (add to allow list)"),
+            PermissionChoice::Never => write!(f, "Never (add to deny list)"),
+        }
+    }
+}
+
+pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
+
+    // Check if tool is denied
+    if config.is_tool_denied(name) {
+        warn!("Tool '{}' is in the deny list, blocking execution", name);
+        return json!({"error": format!("Tool '{}' is denied by configuration", name), "skipped": true});
+    }
 
     // Parse arguments first to display them to the user
     let args: serde_json::Value = match args.parse() {
@@ -269,64 +329,122 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
         _ => None,
     };
 
-    // Ask for user approval with styled formatting
-    let approval_message = match name {
-        "read_file" => {
-            let path = args["path"].as_str().unwrap_or("unknown");
-            format!(
-                "Can I {}?\n  📄 File: {}",
-                style("read this file").yellow(),
-                style(path).green()
-            )
+    // Check if tool is auto-allowed
+    let auto_allowed = config.is_tool_allowed(name);
+
+    // Ask for user approval if not auto-allowed
+    let permission = if auto_allowed {
+        info!("Tool '{}' is in the allow list, auto-approving", name);
+        PermissionChoice::Yes
+    } else {
+        // Build approval message with styled formatting
+        let approval_message = match name {
+            "read_file" => {
+                let path = args["path"].as_str().unwrap_or("unknown");
+                format!(
+                    "Can I {}?\n  📄 File: {}",
+                    style("read this file").yellow(),
+                    style(path).green()
+                )
+            }
+            "write_file" => {
+                let path = args["path"].as_str().unwrap_or("unknown");
+                let content = args["content"].as_str().unwrap_or("");
+                let preview = if content.len() > 100 {
+                    format!("{}... ({} bytes total)", &content[..100], content.len())
+                } else {
+                    content.to_string()
+                };
+                format!(
+                    "Can I {}?\n  📄 File: {}\n  📝 Content preview:\n{}",
+                    style("write to this file").yellow(),
+                    style(path).green(),
+                    style(&preview).dim()
+                )
+            }
+            "grep" => {
+                let pattern = args["pattern"].as_str().unwrap_or("unknown");
+                let path = args["path"].as_str().unwrap_or("unknown");
+                format!(
+                    "Can I {}?\n  🔍 Pattern: {}\n  📂 Path: {}",
+                    style("search for this pattern").yellow(),
+                    style(pattern).magenta(),
+                    style(path).green()
+                )
+            }
+            "now" => {
+                let timezone = args["timezone"].as_str().unwrap_or("utc");
+                format!(
+                    "Can I {}?\n  🕐 Timezone: {}",
+                    style("get the current date and time").yellow(),
+                    style(timezone).cyan()
+                )
+            }
+            _ => format!("Can I execute: {}?", style(name).yellow()),
+        };
+
+        let options = vec![
+            PermissionChoice::Yes,
+            PermissionChoice::No,
+            PermissionChoice::Always,
+            PermissionChoice::Never,
+        ];
+
+        match Select::new(&approval_message, options)
+            .with_help_message(&format!(
+                "{} Use arrow keys to navigate, {} to select",
+                style("→").cyan(),
+                style("Enter").green().bold()
+            ))
+            .prompt()
+        {
+            Ok(choice) => {
+                // Handle "Always" and "Never" choices by updating config
+                match choice {
+                    PermissionChoice::Always => {
+                        info!("Adding '{}' to allow list", name);
+                        // Load current config, modify it, and save
+                        let mut updated_config = Config::load();
+                        if let Err(e) = updated_config.allow_tool(name) {
+                            error!("Failed to update config with allow list: {}", e);
+                            eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
+                        } else {
+                            eprintln!(
+                                "{} Tool '{}' added to allow list in squid.config.json",
+                                style("✓").green(),
+                                style(name).cyan()
+                            );
+                        }
+                    }
+                    PermissionChoice::Never => {
+                        info!("Adding '{}' to deny list", name);
+                        // Load current config, modify it, and save
+                        let mut updated_config = Config::load();
+                        if let Err(e) = updated_config.deny_tool(name) {
+                            error!("Failed to update config with deny list: {}", e);
+                            eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
+                        } else {
+                            eprintln!(
+                                "{} Tool '{}' added to deny list in squid.config.json",
+                                style("✓").green(),
+                                style(name).cyan()
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+                choice
+            }
+            Err(e) => {
+                error!("Failed to get user approval: {}", e);
+                return json!({"error": format!("Failed to get user approval: {}", e)});
+            }
         }
-        "write_file" => {
-            let path = args["path"].as_str().unwrap_or("unknown");
-            let content = args["content"].as_str().unwrap_or("");
-            let preview = if content.len() > 100 {
-                format!("{}... ({} bytes total)", &content[..100], content.len())
-            } else {
-                content.to_string()
-            };
-            format!(
-                "Can I {}?\n  📄 File: {}\n  📝 Content preview:\n{}",
-                style("write to this file").yellow(),
-                style(path).green(),
-                style(&preview).dim()
-            )
-        }
-        "grep" => {
-            let pattern = args["pattern"].as_str().unwrap_or("unknown");
-            let path = args["path"].as_str().unwrap_or("unknown");
-            format!(
-                "Can I {}?\n  🔍 Pattern: {}\n  📂 Path: {}",
-                style("search for this pattern").yellow(),
-                style(pattern).magenta(),
-                style(path).green()
-            )
-        }
-        "now" => {
-            let timezone = args["timezone"].as_str().unwrap_or("utc");
-            format!(
-                "Can I {}?\n  🕐 Timezone: {}",
-                style("get the current date and time").yellow(),
-                style(timezone).cyan()
-            )
-        }
-        _ => format!("Can I execute: {}?", style(name).yellow()),
     };
 
-    let approved = Confirm::new(&approval_message)
-        .with_default(false)
-        .with_help_message(&format!(
-            "{} {} to allow, {} to deny",
-            style("→").cyan(),
-            style("Y").green().bold(),
-            style("N").red().bold()
-        ))
-        .prompt();
-
-    match approved {
-        Ok(true) => {
+    // Execute tool based on permission
+    match permission {
+        PermissionChoice::Yes | PermissionChoice::Always => {
             // User approved, proceed with tool execution
             match name {
                 "read_file" => {
@@ -432,11 +550,11 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                     }
                 }
                 "now" => {
-                    let timezone = args["timezone"].as_str().unwrap_or("utc");
+                    let timezone = args["timezone"].as_str().unwrap_or("local");
 
                     let datetime_str = match timezone {
-                        "local" => Local::now().to_rfc3339(),
-                        _ => Utc::now().to_rfc3339(), // Default to UTC
+                        "utc" => Utc::now().to_rfc3339(),
+                        _ => Local::now().to_rfc3339(), // Default to local
                     };
 
                     info!(
@@ -451,15 +569,10 @@ pub async fn call_tool(name: &str, args: &str, _config: &Config) -> serde_json::
                 }
             }
         }
-        Ok(false) => {
+        PermissionChoice::No | PermissionChoice::Never => {
             // User declined
-            info!("Tool execution skipped by user: {}", name);
+            info!("Tool execution declined by user: {}", name);
             json!({"error": "Tool execution declined by user", "skipped": true})
-        }
-        Err(e) => {
-            // Error in prompt (e.g., non-interactive terminal)
-            error!("Failed to get user approval: {}", e);
-            json!({"error": format!("Failed to get user approval: {}", e)})
         }
     }
 }
