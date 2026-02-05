@@ -290,18 +290,23 @@ API_KEY=not-needed
 - `permissions`: Tool execution permissions (optional)
   - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
   - `deny`: Array of tool names that are completely blocked (default: `[]`)
+  - **Granular bash permissions**: Use `"bash:command"` format for specific commands
+    - `"bash"` - allows all bash commands (dangerous patterns still blocked)
+    - `"bash:ls"` - allows only `ls` commands (ls, ls -la, etc.)
+    - `"bash:git status"` - allows only `git status` commands
+  - ⚠️ **Important**: Dangerous bash commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** regardless of permissions
   - Example:
     ```json
     "permissions": {
-      "allow": ["now", "read_file", "grep"],
-      "deny": ["write_file"]
+      "allow": ["now", "read_file", "grep", "bash:ls", "bash:git status"],
+      "deny": ["write_file", "bash:rm"]
     }
     ```
   - When prompted for tool approval, you can choose:
     - **Yes (this time)** - Allow once, ask again next time
     - **No (skip)** - Deny once, ask again next time
-    - **Always** - Add to allow list and auto-save config
-    - **Never** - Add to deny list and auto-save config
+    - **Always** - Add to allow list and auto-save config (bash commands save as `bash:command`)
+    - **Never** - Add to deny list and auto-save config (bash commands save as `bash:command`)
   - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
 
 ## Usage
@@ -434,7 +439,7 @@ squid ask --no-stream "Read Cargo.toml and list all dependencies"
 - ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
 - 📝 **Full logging** - All tool calls are logged for transparency
 - 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
-- 💻 **Bash execution** - Run safe, read-only commands for system inspection (dangerous commands blocked)
+- 💻 **Bash execution** - Run safe, read-only commands for system inspection (dangerous commands **always** blocked, even with permissions)
 - 🔐 **Privacy preserved** - With local models (LM Studio/Ollama), all file operations happen locally on your machine
 
 **Using .squidignore:**

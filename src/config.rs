@@ -168,13 +168,71 @@ impl Config {
     }
 
     /// Check if a tool is allowed to run without confirmation
+    /// Supports granular bash permissions: "bash:ls", "bash:git", etc.
     pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
         self.permissions.allow.contains(&tool_name.to_string())
     }
 
     /// Check if a tool is denied from running
+    /// Supports granular bash permissions: "bash:ls", "bash:git", etc.
     pub fn is_tool_denied(&self, tool_name: &str) -> bool {
         self.permissions.deny.contains(&tool_name.to_string())
+    }
+
+    /// Check if a bash command is allowed to run without confirmation
+    /// Supports granular permissions:
+    /// - "bash" -> allows all bash commands
+    /// - "bash:ls" -> allows only ls commands (ls, ls -la, etc.)
+    /// - "bash:git" -> allows only git commands
+    /// - "bash:git status" -> allows only git status commands
+    pub fn is_bash_command_allowed(&self, command: &str) -> bool {
+        // Check if all bash commands are allowed
+        if self.permissions.allow.contains(&"bash".to_string()) {
+            return true;
+        }
+
+        // Extract the first word(s) from the command for matching
+        let command_trimmed = command.trim();
+
+        // Check for granular permissions
+        for permission in &self.permissions.allow {
+            if let Some(bash_cmd) = permission.strip_prefix("bash:") {
+                // Match if command starts with the allowed pattern
+                if command_trimmed == bash_cmd
+                    || command_trimmed.starts_with(&format!("{} ", bash_cmd))
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if a bash command is denied from running
+    /// Supports granular permissions similar to is_bash_command_allowed
+    pub fn is_bash_command_denied(&self, command: &str) -> bool {
+        // Check if all bash commands are denied
+        if self.permissions.deny.contains(&"bash".to_string()) {
+            return true;
+        }
+
+        // Extract the first word(s) from the command for matching
+        let command_trimmed = command.trim();
+
+        // Check for granular denials
+        for permission in &self.permissions.deny {
+            if let Some(bash_cmd) = permission.strip_prefix("bash:") {
+                // Match if command starts with the denied pattern
+                if command_trimmed == bash_cmd
+                    || command_trimmed.starts_with(&format!("{} ", bash_cmd))
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Add a tool to the allow list and save config
@@ -254,6 +312,53 @@ mod tests {
         config.permissions.deny.push("write_file".to_string());
         assert!(config.is_tool_denied("write_file"));
         assert!(!config.is_tool_denied("read_file"));
+    }
+
+    #[test]
+    fn test_is_bash_command_allowed() {
+        let mut config = Config::default();
+
+        // Test: no bash permissions
+        assert!(!config.is_bash_command_allowed("ls -la"));
+
+        // Test: all bash allowed
+        config.permissions.allow.push("bash".to_string());
+        assert!(config.is_bash_command_allowed("ls -la"));
+        assert!(config.is_bash_command_allowed("git status"));
+
+        // Test: granular permission
+        config.permissions.allow.clear();
+        config.permissions.allow.push("bash:ls".to_string());
+        assert!(config.is_bash_command_allowed("ls"));
+        assert!(config.is_bash_command_allowed("ls -la"));
+        assert!(config.is_bash_command_allowed("ls -l"));
+        assert!(!config.is_bash_command_allowed("cat file.txt"));
+
+        // Test: more specific granular permission
+        config.permissions.allow.push("bash:git status".to_string());
+        assert!(config.is_bash_command_allowed("git status"));
+        assert!(config.is_bash_command_allowed("git status --short"));
+        assert!(!config.is_bash_command_allowed("git log"));
+    }
+
+    #[test]
+    fn test_is_bash_command_denied() {
+        let mut config = Config::default();
+
+        // Test: no bash denials
+        assert!(!config.is_bash_command_denied("ls -la"));
+
+        // Test: all bash denied
+        config.permissions.deny.push("bash".to_string());
+        assert!(config.is_bash_command_denied("ls -la"));
+        assert!(config.is_bash_command_denied("git status"));
+
+        // Test: granular denial
+        config.permissions.deny.clear();
+        config.permissions.deny.push("bash:rm".to_string());
+        assert!(config.is_bash_command_denied("rm file.txt"));
+        assert!(config.is_bash_command_denied("rm -rf folder"));
+        assert!(!config.is_bash_command_denied("ls -la"));
     }
 
     #[test]

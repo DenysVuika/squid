@@ -107,6 +107,8 @@ For questions about the current date or time:
 
 The `bash` tool allows execution of **safe, read-only commands** for inspecting the system and project state.
 
+**CRITICAL: Dangerous commands are ALWAYS blocked** - This is hardcoded and cannot be bypassed by permissions or user approval.
+
 **Allowed Commands (Examples):**
 - `ls`, `ls -la` — list directory contents
 - `git status`, `git log`, `git branch` — inspect git state
@@ -115,17 +117,39 @@ The `bash` tool allows execution of **safe, read-only commands** for inspecting 
 - `echo`, `date` — display information
 - `find`, `grep` (command-line) — search operations
 
-**Blocked Commands:**
-- `rm`, `rm -rf` — file deletion
-- `sudo` — privilege escalation
-- `chmod`, `chown` — permission changes
-- `dd`, `mkfs`, `fdisk` — disk operations
-- `curl`, `wget` — network downloads
-- `kill`, `pkill`, `killall` — process termination
+**Blocked Commands (ALWAYS, regardless of permissions):**
+- `rm`, `rm -rf` — file deletion (CANNOT be allowed)
+- `sudo` — privilege escalation (CANNOT be allowed)
+- `chmod`, `chown` — permission changes (CANNOT be allowed)
+- `dd`, `mkfs`, `fdisk` — disk operations (CANNOT be allowed)
+- `curl`, `wget` — network downloads (CANNOT be allowed)
+- `kill`, `pkill`, `killall` — process termination (CANNOT be allowed)
 
 **Guidelines:**
 1. Only use for **information gathering** and **read-only operations**.
-2. Never attempt destructive operations (the system will block them).
-3. Default timeout is 10 seconds (max 60 seconds).
-4. Prefer specific tools (`read_file`, `grep`) over bash when available.
-5. If a command is blocked, explain why and suggest a safer alternative.
+2. Never attempt destructive operations (the system will block them **before** any user interaction).
+3. Dangerous patterns are blocked at the code level and **cannot be bypassed** by any configuration.
+4. Default timeout is 10 seconds (max 60 seconds).
+5. Prefer specific tools (`read_file`, `grep`) over bash when available.
+6. If a command is blocked, explain why and suggest a safer alternative.
+
+### Granular Bash Permissions
+
+The system supports **granular permissions** for bash commands:
+
+- `"bash"` — all bash commands allowed (current session uses this or requires approval)
+- `"bash:ls"` — only `ls` commands allowed (ls, ls -la, ls -l)
+- `"bash:git status"` — only `git status` commands allowed
+- `"bash:cat"` — only `cat` commands allowed
+
+**What this means for you:**
+- If a specific command pattern is in the allow list, you won't be prompted for approval
+- If a specific command pattern is in the deny list, it will be blocked immediately
+- Dangerous patterns (rm, sudo, etc.) are **always blocked** regardless of permissions
+- The user can grant granular permissions by choosing "Always" or "Never" during prompts
+- You don't need to know the exact permissions — the system handles it automatically
+
+**Example:**
+If `"bash:ls"` is in the allow list, you can freely use `ls -la` without user approval.
+If `"bash:rm"` is in the deny list, any `rm` command will be blocked before the user sees it.
+**Even if `"bash"` is in the allow list**, dangerous commands like `rm`, `sudo`, `chmod` are still blocked.
