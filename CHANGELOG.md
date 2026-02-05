@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Smart Config Updates**: Re-running `squid init` preserves your settings
   - Uses existing values as defaults in prompts
-  - Keeps your tool permissions (allow/deny lists)
+  - **Smart permission merging**: Preserves your custom permissions + adds new defaults
+  - Automatically adds new default permissions (e.g., `"now"`) while keeping your customizations
   - Easy way to update config without starting from scratch
 
 - **Tool Permissions**: Configure which tools can run automatically or should be blocked

@@ -212,9 +212,43 @@ Configuration saved to: "squid.config.json"
   API Key: [not set]
   Log Level: error
 
+✓ Default permissions configured
+  Allowed: ["now"]
+
 ✓ Created .squidignore with default patterns
   Edit this file to customize which files squid should ignore
 ```
+
+**Re-running init on existing config:**
+
+When you run `squid init` on a directory that already has a config file, it will:
+- Use existing values as defaults in prompts
+- **Smart merge permissions**: Preserve your custom permissions + add new defaults
+- Update version to match current app version
+
+```
+$ squid init --url http://127.0.0.1:1234/v1 --model local-model --api-key "" --log-level info
+Found existing configuration, using current values as defaults...
+
+Configuration saved to: "./squid.config.json"
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [configured]
+  Log Level: info
+
+✓ Added new default permissions: ["now"]
+
+✓ Current tool permissions:
+  Allowed: ["bash:git status", "bash:ls", "now"]
+  Denied: ["write_file"]
+
+✓ Using existing .squidignore file
+```
+
+In this example:
+- User's existing permissions (`bash:git status`, `bash:ls`, `write_file` denial) are preserved
+- New default permission (`now`) was automatically added
+- Config version updated from 0.4.0 to 0.5.0
 
 #### Non-Interactive Mode
 

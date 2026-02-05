@@ -10,13 +10,9 @@
       "bash:ls",
       "bash:pwd",
       "bash:git status",
-      "bash:git log",
       "bash:cat"
     ],
-    "deny": [
-      "bash:rm",
-      "bash:sudo"
-    ]
+    "deny": []
   },
   "version": "0.5.0"
 }
