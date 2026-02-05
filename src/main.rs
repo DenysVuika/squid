@@ -556,7 +556,29 @@ async fn main() {
                 }
             }
 
-            let default_config = config::Config::default();
+            // Try to load existing config, otherwise use defaults
+            let config_path = dir.join("squid.config.json");
+            let config_existed = config_path.exists();
+            let existing_config = if config_existed {
+                println!("Found existing configuration, using current values as defaults...\n");
+                match std::fs::read_to_string(&config_path) {
+                    Ok(content) => match serde_json::from_str::<config::Config>(&content) {
+                        Ok(cfg) => Some(cfg),
+                        Err(e) => {
+                            info!("Failed to parse existing config: {}", e);
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        info!("Failed to read existing config: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            let default_config = existing_config.unwrap_or_else(|| config::Config::default());
 
             // Use CLI args if provided, otherwise prompt interactively
             let final_url = if let Some(u) = url {
@@ -611,13 +633,17 @@ async fn main() {
             let final_log_level = if let Some(level) = log_level {
                 level.clone()
             } else {
-                match inquire::Select::new(
-                    "Log Level:",
-                    vec!["error", "warn", "info", "debug", "trace"],
-                )
-                .with_help_message("Logging verbosity (info is recommended)")
-                .with_starting_cursor(2) // Default to "info"
-                .prompt()
+                // Find the index of the current log level for the cursor position
+                let levels = vec!["error", "warn", "info", "debug", "trace"];
+                let cursor_pos = levels
+                    .iter()
+                    .position(|&l| l == default_config.log_level)
+                    .unwrap_or(2);
+
+                match inquire::Select::new("Log Level:", levels)
+                    .with_help_message("Logging verbosity (info is recommended)")
+                    .with_starting_cursor(cursor_pos)
+                    .prompt()
                 {
                     Ok(level) => level.to_string(),
                     Err(_) => {
@@ -632,7 +658,8 @@ async fn main() {
                 api_model: final_model,
                 api_key: final_api_key,
                 log_level: final_log_level,
-                permissions: config::Permissions::default(),
+                permissions: default_config.permissions,
+                version: None, // Will be set automatically by save_to_dir()
             };
 
             match config.save_to_dir(dir) {
@@ -648,6 +675,20 @@ async fn main() {
                         println!("  API Key: [not set]");
                     }
                     println!("  Log Level: {}", config.log_level);
+
+                    // Show info about preserved permissions if config was updated
+                    if config_existed
+                        && (!config.permissions.allow.is_empty()
+                            || !config.permissions.deny.is_empty())
+                    {
+                        println!("\n✓ Preserved existing tool permissions");
+                        if !config.permissions.allow.is_empty() {
+                            println!("  Allowed: {:?}", config.permissions.allow);
+                        }
+                        if !config.permissions.deny.is_empty() {
+                            println!("  Denied: {:?}", config.permissions.deny);
+                        }
+                    }
 
                     // Create .squidignore file if it doesn't exist
                     let squidignore_path = dir.join(".squidignore");
