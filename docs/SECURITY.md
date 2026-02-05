@@ -283,6 +283,83 @@ This configuration:
 - ❌ Blocks all write operations (maximum safety)
 - 🕐 Auto-approves time queries (no security impact)
 
+**Important:** For bash commands, dangerous patterns are **always blocked** regardless of permissions. Even if `"bash"` is in the allow list, commands like `rm -rf`, `sudo`, etc. are still blocked.
+
+#### 🎯 Granular Bash Permissions
+
+The `bash` tool supports **granular permissions** for fine-grained control over which commands can run without approval:
+
+**Format:**
+- `"bash"` - Allows **all** bash commands (uses internal safety checks)
+- `"bash:ls"` - Allows only `ls` commands (`ls`, `ls -la`, `ls -l`, etc.)
+- `"bash:git"` - Allows only `git` commands (any git subcommand)
+- `"bash:git status"` - Allows only `git status` commands specifically
+- `"bash:cat"` - Allows only `cat` commands
+
+**Example Configuration with Granular Bash Permissions:**
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "now",
+      "read_file", 
+      "grep",
+      "bash:ls",
+      "bash:git status",
+      "bash:pwd"
+    ],
+    "deny": [
+      "write_file",
+      "bash:rm",
+      "bash:sudo"
+    ]
+  }
+}
+```
+
+This configuration:
+- ✅ Auto-approves `ls` commands without prompting
+- ✅ Auto-approves `git status` (but not other git commands)
+- ✅ Auto-approves `pwd` command
+- ❌ Blocks all `rm` commands (in addition to built-in blocking)
+- ❌ Blocks all `sudo` commands (in addition to built-in blocking)
+- ❓ Prompts for other bash commands (like `cat`, `echo`, `git log`)
+
+**How Granular Permissions Work:**
+
+When you choose **Always** or **Never** for a bash command, the system automatically extracts the base command and saves it:
+
+```bash
+# User approves: "ls -la" with "Always"
+# Saved as: "bash:ls"
+# Now allows: ls, ls -la, ls -l, etc.
+
+# User approves: "git status" with "Always"  
+# Saved as: "bash:git status"
+# Now allows: git status, git status --short
+# Still prompts for: git log, git commit, etc.
+
+# User denies: "rm -rf temp" with "Never"
+# Saved as: "bash:rm"
+# Now blocks: rm, rm -rf, rm -f, etc.
+```
+
+**Benefits:**
+- 🎯 **Precision**: Allow only specific safe commands
+- 🔒 **Safety**: Deny dangerous commands beyond built-in blocks
+- ⚡ **Efficiency**: Reduce prompts for frequently used safe commands
+- 📝 **Clarity**: Config clearly shows which commands are trusted
+
+**Critical Security Note:**
+Dangerous command patterns (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** at the code level and **cannot be bypassed** by:
+- Adding `"bash"` to allow list
+- Adding `"bash:rm"` to allow list
+- User approval
+- Any configuration setting
+
+These blocks are hardcoded for your safety and cannot be overridden.
+
 ### 📋 Content Preview for Write Operations
 
 When the LLM attempts to write a file, you see a preview of the content before approving:
@@ -395,6 +472,70 @@ This is a test file.
 Allow getting current date and time?
 Timezone: utc
 (Y/n)
+```
+
+### bash
+
+**Purpose:** Execute safe, non-destructive bash commands for system inspection
+
+**Security measures:**
+- **MANDATORY blocking of dangerous commands** - Cannot be bypassed by configuration or user approval
+- Blocked patterns (hardcoded): `rm -rf`, `rm -f`, `sudo`, `chmod`, `dd`, `mkfs`, `fdisk`, `curl`, `wget`, `kill`, `pkill`, `killall`
+- Dangerous commands are blocked **before** permission checks and user prompts
+- Shows exact command and timeout before approval (for non-dangerous commands)
+- Configurable timeout (default: 10 seconds, max: 60 seconds)
+- Command execution wrapped in timeout protection
+- Logged with command and execution status
+
+**Allowed use cases:**
+- Information gathering: `ls`, `ls -la`, `pwd`
+- Git inspection: `git status`, `git log`, `git branch`
+- File viewing: `cat file.txt`, `head`, `tail`
+- System info: `echo`, `date`, `uname`
+- Search operations: `find`, command-line `grep`
+
+**Example prompt:**
+```
+Allow executing bash command?
+Command: ls -la
+Timeout: 10 seconds
+(Y/n)
+```
+
+**Security notes:**
+- Commands are executed in a shell subprocess with timeout protection
+- Dangerous commands are blocked **before** user approval is requested
+- Even if a command is in the allow list, dangerous patterns are still blocked
+- Path validation does not apply (bash operates on the shell level)
+- Users should review commands carefully before approval
+
+**Example of blocked command:**
+```bash
+squid ask "Delete all temporary files with rm -rf /tmp/*"
+
+# What happens:
+# 1. LLM requests to execute: rm -rf /tmp/*
+# 2. MANDATORY security check detects "rm -rf" pattern (happens BEFORE permissions)
+# 3. Command is blocked immediately (no permission check, no user prompt)
+# 4. Error returned to LLM:
+#
+# 🦑: Command blocked for security reasons. The command contains a 
+# dangerous pattern: 'rm -rf'. Commands like rm, sudo, chmod, dd, curl, 
+# wget, and kill operations are not allowed.
+```
+
+**Even with "bash" in allow list:**
+```json
+{
+  "permissions": {
+    "allow": ["bash"]  // Allow all bash? NO - dangerous commands still blocked!
+  }
+}
+```
+
+```bash
+squid ask "Run: rm -rf temp"
+# Still blocked! Dangerous patterns cannot be bypassed by configuration.
 ```
 
 ## Direct File Access Commands

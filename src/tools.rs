@@ -5,6 +5,9 @@ use inquire::Select;
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde_json::json;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use tokio::time::timeout;
 use walkdir::WalkDir;
 
 use crate::config::Config;
@@ -98,6 +101,29 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 .build()
                 .expect("Failed to build now function"),
         }),
+        ChatCompletionTools::Function(ChatCompletionTool {
+            function: FunctionObjectArgs::default()
+                .name("bash")
+                .description("Execute a bash command. Only use this for safe, non-destructive commands like ls, git status, cat, etc. Dangerous commands (rm, sudo, chmod, dd, curl, wget, kill) are automatically blocked.")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "The bash command to execute (e.g., 'ls -la', 'git status', 'cat file.txt')"
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum execution time in seconds (default: 10, max: 60)",
+                            "minimum": 1,
+                            "maximum": 60
+                        }
+                    },
+                    "required": ["command"]
+                }))
+                .build()
+                .expect("Failed to build bash function"),
+        }),
     ]
 }
 
@@ -132,6 +158,39 @@ fn search_file(
 }
 
 // Execute grep search
+async fn execute_bash(command: &str, timeout_secs: u64) -> Result<String, String> {
+    let output = timeout(
+        Duration::from_secs(timeout_secs),
+        tokio::task::spawn_blocking({
+            let command = command.to_string();
+            move || {
+                Command::new("sh")
+                    .arg("-c")
+                    .arg(&command)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+            }
+        }),
+    )
+    .await
+    .map_err(|_| format!("Command timed out after {} seconds", timeout_secs))?
+    .map_err(|e| format!("Failed to spawn command: {}", e))?
+    .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Command failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.trim().to_string())
+}
+
 fn execute_grep(
     pattern: &str,
     path: &str,
@@ -264,13 +323,7 @@ impl std::fmt::Display for PermissionChoice {
 pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
-    // Check if tool is denied
-    if config.is_tool_denied(name) {
-        warn!("Tool '{}' is in the deny list, blocking execution", name);
-        return json!({"error": format!("Tool '{}' is denied by configuration", name), "skipped": true});
-    }
-
-    // Parse arguments first to display them to the user
+    // Parse arguments first to get command for bash tool
     let args: serde_json::Value = match args.parse() {
         Ok(v) => v,
         Err(e) => {
@@ -278,6 +331,45 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
             return json!({"error": format!("Invalid arguments: {}", e)});
         }
     };
+
+    // MANDATORY SECURITY CHECK: Block dangerous bash commands BEFORE any permission checks
+    // This cannot be bypassed by configuration or user approval
+    if name == "bash" {
+        let command = args["command"].as_str().unwrap_or("");
+
+        let dangerous_patterns = [
+            "rm -rf", "rm -f", "sudo ", "chmod ", "dd ", "mkfs", "fdisk", "> /dev/", "curl",
+            "wget", "kill ", "pkill", "killall",
+        ];
+
+        for pattern in &dangerous_patterns {
+            if command.contains(pattern) {
+                warn!("Blocked dangerous bash command: {}", command);
+                return json!({
+                    "error": format!(
+                        "Command blocked for security reasons. The command contains a dangerous pattern: '{}'. Commands like rm, sudo, chmod, dd, curl, wget, and kill operations are not allowed.",
+                        pattern
+                    ),
+                    "skipped": true
+                });
+            }
+        }
+    }
+
+    // Check if tool is denied (with granular bash command support)
+    if name == "bash" {
+        let command = args["command"].as_str().unwrap_or("");
+        if config.is_bash_command_denied(command) {
+            warn!(
+                "Bash command '{}' is in the deny list, blocking execution",
+                command
+            );
+            return json!({"error": format!("Bash command '{}' is denied by configuration", command), "skipped": true});
+        }
+    } else if config.is_tool_denied(name) {
+        warn!("Tool '{}' is in the deny list, blocking execution", name);
+        return json!({"error": format!("Tool '{}' is denied by configuration", name), "skipped": true});
+    }
 
     // Initialize path validator with ignore patterns from .squidignore
     let ignore_patterns = PathValidator::load_ignore_patterns();
@@ -329,8 +421,13 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
         _ => None,
     };
 
-    // Check if tool is auto-allowed
-    let auto_allowed = config.is_tool_allowed(name);
+    // Check if tool is auto-allowed (with granular bash command support)
+    let auto_allowed = if name == "bash" {
+        let command = args["command"].as_str().unwrap_or("");
+        config.is_bash_command_allowed(command)
+    } else {
+        config.is_tool_allowed(name)
+    };
 
     // Ask for user approval if not auto-allowed
     let permission = if auto_allowed {
@@ -380,6 +477,16 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                     style(timezone).cyan()
                 )
             }
+            "bash" => {
+                let command = args["command"].as_str().unwrap_or("unknown");
+                let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
+                format!(
+                    "Can I {}?\n  💻 Command: {}\n  ⏱️  Timeout: {} seconds",
+                    style("execute this bash command").yellow(),
+                    style(command).magenta(),
+                    style(timeout_secs).cyan()
+                )
+            }
             _ => format!("Can I execute: {}?", style(name).yellow()),
         };
 
@@ -402,32 +509,76 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                 // Handle "Always" and "Never" choices by updating config
                 match choice {
                     PermissionChoice::Always => {
-                        info!("Adding '{}' to allow list", name);
+                        // For bash tool, save granular permission with command
+                        let tool_to_save = if name == "bash" {
+                            let command = args["command"].as_str().unwrap_or("");
+                            // Extract base command (first word or two words for git/npm/etc)
+                            let base_cmd = if command.starts_with("git ") {
+                                command
+                                    .split_whitespace()
+                                    .take(2)
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            } else {
+                                command
+                                    .split_whitespace()
+                                    .next()
+                                    .unwrap_or(command)
+                                    .to_string()
+                            };
+                            format!("bash:{}", base_cmd)
+                        } else {
+                            name.to_string()
+                        };
+
+                        info!("Adding '{}' to allow list", tool_to_save);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.allow_tool(name) {
+                        if let Err(e) = updated_config.allow_tool(&tool_to_save) {
                             error!("Failed to update config with allow list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Tool '{}' added to allow list in squid.config.json",
+                                "{} Permission '{}' added to allow list in squid.config.json",
                                 style("✓").green(),
-                                style(name).cyan()
+                                style(&tool_to_save).cyan()
                             );
                         }
                     }
                     PermissionChoice::Never => {
-                        info!("Adding '{}' to deny list", name);
+                        // For bash tool, save granular permission with command
+                        let tool_to_save = if name == "bash" {
+                            let command = args["command"].as_str().unwrap_or("");
+                            // Extract base command (first word or two words for git/npm/etc)
+                            let base_cmd = if command.starts_with("git ") {
+                                command
+                                    .split_whitespace()
+                                    .take(2)
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            } else {
+                                command
+                                    .split_whitespace()
+                                    .next()
+                                    .unwrap_or(command)
+                                    .to_string()
+                            };
+                            format!("bash:{}", base_cmd)
+                        } else {
+                            name.to_string()
+                        };
+
+                        info!("Adding '{}' to deny list", tool_to_save);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.deny_tool(name) {
+                        if let Err(e) = updated_config.deny_tool(&tool_to_save) {
                             error!("Failed to update config with deny list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Tool '{}' added to deny list in squid.config.json",
+                                "{} Permission '{}' added to deny list in squid.config.json",
                                 style("✓").green(),
-                                style(name).cyan()
+                                style(&tool_to_save).cyan()
                             );
                         }
                     }
@@ -562,6 +713,23 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                         datetime_str, timezone
                     );
                     json!({"content": format!("The current datetime is {}.", datetime_str)})
+                }
+                "bash" => {
+                    let command = args["command"].as_str().unwrap_or("");
+                    let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
+
+                    // Note: Dangerous command check already performed at the top of call_tool()
+                    // Execute the command
+                    match execute_bash(command, timeout_secs).await {
+                        Ok(output) => {
+                            info!("Bash command executed successfully: {}", command);
+                            json!({"content": format!("Command executed successfully:\n\n{}", output)})
+                        }
+                        Err(e) => {
+                            warn!("Bash command failed: {}: {}", command, e);
+                            json!({"error": format!("Command failed: {}", e)})
+                        }
+                    }
                 }
                 _ => {
                     warn!("Unknown tool called: {}", name);

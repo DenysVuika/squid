@@ -32,6 +32,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports UTC and local timezones
   - Returns RFC 3339 format
 
+- **Bash Tool**: New `bash` tool for executing safe, non-destructive commands
+  - Execute read-only commands like `ls`, `git status`, `cat`, `pwd`
+  - **MANDATORY blocking** of dangerous commands - cannot be bypassed by configuration or user approval
+  - Dangerous patterns (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) blocked at code level
+  - Configurable timeout (default 10 seconds, max 60 seconds)
+  - Integrated with permission system (allow/deny lists)
+  - User approval required for each command execution (except dangerous commands, blocked immediately)
+  - **Granular permissions**: Fine-grained control with `"bash:command"` format
+    - `"bash:ls"` - allows only ls commands
+    - `"bash:git status"` - allows only git status
+    - `"bash"` - allows all bash commands (dangerous patterns still blocked)
+    - Automatically saves granular permissions when choosing "Always" or "Never"
+
 - **Loading Spinner**: Shows "Waiting for squid..." during streaming responses
 
 ### Changed
