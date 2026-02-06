@@ -1,35 +1,77 @@
-## TypeScript/JavaScript Code Review Instructions
+## TypeScript/JavaScript Code Review: Issues Only
 
-Analyze the following TypeScript/JavaScript code and provide constructive feedback focusing on:
+**INSTRUCTIONS:**
+Analyze the provided TypeScript/JavaScript code and ONLY report critical issues requiring fixes. Ignore correct code or style preferences. Use this structure:
 
-**Code Quality & Best Practices:**
-- Proper use of TypeScript types and interfaces
-- Avoiding `any` types where possible
-- Consistent naming conventions (camelCase for variables/functions, PascalCase for classes/types)
-- Proper error handling and async/await usage
+### [Category: Issue Type]
+- **Problem**: [Specific issue, e.g. Using `any` type without justification]
+- **Fix**: [Concise action, e.g. Define proper interface for this data]
+- **Why**: [1-sentence justification, e.g. Loses all TypeScript type safety benefits]
 
-**Modern JavaScript/TypeScript:**
-- Use of ES6+ features appropriately
-- Proper use of `const`/`let` instead of `var`
-- Arrow functions vs regular functions
-- Destructuring and spread operators
+---
 
-**Performance:**
-- Unnecessary re-renders (React/Vue specific)
-- Memory leaks (event listeners, subscriptions)
-- Inefficient array operations
-- Bundle size considerations
+**FOCUS AREAS (Report issues ONLY in these categories):**
 
-**Security:**
-- XSS vulnerabilities
-- Injection risks
-- Proper input validation and sanitization
-- Safe use of `eval()`, `innerHTML`, and similar
+1. **Type Safety**
+   - `any` type usage without justification
+   - Missing return types in function signatures
+   - Improper null checks (missing optional chaining/nullish coalescing)
+   - Implicit any (untyped function parameters)
 
-**Testing & Maintainability:**
-- Testability of the code
-- Single Responsibility Principle
-- Code duplication
-- Comments and documentation where needed
+2. **Code Quality**
+   - Inconsistent naming (e.g., mixing camelCase/PascalCase)
+   - Unhandled promise rejections (missing `.catch()` or `try/catch`)
+   - Callback hell vs proper async/await pattern
+   - Inefficient array operations (e.g., nested `.map()`)
 
-Provide specific, actionable suggestions for improvement.
+3. **Modern JS/TS**
+   - `var` usage in ES6+ code
+   - Missing destructuring for object/array access
+   - Regular functions when arrow functions preferable
+   - Unnecessary class usage where functions would suffice
+
+4. **Security**
+   - Unsanitized `innerHTML` assignments
+   - Potential XSS vulnerabilities (unsafe string interpolation)
+   - Use of `eval()` or `Function` constructor
+   - Missing input validation
+
+5. **Performance**
+   - Unnecessary React/Vue re-renders
+   - Memory leaks (uncleared event listeners/subscriptions)
+   - Large bundle size contributions (e.g., importing entire libraries)
+   - Inefficient DOM manipulations
+
+6. **Testing & Maintainability**
+   - Untestable functions (hardcoded dependencies)
+   - Violations of Single Responsibility Principle
+   - Duplicated code blocks
+   - Missing JSDoc/TSDoc for public APIs
+
+---
+
+**RULES:**
+- No praise (e.g., "Good use of interfaces")
+- No generic advice (e.g., "Consider using arrow functions")
+- Prioritize critical issues (security > formatting)
+- Group by category (e.g., all type safety issues together)
+- Be machine-like: short, direct, scannable
+
+---
+
+**EXAMPLE OUTPUT:**
+
+### Type Safety
+- **Problem**: `function process(data: any)` parameter type
+- **Fix**: Define interface `interface ProcessData { ... }`
+- **Why**: Loses all TypeScript type checking benefits
+
+### Security
+- **Problem**: `element.innerHTML = userInput` without sanitization
+- **Fix**: Use `textContent` or DOM sanitization library
+- **Why**: XSS vulnerability risk
+
+### Performance
+- **Problem**: Large library import (`import { ... } from 'lodash'`)
+- **Fix**: Import specific functions or use native alternatives
+- **Why**: Increases bundle size unnecessarily

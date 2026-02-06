@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Extended Code Review Language Support**: Added language-specific review prompts for 10 additional file types
+  - **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance
+  - **SQL** (`.sql`, `.ddl`, `.dml`) - SQL injection, indexes, transactions
+  - **Shell Scripts** (`.sh`, `.bash`, `.zsh`, `.fish`) - Command injection, portability
+  - **Docker** (`Dockerfile`, `Dockerfile.*`) - Security, resource limits, health checks
+  - **Go** (`.go`) - Concurrency, race conditions, error handling
+  - **Java** (`.java`) - Collections, memory leaks, Spring framework
+  - **JSON** (`.json`) - Sensitive data, schema validation
+  - **YAML** (`.yaml`, `.yml`) - Sensitive data, schema validation
+  - **Makefile** (`Makefile`, `Makefile.*`) - POSIX compliance, .PHONY targets
+  - **Markdown** (`.md`, `.markdown`) - Accessibility, broken links, heading hierarchy
+
+### Changed
+
+- **Improved Code Review Prompts**: All review prompts refactored to focus on issues first
+  - Issue-focused structure: Problem → Fix → Why
+  - Eliminates praise and style preferences
+  - Now supports 14 file types: Rust, TypeScript/JavaScript, HTML, CSS, Python, SQL, Shell, Docker, Go, Java, JSON, YAML, Makefile, Markdown
+
 ## [0.6.0] - 2026-02-05
 
 ### Added

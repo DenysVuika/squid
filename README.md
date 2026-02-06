@@ -395,6 +395,39 @@ squid review styles.css -m "Focus on performance issues"
 
 # Get complete review at once (no streaming)
 squid review app.ts --no-stream
+
+# Review SQL files
+squid review schema.sql
+squid review migrations/001_create_users.ddl
+
+# Review shell scripts
+squid review deploy.sh
+squid review scripts/backup.bash
+
+# Review Docker files
+squid review Dockerfile
+squid review Dockerfile.prod
+
+# Review Go files
+squid review main.go
+squid review pkg/server.go
+
+# Review Java files
+squid review Application.java
+squid review controllers/UserController.java
+
+# Review configuration files
+squid review config.json
+squid review docker-compose.yaml
+squid review deployment.yml
+
+# Review Makefiles
+squid review Makefile
+squid review Makefile.dev
+
+# Review documentation
+squid review README.md
+squid review docs/API.markdown
 ```
 
 The review command automatically selects the appropriate review prompt based on file type:
@@ -402,6 +435,16 @@ The review command automatically selects the appropriate review prompt based on 
 - **TypeScript/JavaScript** (`.ts`, `.js`, `.tsx`, `.jsx`) - Type safety, modern features, security
 - **HTML** (`.html`, `.htm`) - Semantics, accessibility, SEO
 - **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
+- **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance, best practices
+- **SQL** (`.sql`, `.ddl`, `.dml`) - Performance, security, correctness, best practices
+- **Shell Scripts** (`.sh`, `.bash`, `.zsh`, `.fish`) - Security, robustness, performance, compliance
+- **Docker/Kubernetes** (`Dockerfile`, `Dockerfile.*`) - Security, performance, reliability, best practices
+- **Go** (`.go`) - Concurrency, performance, error handling, best practices
+- **Java** (`.java`) - Performance, best practices, JVM specifics, Spring framework
+- **JSON** (`.json`) - Security, correctness, performance, maintainability
+- **YAML** (`.yaml`, `.yml`) - Security, correctness, performance, maintainability
+- **Makefile** (`Makefile`, `Makefile.*`) - Correctness, portability, performance, security
+- **Markdown** (`.md`, `.markdown`) - Structure, accessibility, consistency, content
 - **Other files** - Generic code quality and best practices
 
 

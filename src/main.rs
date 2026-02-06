@@ -30,6 +30,16 @@ const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+const CODE_REVIEW_PYTHON_PROMPT: &str = include_str!("./assets/review-py.md");
+const CODE_REVIEW_SQL_PROMPT: &str = include_str!("./assets/review-sql.md");
+const CODE_REVIEW_SHELL_PROMPT: &str = include_str!("./assets/review-sh.md");
+const CODE_REVIEW_DOCKER_PROMPT: &str = include_str!("./assets/review-docker.md");
+const CODE_REVIEW_GO_PROMPT: &str = include_str!("./assets/review-go.md");
+const CODE_REVIEW_JAVA_PROMPT: &str = include_str!("./assets/review-java.md");
+const CODE_REVIEW_JSON_PROMPT: &str = include_str!("./assets/review-json.md");
+const CODE_REVIEW_MAKEFILE_PROMPT: &str = include_str!("./assets/review-makefile.md");
+const CODE_REVIEW_MARKDOWN_PROMPT: &str = include_str!("./assets/review-md.md");
+const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 fn combine_prompts(task_prompt: &str) -> String {
@@ -37,6 +47,18 @@ fn combine_prompts(task_prompt: &str) -> String {
 }
 
 fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
+    // Check for files without extensions first (Dockerfile, Makefile, etc.)
+    if let Some(file_name) = file_path.file_name().and_then(|n| n.to_str()) {
+        let lower_name = file_name.to_lowercase();
+        if lower_name == "dockerfile" || lower_name.starts_with("dockerfile.") {
+            return CODE_REVIEW_DOCKER_PROMPT;
+        }
+        if lower_name == "makefile" || lower_name.starts_with("makefile.") {
+            return CODE_REVIEW_MAKEFILE_PROMPT;
+        }
+    }
+
+    // Check by file extension
     if let Some(extension) = file_path.extension() {
         match extension.to_str() {
             Some("rs") => CODE_REVIEW_RUST_PROMPT,
@@ -45,6 +67,14 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
             }
             Some("html") | Some("htm") => CODE_REVIEW_HTML_PROMPT,
             Some("css") | Some("scss") | Some("sass") | Some("less") => CODE_REVIEW_CSS_PROMPT,
+            Some("py") | Some("pyw") | Some("pyi") => CODE_REVIEW_PYTHON_PROMPT,
+            Some("sql") | Some("ddl") | Some("dml") => CODE_REVIEW_SQL_PROMPT,
+            Some("sh") | Some("bash") | Some("zsh") | Some("fish") => CODE_REVIEW_SHELL_PROMPT,
+            Some("go") => CODE_REVIEW_GO_PROMPT,
+            Some("java") => CODE_REVIEW_JAVA_PROMPT,
+            Some("json") => CODE_REVIEW_JSON_PROMPT,
+            Some("yaml") | Some("yml") => CODE_REVIEW_YAML_PROMPT,
+            Some("md") | Some("markdown") => CODE_REVIEW_MARKDOWN_PROMPT,
             _ => CODE_REVIEW_PROMPT,
         }
     } else {

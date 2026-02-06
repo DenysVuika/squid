@@ -1,45 +1,84 @@
-## Rust Code Review Instructions
+## Rust Code Review: Issues Only
 
-Analyze the following Rust code and provide constructive feedback focusing on:
+**INSTRUCTIONS:**
+Analyze the provided Rust code and **ONLY report critical issues requiring fixes**. Ignore correct or opinion-based code. Use this structure:
 
-**Rust Idioms & Best Practices:**
-- Proper use of ownership, borrowing, and lifetimes
-- Idiomatic use of `Option` and `Result` types
-- Pattern matching instead of excessive `if let` chains
-- Iterator usage vs explicit loops
-- Proper use of traits and generics
+### [Category: Issue Type]
+- **Problem**: [Specific issue, e.g., `unwrap()` used in production code]
+- **Fix**: [Concise action, e.g., Replace with `?` or proper error handling]
+- **Why**: [1-sentence justification, e.g., `unwrap()` crashes on `None`/`Err`.]
 
-**Safety & Correctness:**
-- Unnecessary `unsafe` blocks
-- Potential panics (unwrap, expect, indexing)
-- Integer overflow considerations
-- Proper error propagation with `?` operator
-- Thread safety and `Send`/`Sync` traits
+---
 
-**Performance:**
-- Unnecessary clones or allocations
-- Use of `&str` vs `String` appropriately
-- Zero-cost abstractions
-- Efficient use of collections
-- Avoiding unnecessary boxing
+**FOCUS AREAS (Report issues ONLY in these categories):**
 
-**Code Quality:**
-- Clear and descriptive naming
-- Proper visibility modifiers (pub, pub(crate), etc.)
-- Documentation comments (///) for public APIs
-- Clippy warnings and suggestions
-- Consistent formatting (rustfmt)
+1. **Ownership & Safety**
+   - Unnecessary `unsafe` blocks
+   - Potential panics (`unwrap()`, `expect()`, unchecked indexing)
+   - Integer overflow risks (e.g., `+1` without overflow checks)
+   - Missing bounds checks (e.g., array access)
 
-**Error Handling:**
-- Custom error types where appropriate
-- Informative error messages
-- Avoiding `panic!` in library code
-- Proper use of `?` operator vs explicit match
+2. **Idiomatic Rust**
+   - Overuse of `if let` vs pattern matching
+   - Inefficient `clone()` calls
+   - Non-idiomatic `Option`/`Result` handling (e.g., nested `match`)
+   - Misuse of `&str` vs `String` (e.g., `String` for static strings)
+   - Missing iterator usage (e.g., `for` loop vs `.iter()`)
 
-**Testing & Maintainability:**
-- Testability and mockability
-- Module organization
-- Separation of concerns
-- Code duplication
+3. **Performance**
+   - Unnecessary allocations (e.g., `Vec::new()` + `push` vs `vec![]`)
+   - Boxed types where unnecessary
+   - Inefficient collection usage (e.g., `HashMap` with duplicate keys)
 
-Provide specific, actionable suggestions for improvement with Rust-specific alternatives.
+4. **Error Handling**
+   - `panic!` in library code
+   - Uninformative error messages (e.g., `format!("error")` in `Err`)
+   - Missing custom error types for library crates
+
+5. **Code Quality**
+   - Unclear naming (e.g., `data` instead of `user_input`)
+   - Inconsistent visibility (`pub` vs `pub(crate)`)
+   - Missing `///` docs for public APIs
+   - Disabled Clippy lints (e.g., `#![allow(clippy::...)]`)
+
+6. **Testing & Maintainability**
+   - Unmockable dependencies (e.g., direct DB calls in logic)
+   - Duplicated code (e.g., manual `impl`s vs macros/derive)
+   - Poor module organization (e.g., monolithic `lib.rs`)
+
+---
+
+**RULES:**
+- **No praise** (e.g., "Good use of lifetimes").
+- **No generic advice** (e.g., "Consider using traits").
+- **Prioritize critical issues** (e.g., memory safety > formatting).
+- **Group by category** (e.g., all safety issues together).
+- **Be machine-like**: Short, direct, and scannable.
+
+---
+
+**EXAMPLE OUTPUT:**
+
+### Ownership & Safety
+- **Problem**: `vec.get(index).unwrap()` in `process_data()`.
+- **Fix**: Use `?` or propagate `Option`/`Result`.
+- **Why**: `unwrap()` crashes on invalid indices.
+
+- **Problem**: Unchecked arithmetic (`x + 1` without overflow checks).
+- **Fix**: Use `checked_add(1)` or `try_into()`.
+- **Why**: Integer overflow is undefined behavior.
+
+### Idiomatic Rust
+- **Problem**: `if let Some(a) = opt { ... }` followed by `if let Some(b) = opt { ... }`.
+- **Fix**: Use `match` to handle both cases.
+- **Why**: Reduces nesting and improves readability.
+
+### Performance
+- **Problem**: `String::from("static")` instead of `&str`.
+- **Fix**: Use `&str` for static strings.
+- **Why**: Avoids unnecessary heap allocation.
+
+### Error Handling
+- **Problem**: `panic!("failed")` in library function.
+- **Fix**: Return `Result<_, Error>` with context.
+- **Why**: Libraries should never panic.
