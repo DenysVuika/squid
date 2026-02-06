@@ -395,6 +395,14 @@ squid review styles.css -m "Focus on performance issues"
 
 # Get complete review at once (no streaming)
 squid review app.ts --no-stream
+
+# Review SQL files
+squid review schema.sql
+squid review migrations/001_create_users.ddl
+
+# Review shell scripts
+squid review deploy.sh
+squid review scripts/backup.bash
 ```
 
 The review command automatically selects the appropriate review prompt based on file type:
@@ -402,6 +410,9 @@ The review command automatically selects the appropriate review prompt based on 
 - **TypeScript/JavaScript** (`.ts`, `.js`, `.tsx`, `.jsx`) - Type safety, modern features, security
 - **HTML** (`.html`, `.htm`) - Semantics, accessibility, SEO
 - **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
+- **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance, best practices
+- **SQL** (`.sql`, `.ddl`, `.dml`) - Performance, security, correctness, best practices
+- **Shell Scripts** (`.sh`, `.bash`, `.zsh`, `.fish`) - Security, robustness, performance, compliance
 - **Other files** - Generic code quality and best practices
 
 

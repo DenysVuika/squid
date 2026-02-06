@@ -14,13 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Focuses on Python-specific issues: PEP 8, security, performance, best practices
   - Reports only critical issues requiring fixes
 
+- **SQL Code Review Support**: Language-specific review prompt for SQL files
+  - Detects `.sql`, `.ddl`, and `.dml` file extensions
+  - Focuses on SQL-specific issues: performance, security, correctness, best practices
+  - Identifies SQL injection risks, missing indexes, and transaction issues
+
+- **Shell Script Review Support**: Language-specific review prompt for shell scripts
+  - Detects `.sh`, `.bash`, `.zsh`, and `.fish` file extensions
+  - Focuses on script-specific issues: security, robustness, performance, compliance
+  - Identifies command injection, unquoted variables, and portability problems
+
 ### Changed
 
 - **Improved Code Review Prompts**: All language-specific review prompts refactored to focus on issues first
   - Prioritizes actionable feedback over generic advice
   - Issue-focused structure: Problem → Fix → Why
   - Eliminates praise and style preferences
-  - Applies to Rust, TypeScript/JavaScript, HTML, CSS, and Python reviews
+  - Applies to Rust, TypeScript/JavaScript, HTML, CSS, Python, SQL, and Shell script reviews
 
 ## [0.6.0] - 2026-02-05
 
