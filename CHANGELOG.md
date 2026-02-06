@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Issue-focused structure: Problem → Fix → Why
   - Eliminates praise and style preferences
   - Now supports 14 file types: Rust, TypeScript/JavaScript, HTML, CSS, Python, SQL, Shell, Docker, Go, Java, JSON, YAML, Makefile, Markdown
+- **Token Usage Logging**: Changed from INFO to DEBUG level for cleaner default output
+
+### Removed
+
+- **`now` Tool**: Removed redundant datetime tool since environment context now provides comprehensive time information (local time, UTC time, Unix timestamp, and timezone) with every request
 
 ## [0.6.0] - 2026-02-05
 
