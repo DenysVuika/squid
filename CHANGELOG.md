@@ -9,28 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Python Code Review Support**: Language-specific review prompt for Python files
-  - Detects `.py`, `.pyw`, and `.pyi` file extensions
-  - Focuses on Python-specific issues: PEP 8, security, performance, best practices
-  - Reports only critical issues requiring fixes
-
-- **SQL Code Review Support**: Language-specific review prompt for SQL files
-  - Detects `.sql`, `.ddl`, and `.dml` file extensions
-  - Focuses on SQL-specific issues: performance, security, correctness, best practices
-  - Identifies SQL injection risks, missing indexes, and transaction issues
-
-- **Shell Script Review Support**: Language-specific review prompt for shell scripts
-  - Detects `.sh`, `.bash`, `.zsh`, and `.fish` file extensions
-  - Focuses on script-specific issues: security, robustness, performance, compliance
-  - Identifies command injection, unquoted variables, and portability problems
+- **Extended Code Review Language Support**: Added language-specific review prompts for 10 additional file types
+  - **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance
+  - **SQL** (`.sql`, `.ddl`, `.dml`) - SQL injection, indexes, transactions
+  - **Shell Scripts** (`.sh`, `.bash`, `.zsh`, `.fish`) - Command injection, portability
+  - **Docker** (`Dockerfile`, `Dockerfile.*`) - Security, resource limits, health checks
+  - **Go** (`.go`) - Concurrency, race conditions, error handling
+  - **Java** (`.java`) - Collections, memory leaks, Spring framework
+  - **JSON** (`.json`) - Sensitive data, schema validation
+  - **YAML** (`.yaml`, `.yml`) - Sensitive data, schema validation
+  - **Makefile** (`Makefile`, `Makefile.*`) - POSIX compliance, .PHONY targets
+  - **Markdown** (`.md`, `.markdown`) - Accessibility, broken links, heading hierarchy
 
 ### Changed
 
-- **Improved Code Review Prompts**: All language-specific review prompts refactored to focus on issues first
-  - Prioritizes actionable feedback over generic advice
+- **Improved Code Review Prompts**: All review prompts refactored to focus on issues first
   - Issue-focused structure: Problem → Fix → Why
   - Eliminates praise and style preferences
-  - Applies to Rust, TypeScript/JavaScript, HTML, CSS, Python, SQL, and Shell script reviews
+  - Now supports 14 file types: Rust, TypeScript/JavaScript, HTML, CSS, Python, SQL, Shell, Docker, Go, Java, JSON, YAML, Makefile, Markdown
 
 ## [0.6.0] - 2026-02-05
 
