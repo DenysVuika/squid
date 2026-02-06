@@ -1,5 +1,4 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
-use chrono::{Local, Utc};
 use console::style;
 use inquire::Select;
 use log::{debug, error, info, warn};
@@ -83,24 +82,7 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 .build()
                 .expect("Failed to build grep function"),
         }),
-        ChatCompletionTools::Function(ChatCompletionTool {
-            function: FunctionObjectArgs::default()
-                .name("now")
-                .description("Get the current date and time in RFC 3339 format. Only use this when the user specifically asks for it or when current datetime is needed.")
-                .parameters(json!({
-                    "type": "object",
-                    "properties": {
-                        "timezone": {
-                            "type": "string",
-                            "description": "The timezone to use for the datetime. Options: 'local' for local time (default, use for most queries) or 'utc' for UTC time.",
-                            "enum": ["utc", "local"]
-                        }
-                    },
-                    "required": []
-                }))
-                .build()
-                .expect("Failed to build now function"),
-        }),
+
         ChatCompletionTools::Function(ChatCompletionTool {
             function: FunctionObjectArgs::default()
                 .name("bash")
@@ -469,14 +451,7 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                     style(path).green()
                 )
             }
-            "now" => {
-                let timezone = args["timezone"].as_str().unwrap_or("utc");
-                format!(
-                    "Can I {}?\n  🕐 Timezone: {}",
-                    style("get the current date and time").yellow(),
-                    style(timezone).cyan()
-                )
-            }
+
             "bash" => {
                 let command = args["command"].as_str().unwrap_or("unknown");
                 let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
@@ -700,20 +675,7 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                         }
                     }
                 }
-                "now" => {
-                    let timezone = args["timezone"].as_str().unwrap_or("local");
 
-                    let datetime_str = match timezone {
-                        "utc" => Utc::now().to_rfc3339(),
-                        _ => Local::now().to_rfc3339(), // Default to local
-                    };
-
-                    info!(
-                        "Returning current datetime: {} ({})",
-                        datetime_str, timezone
-                    );
-                    json!({"content": format!("The current datetime is {}.", datetime_str)})
-                }
                 "bash" => {
                     let command = args["command"].as_str().unwrap_or("");
                     let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
