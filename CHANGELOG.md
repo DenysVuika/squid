@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Environment Context**: LLM receives system information with each request for context-aware responses
+  - Includes OS details, CPU architecture, platform, timezone, and timestamps
+  - Privacy-focused: hostname and working directory excluded by default
+  - Helps LLM provide OS-specific commands and timezone-aware suggestions
 - **Extended Code Review Language Support**: Added language-specific review prompts for 10 additional file types
   - **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance
   - **SQL** (`.sql`, `.ddl`, `.dml`) - SQL injection, indexes, transactions

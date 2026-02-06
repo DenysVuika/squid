@@ -8,7 +8,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
 - 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
-- 🕐 **Datetime awareness** - LLM can access current date and time (UTC or local)
+- 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses

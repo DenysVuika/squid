@@ -18,6 +18,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 mod config;
+mod envinfo;
 mod logger;
 mod tools;
 mod validate;
@@ -98,6 +99,9 @@ async fn ask_llm_streaming(
 
     let client = Client::with_config(config);
 
+    // Get environment context
+    let env_context = envinfo::get_env_context();
+
     let user_message = if let Some(content) = file_content {
         let file_info = if let Some(path) = file_path {
             format!("the file '{}'", path)
@@ -105,15 +109,18 @@ async fn ask_llm_streaming(
             "the file".to_string()
         };
         format!(
-            "Here is the content of {}:\n\n```\n{}\n```\n\nQuestion: {}",
-            file_info, content, question
+            "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
+            env_context, file_info, content, question
         )
     } else {
-        question.to_string()
+        format!("{}\n\nUser query: {}", env_context, question)
     };
 
     let default_prompt = combine_prompts(ASK_PROMPT);
     let system_message = system_prompt.unwrap_or(&default_prompt);
+
+    debug!("System message:\n{}", system_message);
+    debug!("User message:\n{}", user_message);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
@@ -163,14 +170,14 @@ async fn ask_llm_streaming(
         // Log token usage statistics from streaming response (only present in final chunk)
         if let Some(usage) = &response.usage {
             writeln!(lock)?; // Add newline before logging token stats
-            info!(
+            debug!(
                 "Token usage - Prompt: {}, Completion: {}, Total: {}",
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
             if let Some(prompt_details) = &usage.prompt_tokens_details {
                 if let Some(cached) = prompt_details.cached_tokens {
-                    info!("Cached tokens: {}", cached);
+                    debug!("Cached tokens: {}", cached);
                 }
             }
         }
@@ -297,14 +304,14 @@ async fn ask_llm_streaming(
             // Log token usage statistics from follow-up streaming response (only present in final chunk)
             if let Some(usage) = &response.usage {
                 writeln!(lock)?; // Add newline before logging token stats
-                info!(
+                debug!(
                     "Follow-up token usage - Prompt: {}, Completion: {}, Total: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 );
 
                 if let Some(prompt_details) = &usage.prompt_tokens_details {
                     if let Some(cached) = prompt_details.cached_tokens {
-                        info!("Follow-up cached tokens: {}", cached);
+                        debug!("Follow-up cached tokens: {}", cached);
                     }
                 }
             }
@@ -344,6 +351,9 @@ async fn ask_llm(
 
     let client = Client::with_config(config);
 
+    // Get environment context
+    let env_context = envinfo::get_env_context();
+
     let user_message = if let Some(content) = file_content {
         let file_info = if let Some(path) = file_path {
             format!("the file '{}'", path)
@@ -351,15 +361,18 @@ async fn ask_llm(
             "the file".to_string()
         };
         format!(
-            "Here is the content of {}:\n\n```\n{}\n```\n\nQuestion: {}",
-            file_info, content, question
+            "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
+            env_context, file_info, content, question
         )
     } else {
-        question.to_string()
+        format!("{}\n\nUser query: {}", env_context, question)
     };
 
     let default_prompt = combine_prompts(ASK_PROMPT);
     let system_message = system_prompt.unwrap_or(&default_prompt);
+
+    debug!("System message:\n{}", system_message);
+    debug!("User message:\n{}", user_message);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
@@ -386,14 +399,14 @@ async fn ask_llm(
 
     // Log token usage statistics
     if let Some(usage) = &response.usage {
-        info!(
+        debug!(
             "Token usage - Prompt: {}, Completion: {}, Total: {}",
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
 
         if let Some(prompt_details) = &usage.prompt_tokens_details {
             if let Some(cached) = prompt_details.cached_tokens {
-                info!("Cached tokens: {}", cached);
+                debug!("Cached tokens: {}", cached);
             }
         }
     }
@@ -467,14 +480,14 @@ async fn ask_llm(
 
         // Log token usage statistics for follow-up request
         if let Some(usage) = &final_response.usage {
-            info!(
+            debug!(
                 "Follow-up token usage - Prompt: {}, Completion: {}, Total: {}",
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
             if let Some(prompt_details) = &usage.prompt_tokens_details {
                 if let Some(cached) = prompt_details.cached_tokens {
-                    info!("Follow-up cached tokens: {}", cached);
+                    debug!("Follow-up cached tokens: {}", cached);
                 }
             }
         }
