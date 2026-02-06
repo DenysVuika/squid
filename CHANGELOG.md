@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Python Code Review Support**: Language-specific review prompt for Python files
+  - Detects `.py`, `.pyw`, and `.pyi` file extensions
+  - Focuses on Python-specific issues: PEP 8, security, performance, best practices
+  - Reports only critical issues requiring fixes
+
+### Changed
+
+- **Improved Code Review Prompts**: All language-specific review prompts refactored to focus on issues first
+  - Prioritizes actionable feedback over generic advice
+  - Issue-focused structure: Problem → Fix → Why
+  - Eliminates praise and style preferences
+  - Applies to Rust, TypeScript/JavaScript, HTML, CSS, and Python reviews
+
 ## [0.6.0] - 2026-02-05
 
 ### Added

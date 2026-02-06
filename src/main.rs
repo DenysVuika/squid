@@ -30,6 +30,7 @@ const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
 const CODE_REVIEW_TYPESCRIPT_PROMPT: &str = include_str!("./assets/review-typescript.md");
 const CODE_REVIEW_HTML_PROMPT: &str = include_str!("./assets/review-html.md");
 const CODE_REVIEW_CSS_PROMPT: &str = include_str!("./assets/review-css.md");
+const CODE_REVIEW_PYTHON_PROMPT: &str = include_str!("./assets/review-py.md");
 const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 fn combine_prompts(task_prompt: &str) -> String {
@@ -45,6 +46,7 @@ fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
             }
             Some("html") | Some("htm") => CODE_REVIEW_HTML_PROMPT,
             Some("css") | Some("scss") | Some("sass") | Some("less") => CODE_REVIEW_CSS_PROMPT,
+            Some("py") | Some("pyw") | Some("pyi") => CODE_REVIEW_PYTHON_PROMPT,
             _ => CODE_REVIEW_PROMPT,
         }
     } else {
