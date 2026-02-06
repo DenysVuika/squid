@@ -1,51 +1,58 @@
-## Code Review Instructions
+## Code Review: Issues Only
 
-Analyze the following code and provide constructive feedback, suggestions for improvement, and highlight any potential issues or best practices that should be considered.
+**INSTRUCTIONS:**
+Analyze the provided code and ONLY report critical issues requiring fixes. Ignore correct code or style preferences. Use this structure:
 
-**Code Quality:**
-- Clear and descriptive naming conventions
-- Proper code organization and structure
-- Single Responsibility Principle
-- DRY (Don't Repeat Yourself) principle
-- Appropriate use of language features and idioms
+### [Language-Specific: Issue Type]
+- **Problem**: [Specific issue]
+- **Fix**: [Concise action]
+- **Why**: [1-sentence justification]
 
-**Readability:**
-- Clear and understandable logic flow
-- Appropriate comments and documentation
-- Consistent formatting and indentation
-- Meaningful variable and function names
-- Avoidance of overly complex or nested code
+---
 
-**Performance:**
-- Efficient algorithms and data structures
-- Unnecessary computations or iterations
-- Resource management (memory, connections, etc.)
-- Optimization opportunities without sacrificing readability
+**FOCUS AREAS (Report issues ONLY in these categories):**
 
-**Security:**
-- Input validation and sanitization
-- Authentication and authorization checks
-- Exposure of sensitive information
-- Injection vulnerabilities
-- Secure data handling and storage
+1. **Critical Issues**
+   - Security vulnerabilities (injection, XSS, data exposure)
+   - Memory/resource leaks
+   - Crashes or undefined behavior
+   - Missing error handling
 
-**Best Practices:**
-- Language-specific conventions and idioms
-- Design patterns appropriately applied
-- Separation of concerns
-- Error handling strategies
-- Configuration management
+2. **Quality Problems**
+   - Duplicated code violating DRY
+   - Complexity making logic unmaintainable
+   - Undocumented public APIs
+   - Unclear naming causing confusion
 
-**Testing:**
-- Testability of the code
-- Edge cases consideration
-- Test coverage opportunities
-- Mockability and dependency injection
+3. **Performance Bottlenecks**
+   - Inefficient algorithms
+   - Unnecessary computations
+   - Blocking operations
 
-**Documentation:**
-- Clear inline comments where needed
-- Function/method documentation
-- Complex logic explanations
-- API documentation for public interfaces
+4. **Testing Problems**
+   - Untestable functions
+   - Missing edge case handling
+   - Unmockable dependencies
 
-Provide specific, actionable suggestions for improvement. Focus on the most impactful changes first.
+---
+
+**RULES:**
+- No praise (e.g., "Good use of patterns")
+- No generic advice (e.g., "Consider better naming")
+- Prioritize security > performance > quality
+- Group by category
+- Be machine-like: short, direct, scannable
+
+---
+
+**EXAMPLE OUTPUT:**
+
+### Security
+- **Problem**: Hardcoded password in config file
+- **Fix**: Use environment variables
+- **Why**: Security risk in version control
+
+### Performance
+- **Problem**: Nested loops with O(n²) complexity
+- **Fix**: Use hash map for O(1) lookups
+- **Why**: Will fail on large datasets
