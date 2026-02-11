@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import * as fs from 'fs';
 import * as path from 'path';
+import tailwindcss from '@tailwindcss/vite';
 
 // Plugin to preserve .gitkeep file when emptying outDir
 function preserveGitkeep(): Plugin {
@@ -35,5 +36,10 @@ export default defineConfig({
     outDir: '../static',
     emptyOutDir: true,
   },
-  plugins: [react(), preserveGitkeep()],
+  plugins: [react(), preserveGitkeep(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
 });
