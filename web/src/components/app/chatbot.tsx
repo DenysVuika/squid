@@ -1,5 +1,5 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import type { ToolUIPart } from 'ai';
+import type { FileUIPart, ToolUIPart } from 'ai';
 
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -315,7 +315,6 @@ const mockResponses = [
 ];
 
 const delay = (ms: number): Promise<void> =>
-  // eslint-disable-next-line promise/avoid-new -- setTimeout requires a new Promise
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
@@ -326,7 +325,7 @@ const AttachmentItem = ({
   attachment,
   onRemove,
 }: {
-  attachment: { id: string; name: string; type: string; url: string };
+  attachment: FileUIPart & { id: string };
   onRemove: (id: string) => void;
 }) => {
   const handleRemove = useCallback(() => {
