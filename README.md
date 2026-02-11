@@ -9,6 +9,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🔍 AI-powered code reviews with language-specific prompts
 - 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
+- 🌐 **Web UI** - Built-in web interface for interacting with Squid
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
@@ -447,7 +448,25 @@ The review command automatically selects the appropriate review prompt based on 
 - **Markdown** (`.md`, `.markdown`) - Structure, accessibility, consistency, content
 - **Other files** - Generic code quality and best practices
 
+### Squid Web UI
 
+Start the built-in web interface for Squid:
+
+```bash
+# Start Web UI on default port (8080)
+squid serve
+
+# Specify a custom port
+squid serve --port 3000
+squid serve -p 3000
+```
+
+The web server will:
+- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
+- Provide a browser-based interface for interacting with Squid
+- Display the server URL on startup
+
+Press `Ctrl+C` to stop the server.
 
 ### Tool Calling (with Multi-Layered Security)
 

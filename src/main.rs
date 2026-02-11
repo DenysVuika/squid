@@ -1,3 +1,5 @@
+use actix_files as fs;
+use actix_web::{App, HttpResponse, HttpServer, web};
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -563,6 +565,12 @@ enum Commands {
         #[arg(long)]
         no_stream: bool,
     },
+    /// Start a web server for the Squid Web UI
+    Serve {
+        /// Port to run the server on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -1010,6 +1018,56 @@ async fn main() {
                 .await
                 {
                     error!("Failed to get review: {}", e);
+                }
+            }
+        }
+        Commands::Serve { port } => {
+            info!("Starting Squid Web UI on port {}", port);
+
+            // Use embedded static directory relative to the binary
+            let static_dir = PathBuf::from("static");
+
+            // Check if directory exists
+            if !static_dir.exists() {
+                error!("Static directory not found");
+                println!("🦑: The static directory wasn't found. This might be a build issue.");
+                println!("Expected location: {}", static_dir.display());
+                return;
+            }
+
+            let bind_address = format!("127.0.0.1:{}", port);
+
+            println!("🦑: Starting Squid Web UI...");
+            println!("🌐 Server running at: http://{}", bind_address);
+            println!("Press Ctrl+C to stop the server\n");
+
+            let server = HttpServer::new(move || {
+                App::new()
+                    .service(
+                        fs::Files::new("/", static_dir.clone())
+                            .index_file("index.html")
+                            .show_files_listing(),
+                    )
+                    .default_service(
+                        web::route()
+                            .to(|| async { HttpResponse::NotFound().body("404 - Not Found") }),
+                    )
+            })
+            .bind(&bind_address);
+
+            match server {
+                Ok(server) => {
+                    if let Err(e) = server.run().await {
+                        error!("Server error: {}", e);
+                        println!("🦑: Server error - {}", e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to bind to {}: {}", bind_address, e);
+                    println!("🦑: Failed to start server on {} - {}", bind_address, e);
+                    println!(
+                        "The port might already be in use. Try a different port with --port <PORT>"
+                    );
                 }
             }
         }

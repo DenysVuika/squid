@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Web UI**: New `serve` command to launch the built-in Squid Web UI
+  - Browser-based interface for interacting with Squid
+  - Configurable port (default: 8080)
+  - Includes welcome page and foundation for future features
+  - Built with actix-web for performance and reliability
+
 ## [0.7.0] - 2026-02-11
 
 ### Added
