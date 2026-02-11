@@ -1,4 +1,3 @@
-use actix_files as fs;
 use actix_web::{App, HttpResponse, HttpServer, web};
 use async_openai::{
     Client,
@@ -16,6 +15,7 @@ use dotenvy::dotenv;
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error, info, warn};
+use rust_embed::RustEmbed;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -24,6 +24,10 @@ mod envinfo;
 mod logger;
 mod tools;
 mod validate;
+
+#[derive(RustEmbed)]
+#[folder = "static/"]
+struct Assets;
 
 const PERSONA: &str = include_str!("./assets/persona.md");
 const TOOLS: &str = include_str!("./assets/tools.md");
@@ -1024,17 +1028,6 @@ async fn main() {
         Commands::Serve { port } => {
             info!("Starting Squid Web UI on port {}", port);
 
-            // Use embedded static directory relative to the binary
-            let static_dir = PathBuf::from("static");
-
-            // Check if directory exists
-            if !static_dir.exists() {
-                error!("Static directory not found");
-                println!("🦑: The static directory wasn't found. This might be a build issue.");
-                println!("Expected location: {}", static_dir.display());
-                return;
-            }
-
             let bind_address = format!("127.0.0.1:{}", port);
 
             println!("🦑: Starting Squid Web UI...");
@@ -1043,15 +1036,8 @@ async fn main() {
 
             let server = HttpServer::new(move || {
                 App::new()
-                    .service(
-                        fs::Files::new("/", static_dir.clone())
-                            .index_file("index.html")
-                            .show_files_listing(),
-                    )
-                    .default_service(
-                        web::route()
-                            .to(|| async { HttpResponse::NotFound().body("404 - Not Found") }),
-                    )
+                    .route("/", web::get().to(serve_index))
+                    .route("/{filename:.*}", web::get().to(serve_static))
             })
             .bind(&bind_address);
 
@@ -1071,5 +1057,29 @@ async fn main() {
                 }
             }
         }
+    }
+}
+
+async fn serve_index() -> HttpResponse {
+    serve_static(web::Path::from("index.html".to_string())).await
+}
+
+async fn serve_static(path: web::Path<String>) -> HttpResponse {
+    let path = path.into_inner();
+    let path = if path.is_empty() || path == "/" {
+        "index.html"
+    } else {
+        path.as_str()
+    };
+
+    match Assets::get(path) {
+        Some(content) => {
+            let mime_type = mime_guess::from_path(path).first_or_octet_stream();
+
+            HttpResponse::Ok()
+                .content_type(mime_type.as_ref())
+                .body(content.data.into_owned())
+        }
+        None => HttpResponse::NotFound().body("404 - Not Found"),
     }
 }
