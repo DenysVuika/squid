@@ -539,6 +539,10 @@ The review command automatically selects the appropriate review prompt based on 
 
 ### Squid Web UI
 
+![Squid Web UI](docs/assets/screenshot.png)
+
+*Modern chat interface with session management, token usage tracking, and real-time cost estimates*
+
 Start the built-in web interface for Squid:
 
 ```bash
@@ -558,17 +562,18 @@ The web server will:
 
 **Web UI Features:**
 - **Chat Page** - Interactive chat interface with session management sidebar
-  - Browse and switch between past conversations
-  - Auto-generated session titles from first message
-  - Rename sessions with inline edit dialog
-  - Multi-file attachments support
-  - Stop streaming responses mid-generation
-  - Auto-save all conversations to database
+  - 📊 **Token usage indicator** - Real-time context utilization percentage (e.g., "5.6% • 7.1K / 128K")
+  - 💰 **Cost tracking** - Displays estimated cost for both cloud and local models
+  - 🗂️ **Session sidebar** - Browse and switch between past conversations
+  - ✏️ **Auto-generated titles** - Sessions titled from first message, editable inline
+  - 📎 **Multi-file attachments** - Add context from multiple files
+  - ⏹️ **Stop generation** - Halt streaming responses mid-generation
+  - 💾 **Auto-save** - All conversations automatically saved to database
 - **Logs Page** - View application logs with pagination
-  - Filter by log level (error, warn, info, debug, trace)
-  - Adjustable page size (25, 50, 100, 200 entries)
-  - Color-coded log levels and timestamps
-  - Session ID tracking for debugging
+  - 🔍 Filter by log level (error, warn, info, debug, trace)
+  - 📄 Adjustable page size (25, 50, 100, 200 entries)
+  - 🎨 Color-coded log levels and timestamps
+  - 🔗 Session ID tracking for debugging
 
 The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
 
