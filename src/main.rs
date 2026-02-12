@@ -13,6 +13,7 @@ mod envinfo;
 mod llm;
 mod logger;
 mod session;
+mod tokens;
 mod tools;
 mod validate;
 

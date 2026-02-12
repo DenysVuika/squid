@@ -9,92 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Token Usage Tracking**: Per-session token and cost tracking
-  - Real-time token usage display in chat header using Context component
+- **Token Usage & Cost Tracking**: Real-time token counts and cost estimates
+  - Visual token usage indicator in chat header with percentage and breakdown
   - Track input, output, reasoning, and cache tokens separately
-  - Session-level token accumulation across multiple turns
-  - Model tracking per session (first model used)
-  - Visual token usage indicator with percentage and counts
-  - Detailed token breakdown on hover (input/output/reasoning/cache)
-  - Cost calculation using tokenlens library (sources from models.dev)
-  - Token usage data persisted in database
-  - Token usage shown in session list API responses
-  - Database migration adds token tracking columns to sessions table
-  - `Usage` stream event type for real-time token updates during streaming
-  - Comprehensive documentation at `docs/TOKEN_TRACKING.md`
-- **Session Titles & Renaming**: Auto-generated titles and rename functionality
-  - Sessions automatically titled from first user message (max 100 chars)
-  - Rename any session with inline editing dialog
-  - Title displayed in session list sidebar with edit button
-  - `PATCH /api/sessions/{id}` - Update session title
-  - Database migration adds `title` column to sessions table
-- **Session Management API**: Complete REST API for managing chat sessions
-  - `GET /api/sessions` - List all sessions with metadata, preview, and title
-  - `GET /api/sessions/{id}` - Load full session history with title
-  - `DELETE /api/sessions/{id}` - Delete sessions
-  - Sessions sorted by most recent activity
-  - Message count and preview text for each session
-- **Session Sidebar**: Visual session management in web UI
-  - Browse all past conversations in a collapsible sidebar
-  - Click any session to instantly load its full history
-  - Rename sessions with inline edit dialog (pencil icon)
-  - Delete sessions with confirmation dialog
-  - Toggle sidebar visibility with menu button
-  - Session title or preview shown (auto-generated from first message)
-  - Sessions display message count and last activity time
-  - Smart date formatting (time/day/date based on age)
-  - Auto-refreshes when new sessions are created (no page reload needed)
-  - **Shimmer loading indicator** shown while AI is thinking (before streaming starts)
+  - Cost calculation based on model pricing (via tokenlens/models.dev)
+  - Automatic token estimation for local models (LM Studio, Ollama) using tiktoken-rs
+- **Session Management**: Browse, rename, and organize chat sessions
+  - Sessions automatically titled from first user message
+  - Sidebar for browsing all past conversations
+  - Rename any session with inline editing
+  - Delete sessions with confirmation
+  - Smart date formatting and auto-refresh
+- **Shimmer Loading Indicator**: Visual feedback while AI is thinking
 
 ### Fixed
 
-- **Critical: User Messages Not Persisting**: Fixed database CASCADE DELETE issue where user messages were being deleted when sessions were updated
-  - Changed session save logic from `INSERT OR REPLACE` to `UPDATE`/`INSERT` pattern
-  - Prevents foreign key CASCADE from deleting messages when updating session metadata
-  - User messages now properly persist across session switches and server restarts
-  - Added comprehensive regression tests to ensure messages persist through session updates
-
-
-- **Migration System**: Database migrations now tracked to prevent duplicate runs
-  - Added `schema_migrations` table to track applied migrations
-  - Migrations are idempotent (safe to run multiple times)
-  - Gracefully handles databases with partially applied migrations
-  - Fixes "duplicate column name: title" error on existing databases
-- TypeScript type errors in Context component usage prop (now correctly implements LanguageModelUsage interface)
-- **Persistent Chat Sessions**: All conversations now automatically saved and restored
-  - Chat history persists across page reloads and server restarts
-  - Sessions stored in SQLite database (`squid.db`)
-  - "New Chat" button to start fresh conversations
-  - Conversations seamlessly continue where you left off
-- **Database Logging Infrastructure**: SQLite logging support for debugging
-  - Logs table in database schema ready for application logs
-  - New `logs` command to query stored logs: `squid logs`
-  - Filter logs by level, session ID, or limit results
-  - Foundation for correlating logs with chat sessions
-- **Logs Viewing Page**: Dedicated web UI page for viewing application logs
-  - Browse all application logs with pagination support
-  - Filter logs by level (error, warn, info, debug, trace)
-  - Adjustable page size (25, 50, 100, 200 entries)
-  - Clean table view with color-coded log levels
-  - Shows timestamp, level, target, message, and session ID
-  - Navigation accessible from main app navigation bar
-  - REST API endpoint: `GET /api/logs` with pagination parameters
-- **Multi-File Attachments**: Send multiple files in a single message
-  - Attach multiple files simultaneously from the web UI
-  - File contents displayed as sources in assistant responses
-- **Stop Streaming**: Abort AI responses in progress
-  - Click stop button during streaming to cancel request
-  - Partial responses are preserved
+- **User Messages Not Persisting**: Fixed messages being deleted when switching sessions
+- **Token Counts for Local Models**: Token estimates now display correctly in UI
+- **Database Migrations**: Prevented duplicate migrations and "duplicate column" errors
 
 ### Changed
 
-- **Web UI**: Cleaner starting experience with session management
-  - New chats start with empty conversation instead of demo messages
-  - Saved sessions automatically load when you return
-  - Sidebar layout for browsing and switching between conversations
-  - React Router integration for multi-page navigation
-  - Navigation bar with Chat and Logs pages
-  - Deleting current session automatically starts a new chat
+- New chats start empty (no demo messages)
+- Sidebar layout for session management
+- Navigation bar with Chat and Logs pages
 
 ## [0.7.0] - 2026-02-11
 

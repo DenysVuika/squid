@@ -15,7 +15,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::{config, envinfo, llm, logger, session, tools};
+use crate::{config, envinfo, llm, logger, session, tokens, tools};
 
 #[derive(Debug, Deserialize)]
 pub struct FileAttachment {
@@ -308,6 +308,7 @@ pub async fn chat_stream(
         content: f.content.clone(),
     }).collect();
     let system_prompt = body.system_prompt.clone();
+    let system_prompt_for_stream = system_prompt.clone(); // Clone for use inside stream
     let app_config_clone = app_config.get_ref().clone();
     let session_manager_clone = session_manager.get_ref().clone();
     let model_id = app_config.api_model.clone();
@@ -375,6 +376,7 @@ pub async fn chat_stream(
                 let mut total_output_tokens = 0i64;
                 let mut total_reasoning_tokens = 0i64;
                 let mut total_cache_tokens = 0i64;
+                let mut received_usage = false; // Track if provider sent usage
 
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
@@ -392,6 +394,7 @@ pub async fn chat_stream(
                                 total_output_tokens += output_tokens;
                                 total_reasoning_tokens += reasoning_tokens;
                                 total_cache_tokens += cache_tokens;
+                                received_usage = true;
                             }
 
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
@@ -413,11 +416,13 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
+                // Clone accumulated_content before moving it, as we need it later for token estimation
+                let accumulated_content_clone = accumulated_content.clone();
                 if !accumulated_content.is_empty() {
                     debug!("Saving assistant message to session {} (length: {} chars)", session_id, accumulated_content.len());
                     match session_manager_clone.add_assistant_message(
                         &session_id,
-                        accumulated_content,
+                        accumulated_content_clone,
                         sources,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
@@ -425,6 +430,75 @@ pub async fn chat_stream(
                     }
                 } else {
                     debug!("Skipping empty assistant message for session {}", session_id);
+                }
+
+                // If provider didn't send usage stats, estimate them client-side
+                if !received_usage {
+                    debug!("Provider didn't report token usage, estimating client-side for model: {}", model_id);
+
+                    // Estimate input tokens from the full conversation context
+                    if let Some(session) = session_manager_clone.get_session(&session_id) {
+                        // Build message list same way as the API call
+                        let mut estimate_messages = Vec::new();
+
+                        // Add system message (same logic as create_chat_stream)
+                        let sys_msg_text = if let Some(ref prompt) = system_prompt_for_stream {
+                            prompt.clone()
+                        } else {
+                            llm::combine_prompts(llm::get_ask_prompt())
+                        };
+                        let system_msg = ChatCompletionRequestSystemMessage {
+                            content: sys_msg_text.into(),
+                            ..Default::default()
+                        };
+                        estimate_messages.push(system_msg.into());
+
+                        // Add all conversation history
+                        for msg in &session.messages {
+                            if msg.role == "user" {
+                                estimate_messages.push(
+                                    ChatCompletionRequestUserMessage {
+                                        content: msg.content.clone().into(),
+                                        ..Default::default()
+                                    }
+                                    .into(),
+                                );
+                            } else if msg.role == "assistant" {
+                                estimate_messages.push(
+                                    ChatCompletionRequestAssistantMessage {
+                                        content: Some(msg.content.clone().into()),
+                                        ..Default::default()
+                                    }
+                                    .into(),
+                                );
+                            }
+                        }
+
+                        let (estimated_input, _) = tokens::estimate_tokens(&model_id, &estimate_messages);
+                        total_input_tokens = estimated_input;
+
+                        // Estimate output tokens from accumulated content
+                        if !accumulated_content.is_empty() {
+                            total_output_tokens = tokens::estimate_message_tokens(&model_id, accumulated_content.as_str());
+                        }
+
+                        debug!(
+                            "Estimated tokens for session {}: input={}, output={}",
+                            session_id, total_input_tokens, total_output_tokens
+                        );
+
+                        // Send estimated usage to UI
+                        let usage_event = StreamEvent::Usage {
+                            input_tokens: total_input_tokens,
+                            output_tokens: total_output_tokens,
+                            reasoning_tokens: total_reasoning_tokens,
+                            cache_tokens: total_cache_tokens,
+                        };
+                        let json = serde_json::to_string(&usage_event).unwrap_or_default();
+                        yield Ok::<_, actix_web::Error>(
+                            web::Bytes::from(format!("data: {}\n\n", json))
+                        );
+                    }
                 }
 
                 // Update session with token usage and model info
