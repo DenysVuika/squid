@@ -59,6 +59,19 @@ export interface SessionData {
   updated_at: number;
 }
 
+export interface SessionListItem {
+  session_id: string;
+  message_count: number;
+  created_at: number;
+  updated_at: number;
+  preview: string | null;
+}
+
+export interface SessionListResponse {
+  sessions: SessionListItem[];
+  total: number;
+}
+
 /**
  * Stream chat messages to the Squid API and receive responses via SSE
  *
@@ -275,6 +288,71 @@ export async function loadSession(apiUrl: string, sessionId: string): Promise<Se
   } catch (error) {
     console.error('Failed to load session:', error);
     return null;
+  }
+}
+
+/**
+ * List all sessions
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with list of sessions
+ *
+ * @example
+ * ```typescript
+ * const { sessions, total } = await listSessions('');
+ * console.log(`Found ${total} sessions`);
+ * ```
+ */
+export async function listSessions(apiUrl: string): Promise<SessionListResponse> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/sessions` : '/api/sessions';
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: SessionListResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to list sessions:', error);
+    return { sessions: [], total: 0 };
+  }
+}
+
+/**
+ * Delete a session
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param sessionId - The session ID to delete
+ * @returns Promise with boolean indicating success
+ *
+ * @example
+ * ```typescript
+ * const success = await deleteSession('', 'abc-123-def-456');
+ * if (success) {
+ *   console.log('Session deleted');
+ * }
+ * ```
+ */
+export async function deleteSession(apiUrl: string, sessionId: string): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/sessions/${sessionId}` : `/api/sessions/${sessionId}`;
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return false;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to delete session:', error);
+    return false;
   }
 }
 

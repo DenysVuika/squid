@@ -597,7 +597,9 @@ async fn main() {
                     .service(
                         web::scope("/api")
                             .route("/chat", web::post().to(api::chat_stream))
+                            .route("/sessions", web::get().to(api::list_sessions))
                             .route("/sessions/{session_id}", web::get().to(api::get_session))
+                            .route("/sessions/{session_id}", web::delete().to(api::delete_session))
                     )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))

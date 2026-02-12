@@ -74,6 +74,21 @@ pub struct SessionResponse {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct SessionListItem {
+    pub session_id: String,
+    pub message_count: usize,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub preview: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SessionListResponse {
+    pub sessions: Vec<SessionListItem>,
+    pub total: usize,
+}
+
 /// Get session history by ID
 pub async fn get_session(
     session_id: web::Path<String>,
@@ -101,6 +116,68 @@ pub async fn get_session(
         None => Ok(HttpResponse::NotFound().json(serde_json::json!({
             "error": "Session not found"
         }))),
+    }
+}
+
+/// List all sessions with metadata
+pub async fn list_sessions(
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Listing all sessions");
+
+    let session_ids = session_manager.list_sessions();
+    let mut sessions = Vec::new();
+
+    for session_id in session_ids {
+        if let Some(session) = session_manager.get_session(&session_id) {
+            // Get preview from first user message
+            let preview = session.messages
+                .iter()
+                .find(|msg| msg.role == "user")
+                .map(|msg| {
+                    let content = &msg.content;
+                    if content.len() > 100 {
+                        format!("{}...", &content[..100])
+                    } else {
+                        content.clone()
+                    }
+                });
+
+            sessions.push(SessionListItem {
+                session_id: session.id,
+                message_count: session.messages.len(),
+                created_at: session.created_at,
+                updated_at: session.updated_at,
+                preview,
+            });
+        }
+    }
+
+    // Sort by updated_at descending (most recent first)
+    sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+    let total = sessions.len();
+    Ok(HttpResponse::Ok().json(SessionListResponse { sessions, total }))
+}
+
+/// Delete a session by ID
+pub async fn delete_session(
+    session_id: web::Path<String>,
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Deleting session: {}", session_id);
+
+    let deleted = session_manager.delete_session(&session_id);
+
+    if deleted {
+        Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Session deleted successfully"
+        })))
+    } else {
+        Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Session not found"
+        })))
     }
 }
 

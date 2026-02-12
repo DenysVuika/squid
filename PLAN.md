@@ -38,24 +38,23 @@ All tasks in this phase have been completed:
 
 ## Phase 2: Session Management API
 
-### 2.1 REST Endpoints for Session Operations ⚠️ Partially Complete
+### 2.1 REST Endpoints for Session Operations ✅ COMPLETED
 
 **Completed Routes:**
 - ✅ `GET /api/sessions/:id` - Get session details and full message history
+- ✅ `GET /api/sessions` - List all sessions with metadata
+- ✅ `DELETE /api/sessions/:id` - Delete session
 
-**Remaining API Routes:**
-```
-GET  /api/sessions           - List all sessions
-POST /api/sessions           - Create new session (currently auto-created)
-DELETE /api/sessions/:id     - Delete session
-```
+**Completed Tasks:**
+- ✅ Add routes to `main.rs` for list/delete operations
+- ✅ Create handlers in `api.rs` for new endpoints
+- ✅ Return session metadata (message count, preview, timestamps)
+- ✅ Sort sessions by most recent activity
 
-**Remaining Tasks:**
-- [ ] Add routes to `main.rs` for list/delete operations
-- [ ] Create handlers in `api.rs` for new endpoints
+**Future Enhancements:**
 - [ ] Add pagination for session lists
 - [ ] Add filtering (by date, search)
-- [ ] Return session metadata (title, message count, last updated)
+- [ ] POST /api/sessions - Explicit session creation endpoint
 
 ### 2.2 Session Metadata
 
@@ -66,24 +65,26 @@ DELETE /api/sessions/:id     - Delete session
 - [ ] Add user-editable session names
 - [ ] Session tags/categories
 
-### 2.3 Web UI for Session Management ⚠️ Partially Complete
+### 2.3 Web UI for Session Management ✅ COMPLETED
 
 **Completed Features:**
 - ✅ Session restoration on page reload (auto-loads last session)
 - ✅ "New Chat" button to start fresh conversations
 - ✅ Session ID persistence in localStorage
+- ✅ `SessionList.tsx` - Sidebar with past sessions
+- ✅ Click session to load conversation from sidebar
+- ✅ Delete session with confirmation dialog
+- ✅ Toggle sidebar visibility
+- ✅ Session preview (first user message, truncated to 100 chars)
+- ✅ Message count and last activity timestamp display
+- ✅ Smart date formatting (time/day/date based on age)
+- ✅ Auto-refresh session list on delete
+- ✅ Auto-start new chat when deleting current session
 
-**Remaining Components:**
-- [ ] `SessionList.tsx` - Sidebar with past sessions
-- [ ] `SessionItem.tsx` - Individual session preview
-- [ ] `SessionControls.tsx` - Delete/rename buttons
-
-**Remaining Features:**
-- [ ] Click session to load conversation from list
-- [ ] Delete session with confirmation
+**Future Enhancements:**
 - [ ] Rename session
 - [ ] Search sessions
-- [ ] Sort by date/name
+- [ ] Manual sort options (by date/name)
 - [ ] Session export (download as JSON/Markdown)
 
 ---
@@ -288,10 +289,10 @@ CREATE TABLE message_files (
 2. ✅ Basic session GET API (Phase 2.1 partial)
 3. ✅ Session restoration in Web UI
 
-### High Priority (Phase 2 - Remaining)
-1. Complete session CRUD API (list, delete)
-2. Web UI session list sidebar
-3. Session management UI (rename, delete, search)
+### ✅ Completed (Phase 2)
+1. ✅ Complete session CRUD API (list, delete)
+2. ✅ Web UI session list sidebar
+3. ✅ Session management UI (delete, preview, load)
 
 ### Medium Priority (Phase 3)
 1. Session cleanup
@@ -354,24 +355,22 @@ rate_limit_requests_per_minute = 60
 
 Phase 1 is complete! ✅
 
-**To continue with Phase 2 (Session Management API):**
+**Phase 2 is complete! Next steps for Phase 3:**
 
 ```bash
-# 1. Implement remaining session API endpoints
-# Add to src/api.rs:
-# - GET /api/sessions (list all sessions)
-# - DELETE /api/sessions/:id (delete session)
+# Test the new session management features:
+cargo run -- serve
 
-# 2. Add routes to src/main.rs
-
-# 3. Create session list UI component
-# web/src/components/app/SessionList.tsx
-
-# 4. Add sidebar to chatbot UI
-# Update web/src/components/app/chatbot.tsx
-
-# 5. Test with: cargo run -- serve
+# Then visit http://127.0.0.1:3000
+# - Try creating multiple chat sessions
+# - Browse sessions in the sidebar
+# - Load different sessions
+# - Delete sessions
 ```
 
 **Suggested next command:**
-> "Implement session list API endpoint (GET /api/sessions) with pagination and filtering"
+> "Implement session cleanup scheduler (Phase 3.1) with configurable retention policies"
+
+or
+
+> "Add session metadata management - auto-generate titles, store token usage"

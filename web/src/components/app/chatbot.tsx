@@ -2,6 +2,7 @@ import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
 import { loadSession, streamChat } from '@/lib/chat-api';
+import { SessionList } from '@/components/app/session-list';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -218,6 +219,7 @@ const Example = () => {
   const streamingContentRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
@@ -521,122 +523,193 @@ const Example = () => {
     toast.success('New chat started');
   }, []);
 
+  const handleSessionSelect = useCallback(
+    async (selectedSessionId: string) => {
+      // Don't reload if already on this session
+      if (selectedSessionId === sessionId) return;
+
+      console.log('[Session] Selecting session:', selectedSessionId);
+      const session = await loadSession('', selectedSessionId);
+
+      if (!session) {
+        toast.error('Session not found');
+        return;
+      }
+
+      // Update session ID
+      setSessionId(selectedSessionId);
+      localStorage.setItem('squid_session_id', selectedSessionId);
+
+      // Convert session messages to UI format
+      const uiMessages: MessageType[] = [];
+      for (const msg of session.messages) {
+        uiMessages.push({
+          from: msg.role as 'user' | 'assistant',
+          key: `${msg.role}-${msg.timestamp}`,
+          sources:
+            msg.sources.length > 0
+              ? msg.sources.map((s) => ({
+                  href: '#',
+                  title: s.title,
+                }))
+              : undefined,
+          versions: [
+            {
+              id: `${msg.role}-${msg.timestamp}`,
+              content: msg.content,
+            },
+          ],
+        });
+      }
+
+      setMessages(uiMessages);
+      setText('');
+      setStatus('ready');
+
+      toast.success('Session loaded');
+    },
+    [sessionId]
+  );
+
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
   return (
-    <div className="relative flex size-full flex-col divide-y overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950">
-        <h2 className="text-sm font-semibold">Squid Chat</h2>
-        <button
-          className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-          onClick={handleNewChat}
-          type="button"
-        >
-          New Chat
-        </button>
-      </div>
-      <Conversation>
-        <ConversationContent>
-          {messages.map(({ versions, ...message }) => (
-            <MessageBranch defaultBranch={0} key={message.key}>
-              <MessageBranchContent>
-                {versions.map((version) => (
-                  <Message from={message.from} key={`${message.key}-${version.id}`}>
-                    <div>
-                      {message.sources?.length && (
-                        <Sources>
-                          <SourcesTrigger count={message.sources.length} />
-                          <SourcesContent>
-                            {message.sources.map((source) => (
-                              <Source href={source.href} key={source.href} title={source.title} />
-                            ))}
-                          </SourcesContent>
-                        </Sources>
-                      )}
-                      {message.reasoning && (
-                        <Reasoning duration={message.reasoning.duration}>
-                          <ReasoningTrigger />
-                          <ReasoningContent>{message.reasoning.content}</ReasoningContent>
-                        </Reasoning>
-                      )}
-                      <MessageContent>
-                        <MessageResponse>{version.content}</MessageResponse>
-                      </MessageContent>
-                    </div>
-                  </Message>
-                ))}
-              </MessageBranchContent>
-              {versions.length > 1 && (
-                <MessageBranchSelector>
-                  <MessageBranchPrevious />
-                  <MessageBranchPage />
-                  <MessageBranchNext />
-                </MessageBranchSelector>
-              )}
-            </MessageBranch>
-          ))}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-      <div className="grid shrink-0 gap-4 pt-4">
-        <Suggestions className="px-4">
-          {suggestions.map((suggestion) => (
-            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
-          ))}
-        </Suggestions>
-        <div className="w-full px-4 pb-4">
-          <PromptInput globalDrop multiple onSubmit={handleSubmit}>
-            <PromptInputHeader>
-              <PromptInputAttachmentsDisplay />
-            </PromptInputHeader>
-            <PromptInputBody>
-              <PromptInputTextarea onChange={handleTextChange} value={text} />
-            </PromptInputBody>
-            <PromptInputFooter>
-              <PromptInputTools>
-                <PromptInputActionMenu>
-                  <PromptInputActionMenuTrigger />
-                  <PromptInputActionMenuContent>
-                    <PromptInputActionAddAttachments />
-                  </PromptInputActionMenuContent>
-                </PromptInputActionMenu>
-                <SpeechInput
-                  className="shrink-0"
-                  onTranscriptionChange={handleTranscriptionChange}
-                  size="icon-sm"
-                  variant="ghost"
-                />
-                <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
-                  <GlobeIcon size={16} />
-                  <span>Search</span>
-                </PromptInputButton>
-                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                  <ModelSelectorTrigger asChild>
-                    <PromptInputButton>
-                      {selectedModelData?.chefSlug && <ModelSelectorLogo provider={selectedModelData.chefSlug} />}
-                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
-                    </PromptInputButton>
-                  </ModelSelectorTrigger>
-                  <ModelSelectorContent>
-                    <ModelSelectorInput placeholder="Search models..." />
-                    <ModelSelectorList>
-                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                      {chefs.map((chef) => (
-                        <ModelSelectorGroup heading={chef} key={chef}>
-                          {models
-                            .filter((m) => m.chef === chef)
-                            .map((m) => (
-                              <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
-                            ))}
-                        </ModelSelectorGroup>
-                      ))}
-                    </ModelSelectorList>
-                  </ModelSelectorContent>
-                </ModelSelector>
-              </PromptInputTools>
-              <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
-            </PromptInputFooter>
-          </PromptInput>
+    <div className="relative flex size-full overflow-hidden">
+      {sidebarOpen && (
+        <div className="w-64 shrink-0">
+          <SessionList
+            currentSessionId={sessionId}
+            onSessionSelect={handleSessionSelect}
+            onNewChat={handleNewChat}
+            apiUrl=""
+          />
+        </div>
+      )}
+      <div className="relative flex size-full flex-col divide-y overflow-hidden">
+        <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950">
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              type="button"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h2 className="text-sm font-semibold">Squid Chat</h2>
+          </div>
+          <button
+            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+            onClick={handleNewChat}
+            type="button"
+          >
+            New Chat
+          </button>
+        </div>
+        <Conversation>
+          <ConversationContent>
+            {messages.map(({ versions, ...message }) => (
+              <MessageBranch defaultBranch={0} key={message.key}>
+                <MessageBranchContent>
+                  {versions.map((version) => (
+                    <Message from={message.from} key={`${message.key}-${version.id}`}>
+                      <div>
+                        {message.sources?.length && (
+                          <Sources>
+                            <SourcesTrigger count={message.sources.length} />
+                            <SourcesContent>
+                              {message.sources.map((source) => (
+                                <Source href={source.href} key={source.href} title={source.title} />
+                              ))}
+                            </SourcesContent>
+                          </Sources>
+                        )}
+                        {message.reasoning && (
+                          <Reasoning duration={message.reasoning.duration}>
+                            <ReasoningTrigger />
+                            <ReasoningContent>{message.reasoning.content}</ReasoningContent>
+                          </Reasoning>
+                        )}
+                        <MessageContent>
+                          <MessageResponse>{version.content}</MessageResponse>
+                        </MessageContent>
+                      </div>
+                    </Message>
+                  ))}
+                </MessageBranchContent>
+                {versions.length > 1 && (
+                  <MessageBranchSelector>
+                    <MessageBranchPrevious />
+                    <MessageBranchPage />
+                    <MessageBranchNext />
+                  </MessageBranchSelector>
+                )}
+              </MessageBranch>
+            ))}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+        <div className="grid shrink-0 gap-4 pt-4">
+          <Suggestions className="px-4">
+            {suggestions.map((suggestion) => (
+              <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+            ))}
+          </Suggestions>
+          <div className="w-full px-4 pb-4">
+            <PromptInput globalDrop multiple onSubmit={handleSubmit}>
+              <PromptInputHeader>
+                <PromptInputAttachmentsDisplay />
+              </PromptInputHeader>
+              <PromptInputBody>
+                <PromptInputTextarea onChange={handleTextChange} value={text} />
+              </PromptInputBody>
+              <PromptInputFooter>
+                <PromptInputTools>
+                  <PromptInputActionMenu>
+                    <PromptInputActionMenuTrigger />
+                    <PromptInputActionMenuContent>
+                      <PromptInputActionAddAttachments />
+                    </PromptInputActionMenuContent>
+                  </PromptInputActionMenu>
+                  <SpeechInput
+                    className="shrink-0"
+                    onTranscriptionChange={handleTranscriptionChange}
+                    size="icon-sm"
+                    variant="ghost"
+                  />
+                  <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
+                    <GlobeIcon size={16} />
+                    <span>Search</span>
+                  </PromptInputButton>
+                  <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+                    <ModelSelectorTrigger asChild>
+                      <PromptInputButton>
+                        {selectedModelData?.chefSlug && <ModelSelectorLogo provider={selectedModelData.chefSlug} />}
+                        {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                      </PromptInputButton>
+                    </ModelSelectorTrigger>
+                    <ModelSelectorContent>
+                      <ModelSelectorInput placeholder="Search models..." />
+                      <ModelSelectorList>
+                        <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                        {chefs.map((chef) => (
+                          <ModelSelectorGroup heading={chef} key={chef}>
+                            {models
+                              .filter((m) => m.chef === chef)
+                              .map((m) => (
+                                <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                              ))}
+                          </ModelSelectorGroup>
+                        ))}
+                      </ModelSelectorList>
+                    </ModelSelectorContent>
+                  </ModelSelector>
+                </PromptInputTools>
+                <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
+              </PromptInputFooter>
+            </PromptInput>
+          </div>
         </div>
       </div>
     </div>

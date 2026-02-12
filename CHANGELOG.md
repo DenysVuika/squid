@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Session Management API**: Complete REST API for managing chat sessions
+  - `GET /api/sessions` - List all sessions with metadata and preview
+  - `GET /api/sessions/{id}` - Load full session history
+  - `DELETE /api/sessions/{id}` - Delete sessions
+  - Sessions sorted by most recent activity
+  - Message count and preview text for each session
+- **Session Sidebar**: Visual session management in web UI
+  - Browse all past conversations in a collapsible sidebar
+  - Click any session to instantly load its full history
+  - Delete sessions with confirmation dialog
+  - Toggle sidebar visibility with menu button
+  - Session preview shows first user message (truncated)
+  - Sessions display message count and last activity time
+  - Smart date formatting (time/day/date based on age)
 - **Persistent Chat Sessions**: All conversations now automatically saved and restored
   - Chat history persists across page reloads and server restarts
   - Sessions stored in SQLite database (`squid.db`)
@@ -28,9 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Web UI**: Cleaner starting experience
+- **Web UI**: Cleaner starting experience with session management
   - New chats start with empty conversation instead of demo messages
   - Saved sessions automatically load when you return
+  - Sidebar layout for browsing and switching between conversations
+  - Deleting current session automatically starts a new chat
 
 ## [0.7.0] - 2026-02-11
 

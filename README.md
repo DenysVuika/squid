@@ -11,6 +11,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
 - 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
+- 📁 **Session Management** - Browse, load, and delete past conversations with visual sidebar
 - 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
@@ -555,6 +556,70 @@ while (true) {
 See `web/src/lib/chat-api.ts` for a complete TypeScript client implementation.
 
 **Note:** The chatbot UI is served from the same server as the API, so it automatically uses the relative path `/api/chat` without requiring any configuration.
+
+#### Session Management API
+
+The web server also provides REST endpoints for managing chat sessions:
+
+**List all sessions:** `GET /api/sessions`
+
+**Response:**
+```json
+{
+  "sessions": [
+    {
+      "session_id": "abc-123-def-456",
+      "message_count": 8,
+      "created_at": 1707654321,
+      "updated_at": 1707658921,
+      "preview": "Explain async/await in Rust"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Get session details:** `GET /api/sessions/{session_id}`
+
+**Response:**
+```json
+{
+  "session_id": "abc-123-def-456",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain async/await in Rust",
+      "sources": [],
+      "timestamp": 1707654321
+    },
+    {
+      "role": "assistant",
+      "content": "Async/await in Rust...",
+      "sources": [{"title": "sample.rs"}],
+      "timestamp": 1707654325
+    }
+  ],
+  "created_at": 1707654321,
+  "updated_at": 1707658921
+}
+```
+
+**Delete a session:** `DELETE /api/sessions/{session_id}`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Session deleted successfully"
+}
+```
+
+**Web UI Features:**
+- Browse all conversations in the sidebar
+- Click any session to load its full history
+- Delete sessions with confirmation dialog
+- Toggle sidebar visibility
+- Sessions show preview, message count, and last activity time
 
 ### View Application Logs
 
