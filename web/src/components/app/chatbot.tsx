@@ -58,11 +58,19 @@ import {
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockCopyButton,
+  CodeBlockFilename,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from '@/components/ai-elements/code-block';
 import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { CheckIcon, GlobeIcon } from 'lucide-react';
+import { CheckIcon, GlobeIcon, FileIcon } from 'lucide-react';
+import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -630,6 +638,18 @@ const Example = () => {
     }
   }, []);
 
+  const handleFileUploadError = useCallback((error: { code: string; message: string }) => {
+    if (error.code === 'max_file_size') {
+      toast.error('File too large', {
+        description: 'Files must be smaller than 10MB. Large files will also be rejected by the server.',
+      });
+    } else {
+      toast.error('Upload failed', {
+        description: error.message,
+      });
+    }
+  }, []);
+
   const handleNewChat = useCallback(() => {
     // Clear session ID from state and localStorage
     setSessionId(null);
@@ -722,6 +742,56 @@ const Example = () => {
   const handleViewSourceContent = useCallback((title: string, content: string) => {
     setSourceContentData({ title, content });
     setSourceContentOpen(true);
+  }, []);
+
+  // Detect language from filename
+  const getLanguageFromFilename = useCallback((filename: string): BundledLanguage => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const languageMap: Record<string, BundledLanguage> = {
+      ts: 'typescript',
+      tsx: 'tsx',
+      js: 'javascript',
+      jsx: 'jsx',
+      py: 'python',
+      rs: 'rust',
+      go: 'go',
+      java: 'java',
+      cpp: 'cpp',
+      c: 'c',
+      cs: 'csharp',
+      rb: 'ruby',
+      php: 'php',
+      swift: 'swift',
+      kt: 'kotlin',
+      scala: 'scala',
+      sh: 'bash',
+      bash: 'bash',
+      zsh: 'zsh',
+      fish: 'fish',
+      sql: 'sql',
+      html: 'html',
+      css: 'css',
+      scss: 'scss',
+      sass: 'sass',
+      less: 'less',
+      json: 'json',
+      yaml: 'yaml',
+      yml: 'yaml',
+      toml: 'toml',
+      xml: 'xml',
+      md: 'markdown',
+      markdown: 'markdown',
+      vue: 'vue',
+      svelte: 'svelte',
+      graphql: 'graphql',
+      dart: 'dart',
+      lua: 'lua',
+      r: 'r',
+      matlab: 'matlab',
+      latex: 'latex',
+      tex: 'latex',
+    };
+    return languageMap[ext] || 'text';
   }, []);
 
   return (
@@ -869,7 +939,13 @@ const Example = () => {
             ))}
           </Suggestions>
           <div className="w-full px-4 pb-4">
-            <PromptInput globalDrop multiple onSubmit={handleSubmit}>
+            <PromptInput
+              globalDrop
+              multiple
+              maxFileSize={10 * 1024 * 1024}
+              onError={handleFileUploadError}
+              onSubmit={handleSubmit}
+            >
               <PromptInputHeader>
                 <PromptInputAttachmentsDisplay />
               </PromptInputHeader>
@@ -927,7 +1003,7 @@ const Example = () => {
 
       {/* Source Content Sidebar */}
       {sourceContentOpen && sourceContentData && (
-        <div className="fixed right-0 top-0 h-full w-96 border-l bg-background shadow-lg z-50 flex flex-col">
+        <div className="fixed right-0 top-0 h-full w-150 border-l bg-background shadow-lg z-50 flex flex-col">
           <div className="flex items-center justify-between border-b p-4">
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold truncate">{sourceContentData.title}</h3>
@@ -951,11 +1027,23 @@ const Example = () => {
               </svg>
             </button>
           </div>
-          <ScrollArea className="flex-1">
-            <pre className="p-4 text-sm">
-              <code>{sourceContentData.content}</code>
-            </pre>
-          </ScrollArea>
+          <div className="flex-1 overflow-auto">
+            <CodeBlock
+              code={sourceContentData.content}
+              language={getLanguageFromFilename(sourceContentData.title)}
+              showLineNumbers={true}
+            >
+              <CodeBlockHeader>
+                <CodeBlockTitle>
+                  <FileIcon size={14} />
+                  <CodeBlockFilename>{sourceContentData.title}</CodeBlockFilename>
+                </CodeBlockTitle>
+                <CodeBlockActions>
+                  <CodeBlockCopyButton />
+                </CodeBlockActions>
+              </CodeBlockHeader>
+            </CodeBlock>
+          </div>
         </div>
       )}
     </div>

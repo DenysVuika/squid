@@ -38,10 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prevents accidentally uploading very large files
   - Protects database from growing too large
 - **Clickable Source Files**: Click on "Used X sources" to view file contents in a right sidebar
-  - Shows full file content in a scrollable, formatted view
-  - Displays file size and character count
-  - Slides in from the right, no content overflow issues
+  - Syntax-highlighted code view with line numbers
+  - Auto-detects language from file extension (supports 40+ languages)
+  - Copy button to copy entire file content
+  - Horizontal and vertical scrolling for large files
+  - 600px wide sidebar slides in from the right
   - Easy to close and review what context the AI used
+- **File Size Validation**: Client-side validation for file uploads
+  - 10MB file size limit enforced in browser before upload
+  - User-friendly error messages when files are too large
+  - Backend also validates file size and content type
 
 ### Fixed
 
