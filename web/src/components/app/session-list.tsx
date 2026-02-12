@@ -18,10 +18,17 @@ interface SessionListProps {
   currentSessionId: string | null;
   onSessionSelect: (sessionId: string) => void;
   onNewChat: () => void;
+  refreshTrigger?: number;
   apiUrl?: string;
 }
 
-export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiUrl = '' }: SessionListProps) {
+export function SessionList({
+  currentSessionId,
+  onSessionSelect,
+  onNewChat,
+  refreshTrigger,
+  apiUrl = '',
+}: SessionListProps) {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -44,6 +51,27 @@ export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiU
     loadSessions();
   }, [apiUrl]);
 
+  // Refresh when trigger changes
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      loadSessions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
+
+  // Refresh session list when currentSessionId changes (new session created)
+  useEffect(() => {
+    if (currentSessionId) {
+      // Check if this session is already in the list
+      const sessionExists = sessions.some((s) => s.session_id === currentSessionId);
+      if (!sessionExists) {
+        // Reload sessions to include the new one
+        loadSessions();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId]);
+
   const handleDeleteClick = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSessionToDelete(sessionId);
@@ -57,7 +85,7 @@ export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiU
       const success = await deleteSession(apiUrl, sessionToDelete);
       if (success) {
         toast.success('Session deleted');
-        setSessions(prev => prev.filter(s => s.session_id !== sessionToDelete));
+        setSessions((prev) => prev.filter((s) => s.session_id !== sessionToDelete));
 
         // If the deleted session was the current one, start a new chat
         if (sessionToDelete === currentSessionId) {
@@ -93,11 +121,7 @@ export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiU
     <>
       <div className="flex h-full flex-col border-r bg-muted/10">
         <div className="p-4">
-          <Button
-            onClick={onNewChat}
-            className="w-full justify-start gap-2"
-            variant="outline"
-          >
+          <Button onClick={onNewChat} className="w-full justify-start gap-2" variant="outline">
             <Plus className="h-4 w-4" />
             New Chat
           </Button>
@@ -108,13 +132,9 @@ export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiU
         <ScrollArea className="flex-1">
           <div className="p-2">
             {loading ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                Loading sessions...
-              </div>
+              <div className="p-4 text-center text-sm text-muted-foreground">Loading sessions...</div>
             ) : sessions.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                No sessions yet. Start a new chat!
-              </div>
+              <div className="p-4 text-center text-sm text-muted-foreground">No sessions yet. Start a new chat!</div>
             ) : (
               <div className="space-y-1">
                 {sessions.map((session) => (
@@ -128,9 +148,7 @@ export function SessionList({ currentSessionId, onSessionSelect, onNewChat, apiU
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm">
-                          {session.preview || 'New conversation'}
-                        </p>
+                        <p className="line-clamp-2 text-sm">{session.preview || 'New conversation'}</p>
                         <Button
                           variant="ghost"
                           size="icon"

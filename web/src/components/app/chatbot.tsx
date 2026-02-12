@@ -220,6 +220,7 @@ const Example = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0);
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
@@ -339,6 +340,8 @@ const Example = () => {
               setSessionId(newSessionId);
               // Persist session ID to localStorage
               localStorage.setItem('squid_session_id', newSessionId);
+              // Trigger session list refresh
+              setSessionListRefreshTrigger((prev) => prev + 1);
             },
             onSources: (sources) => {
               // Update the assistant message with sources
@@ -581,6 +584,7 @@ const Example = () => {
             currentSessionId={sessionId}
             onSessionSelect={handleSessionSelect}
             onNewChat={handleNewChat}
+            refreshTrigger={sessionListRefreshTrigger}
             apiUrl=""
           />
         </div>
