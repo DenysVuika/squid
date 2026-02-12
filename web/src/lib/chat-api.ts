@@ -5,17 +5,28 @@
  * Connects to the Squid API server and handles Server-Sent Events (SSE).
  */
 
+export interface FileAttachment {
+  filename: string;
+  content: string;
+}
+
 export interface ChatMessage {
   message: string;
-  file_content?: string;
-  file_path?: string;
+  session_id?: string;
+  files?: FileAttachment[];
   system_prompt?: string;
 }
 
-export type StreamEventType = 'content' | 'tool_call' | 'tool_result' | 'error' | 'done';
+export type StreamEventType = 'session' | 'sources' | 'content' | 'tool_call' | 'tool_result' | 'error' | 'done';
+
+export interface Source {
+  title: string;
+}
 
 export interface StreamEvent {
   type: StreamEventType;
+  session_id?: string;
+  sources?: Source[];
   text?: string;
   name?: string;
   arguments?: string;
@@ -24,6 +35,8 @@ export interface StreamEvent {
 }
 
 export interface StreamHandlers {
+  onSession?: (sessionId: string) => void;
+  onSources?: (sources: Source[]) => void;
   onContent: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
@@ -64,7 +77,7 @@ export interface StreamHandlers {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onContent, onToolCall, onToolResult, onError, onDone, signal } = handlers;
+  const { onSession, onSources, onContent, onToolCall, onToolResult, onError, onDone, signal } = handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -109,6 +122,18 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
             const event: StreamEvent = JSON.parse(data);
 
             switch (event.type) {
+              case 'session':
+                if (onSession && event.session_id) {
+                  onSession(event.session_id);
+                }
+                break;
+
+              case 'sources':
+                if (onSources && event.sources) {
+                  onSources(event.sources);
+                }
+                break;
+
               case 'content':
                 if (event.text) {
                   onContent(event.text);

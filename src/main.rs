@@ -11,6 +11,7 @@ mod config;
 mod envinfo;
 mod llm;
 mod logger;
+mod session;
 mod tools;
 mod validate;
 
@@ -538,6 +539,7 @@ async fn main() {
 
             let bind_address = format!("127.0.0.1:{}", port);
             let app_config = Arc::new(app_config);
+            let session_manager = Arc::new(session::SessionManager::new());
 
             println!("🦑: Starting Squid Web UI...");
             println!("🌐 Server running at: http://{}", bind_address);
@@ -547,6 +549,7 @@ async fn main() {
             let server = HttpServer::new(move || {
                 App::new()
                     .app_data(web::Data::new(app_config.clone()))
+                    .app_data(web::Data::new(session_manager.clone()))
                     .wrap(middleware::Logger::default())
                     .service(
                         web::scope("/api")

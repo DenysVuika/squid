@@ -15,22 +15,37 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::{config, envinfo, llm, tools};
+use crate::{config, envinfo, llm, session, tools};
+
+#[derive(Debug, Deserialize)]
+pub struct FileAttachment {
+    pub filename: String,
+    pub content: String,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ChatRequest {
     pub message: String,
     #[serde(default)]
-    pub file_content: Option<String>,
+    pub session_id: Option<String>,
     #[serde(default)]
-    pub file_path: Option<String>,
+    pub files: Vec<FileAttachment>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct Source {
+    pub title: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum StreamEvent {
+    #[serde(rename = "session")]
+    Session { session_id: String },
+    #[serde(rename = "sources")]
+    Sources { sources: Vec<Source> },
     #[serde(rename = "content")]
     Content { text: String },
     #[serde(rename = "tool_call")]
@@ -47,25 +62,76 @@ pub enum StreamEvent {
 pub async fn chat_stream(
     body: web::Json<ChatRequest>,
     app_config: web::Data<Arc<config::Config>>,
+    session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
     debug!("Received chat request: {:?}", body);
 
     let question = body.message.clone();
-    let file_content = body.file_content.clone();
-    let file_path = body.file_path.clone();
+    let files: Vec<session::FileAttachment> = body.files.iter().map(|f| session::FileAttachment {
+        filename: f.filename.clone(),
+        content: f.content.clone(),
+    }).collect();
     let system_prompt = body.system_prompt.clone();
     let app_config_clone = app_config.get_ref().clone();
+    let session_manager_clone = session_manager.get_ref().clone();
+
+    // Get or create session
+    let session_id = body.session_id.clone().unwrap_or_else(|| {
+        session_manager_clone.create_session()
+    });
 
     // Create SSE stream
     let stream = async_stream::stream! {
+        // Send session ID first
+        let session_event = StreamEvent::Session {
+            session_id: session_id.clone(),
+        };
+        let json = serde_json::to_string(&session_event).unwrap_or_default();
+        yield Ok::<_, actix_web::Error>(
+            web::Bytes::from(format!("data: {}\n\n", json))
+        );
+
+        // Add user message to session and get sources
+        let sources = match session_manager_clone.add_user_message(
+            &session_id,
+            question.clone(),
+            files.clone(),
+        ) {
+            Ok(sources) => sources,
+            Err(e) => {
+                let error_event = StreamEvent::Error {
+                    message: format!("Failed to add message to session: {}", e),
+                };
+                let json = serde_json::to_string(&error_event).unwrap_or_default();
+                yield Ok::<_, actix_web::Error>(
+                    web::Bytes::from(format!("data: {}\n\n", json))
+                );
+                return;
+            }
+        };
+
+        // Send sources if any
+        if !sources.is_empty() {
+            let sources_event = StreamEvent::Sources {
+                sources: sources.iter().map(|s| Source {
+                    title: s.title.clone(),
+                }).collect(),
+            };
+            let json = serde_json::to_string(&sources_event).unwrap_or_default();
+            yield Ok::<_, actix_web::Error>(
+                web::Bytes::from(format!("data: {}\n\n", json))
+            );
+        }
+
         match create_chat_stream(
+            &session_id,
             &question,
-            file_content.as_deref(),
-            file_path.as_deref(),
+            &files,
             system_prompt.as_deref(),
             &app_config_clone,
+            &session_manager_clone,
         ).await {
-            Ok(content_stream) => {
+            Ok((content_stream, assistant_content)) => {
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
                 while let Some(result) = pinned_stream.next().await {
@@ -88,6 +154,13 @@ pub async fn chat_stream(
                         }
                     }
                 }
+
+                // Add assistant message to session with sources
+                let _ = session_manager_clone.add_assistant_message(
+                    &session_id,
+                    assistant_content,
+                    sources,
+                );
 
                 // Send done event
                 let done_event = StreamEvent::Done;
@@ -116,13 +189,17 @@ pub async fn chat_stream(
 }
 
 async fn create_chat_stream(
+    session_id: &str,
     question: &str,
-    file_content: Option<&str>,
-    file_path: Option<&str>,
+    files: &[session::FileAttachment],
     system_prompt: Option<&str>,
     app_config: &config::Config,
+    session_manager: &session::SessionManager,
 ) -> Result<
-    impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
+    (
+        impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
+        String,
+    ),
     Box<dyn std::error::Error + Send + Sync>,
 > {
     debug!("Using API URL: {}", app_config.api_url);
@@ -137,16 +214,20 @@ async fn create_chat_stream(
     // Get environment context
     let env_context = envinfo::get_env_context();
 
-    let user_message = if let Some(content) = file_content {
-        let file_info = if let Some(path) = file_path {
-            format!("the file '{}'", path)
-        } else {
-            "the file".to_string()
-        };
-        format!(
-            "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
-            env_context, file_info, content, question
-        )
+    // Build user message with file contents if present
+    let user_message = if !files.is_empty() {
+        let mut message = env_context.clone();
+        message.push_str("\n\n");
+
+        for file in files {
+            message.push_str(&format!(
+                "Here is the content of '{}':\n\n```\n{}\n```\n\n",
+                file.filename, file.content
+            ));
+        }
+
+        message.push_str(&format!("User query: {}", question));
+        message
     } else {
         format!("{}\n\nUser query: {}", env_context, question)
     };
@@ -157,20 +238,56 @@ async fn create_chat_stream(
     debug!("System message:\n{}", system_message);
     debug!("User message:\n{}", user_message);
 
+    // Get conversation history from session
+    let session = session_manager
+        .get_session(session_id)
+        .ok_or("Session not found")?;
+
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage {
             content: system_message.to_string().into(),
             ..Default::default()
         }
         .into(),
+    ];
+
+    // Add conversation history (excluding the last user message we just added)
+    for (i, msg) in session.messages.iter().enumerate() {
+        if i == session.messages.len() - 1 {
+            break; // Skip the last message as we'll add it with full context
+        }
+
+        if msg.role == "user" {
+            messages.push(
+                ChatCompletionRequestUserMessage {
+                    content: msg.content.clone().into(),
+                    ..Default::default()
+                }
+                .into(),
+            );
+        } else if msg.role == "assistant" {
+            messages.push(
+                ChatCompletionRequestAssistantMessage {
+                    content: Some(msg.content.clone().into()),
+                    ..Default::default()
+                }
+                .into(),
+            );
+        }
+    }
+
+    // Add the current user message with full context
+    messages.push(
         ChatCompletionRequestUserMessage {
             content: user_message.into(),
             ..Default::default()
         }
         .into(),
-    ];
+    );
 
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
+    let assistant_content = Arc::new(std::sync::Mutex::new(String::new()));
+    let assistant_content_clone = assistant_content.clone();
 
     let output_stream = async_stream::stream! {
         loop {
@@ -223,8 +340,13 @@ async fn create_chat_stream(
                 }
 
                 for choice in response.choices {
-                    // Handle content - yield it immediately
+                    // Handle content - yield it immediately and accumulate
                     if let Some(content) = &choice.delta.content {
+                        // Accumulate content for session storage
+                        if let Ok(mut acc) = assistant_content.lock() {
+                            acc.push_str(content);
+                        }
+
                         yield Ok(StreamEvent::Content {
                             text: content.clone(),
                         });
@@ -314,5 +436,6 @@ async fn create_chat_stream(
         }
     };
 
-    Ok(output_stream)
+    let final_content = assistant_content_clone.lock().unwrap().clone();
+    Ok((output_stream, final_content))
 }

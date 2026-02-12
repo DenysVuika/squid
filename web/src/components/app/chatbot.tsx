@@ -393,6 +393,7 @@ const Example = () => {
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -423,33 +424,32 @@ const Example = () => {
       streamingContentRef.current = ''; // Reset streaming content
 
       try {
-        // Read file content if files are attached
-        let fileContent: string | undefined;
-        let fileName: string | undefined;
-
+        // Read file contents if files are attached
+        const fileAttachments = [];
         if (files && files.length > 0) {
-          const file = files[0];
-          if (file.type === 'file' && file.url) {
-            // Use the actual filename from the file object
-            // FileUIPart from 'ai' package includes filename property
-            fileName = 'filename' in file ? String(file.filename) : 'attachment';
-
-            // Try to read the file content
-            try {
-              const response = await fetch(file.url);
-              if (response.ok) {
-                fileContent = await response.text();
-              } else {
-                console.error('Failed to fetch file:', response.statusText);
+          for (const file of files) {
+            if (file.type === 'file' && file.url) {
+              const fileName = 'filename' in file ? String(file.filename) : 'attachment';
+              try {
+                const response = await fetch(file.url);
+                if (response.ok) {
+                  const content = await response.text();
+                  fileAttachments.push({
+                    filename: fileName,
+                    content,
+                  });
+                } else {
+                  console.error('Failed to fetch file:', response.statusText);
+                  toast.error('Failed to read file', {
+                    description: `Could not read ${fileName}`,
+                  });
+                }
+              } catch (e) {
+                console.error('Failed to read file:', e);
                 toast.error('Failed to read file', {
-                  description: `Could not read ${fileName}`,
+                  description: e instanceof Error ? e.message : String(e),
                 });
               }
-            } catch (e) {
-              console.error('Failed to read file:', e);
-              toast.error('Failed to read file', {
-                description: e instanceof Error ? e.message : String(e),
-              });
             }
           }
         }
@@ -459,11 +459,31 @@ const Example = () => {
           '',
           {
             message: userMessage,
-            file_content: fileContent,
-            file_path: fileName,
+            session_id: sessionId || undefined,
+            files: fileAttachments,
           },
           {
             signal: abortControllerRef.current?.signal,
+            onSession: (newSessionId) => {
+              setSessionId(newSessionId);
+            },
+            onSources: (sources) => {
+              // Update the assistant message with sources
+              setMessages((prev) =>
+                prev.map((msg) => {
+                  if (msg.versions.some((v) => v.id === messageId)) {
+                    return {
+                      ...msg,
+                      sources: sources.map((s) => ({
+                        href: '#',
+                        title: s.title,
+                      })),
+                    };
+                  }
+                  return msg;
+                })
+              );
+            },
             onContent: (text) => {
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
@@ -514,7 +534,7 @@ const Example = () => {
         setStreamingMessageId(null);
       }
     },
-    [updateMessageContent]
+    [updateMessageContent, sessionId]
   );
 
   const addUserMessage = useCallback(
@@ -535,16 +555,9 @@ const Example = () => {
       setTimeout(() => {
         const assistantMessageId = `assistant-${Date.now()}`;
 
-        // Create sources from attached files
-        const sources = files?.map((file) => ({
-          href: file.url || '#',
-          title: 'filename' in file ? String(file.filename) : 'Attached file',
-        }));
-
         const assistantMessage: MessageType = {
           from: 'assistant',
           key: `assistant-${Date.now()}`,
-          ...(sources && sources.length > 0 && { sources }),
           versions: [
             {
               content: '',
