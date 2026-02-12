@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sessions display message count and last activity time
   - Smart date formatting (time/day/date based on age)
   - Auto-refreshes when new sessions are created (no page reload needed)
+  - Shimmer loading indicator shown while AI is thinking (before streaming starts)
 - **Persistent Chat Sessions**: All conversations now automatically saved and restored
   - Chat history persists across page reloads and server restarts
   - Sessions stored in SQLite database (`squid.db`)

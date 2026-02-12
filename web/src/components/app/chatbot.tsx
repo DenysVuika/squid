@@ -3,6 +3,7 @@ import type { FileUIPart, ToolUIPart } from 'ai';
 
 import { loadSession, streamChat } from '@/lib/chat-api';
 import { SessionList } from '@/components/app/session-list';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -636,7 +637,11 @@ const Example = () => {
                           </Reasoning>
                         )}
                         <MessageContent>
-                          <MessageResponse>{version.content}</MessageResponse>
+                          {message.from === 'assistant' && !version.content && status === 'streaming' ? (
+                            <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                          ) : (
+                            <MessageResponse>{version.content}</MessageResponse>
+                          )}
                         </MessageContent>
                       </div>
                     </Message>
