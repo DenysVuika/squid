@@ -49,7 +49,7 @@ import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { CheckIcon, GlobeIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 interface MessageType {
@@ -394,6 +394,7 @@ const Example = () => {
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
   const [, setStreamingMessageId] = useState<string | null>(null);
+  const streamingContentRef = useRef<string>('');
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
@@ -415,6 +416,7 @@ const Example = () => {
     async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
       setStatus('streaming');
       setStreamingMessageId(messageId);
+      streamingContentRef.current = ''; // Reset streaming content
 
       try {
         // Read file content if files are attached
@@ -447,12 +449,16 @@ const Example = () => {
           },
           {
             onContent: (text) => {
+              // Accumulate content in ref for better performance
+              streamingContentRef.current += text;
+              const currentContent = streamingContentRef.current;
+
               setMessages((prev) =>
                 prev.map((msg) => {
                   if (msg.versions.some((v) => v.id === messageId)) {
                     return {
                       ...msg,
-                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: v.content + text } : v)),
+                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: currentContent } : v)),
                     };
                   }
                   return msg;
@@ -469,6 +475,7 @@ const Example = () => {
               setStreamingMessageId(null);
             },
             onDone: () => {
+              streamingContentRef.current = ''; // Clear ref after streaming
               setStatus('ready');
               setStreamingMessageId(null);
             },

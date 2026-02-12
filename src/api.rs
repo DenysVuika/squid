@@ -65,13 +65,35 @@ pub async fn chat_stream(
             system_prompt.as_deref(),
             &app_config_clone,
         ).await {
-            Ok(response_text) => {
+            Ok(content_stream) => {
+                // Stream each content chunk as it arrives
+                let mut pinned_stream = Box::pin(content_stream);
+                while let Some(result) = pinned_stream.next().await {
+                    match result {
+                        Ok(chunk) => {
+                            let json = serde_json::to_string(&chunk).unwrap_or_default();
+                            yield Ok::<_, actix_web::Error>(
+                                web::Bytes::from(format!("data: {}\n\n", json))
+                            );
+                        }
+                        Err(e) => {
+                            let error_event = StreamEvent::Error {
+                                message: e.to_string(),
+                            };
+                            let json = serde_json::to_string(&error_event).unwrap_or_default();
+                            yield Ok::<_, actix_web::Error>(
+                                web::Bytes::from(format!("data: {}\n\n", json))
+                            );
+                            break;
+                        }
+                    }
+                }
+
+                // Send done event
+                let done_event = StreamEvent::Done;
+                let json = serde_json::to_string(&done_event).unwrap_or_default();
                 yield Ok::<_, actix_web::Error>(
-                    web::Bytes::from(format!("data: {}\n\n",
-                        serde_json::to_string(&StreamEvent::Content {
-                            text: response_text
-                        }).unwrap_or_default()
-                    ))
+                    web::Bytes::from(format!("data: {}\n\n", json))
                 );
             }
             Err(e) => {
@@ -84,13 +106,6 @@ pub async fn chat_stream(
                 );
             }
         }
-
-        // Send done event
-        let done_event = StreamEvent::Done;
-        let json = serde_json::to_string(&done_event).unwrap_or_default();
-        yield Ok::<_, actix_web::Error>(
-            web::Bytes::from(format!("data: {}\n\n", json))
-        );
     };
 
     Ok(HttpResponse::Ok()
@@ -106,7 +121,10 @@ async fn create_chat_stream(
     file_path: Option<&str>,
     system_prompt: Option<&str>,
     app_config: &config::Config,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<
+    impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     debug!("Using API URL: {}", app_config.api_url);
     debug!("Using API Model: {}", app_config.api_model);
 
@@ -152,10 +170,10 @@ async fn create_chat_stream(
         .into(),
     ];
 
-    let mut full_response = String::new();
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
 
-    loop {
+    let output_stream = async_stream::stream! {
+        loop {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&app_config.api_model)
             .messages(messages.clone())
@@ -164,29 +182,53 @@ async fn create_chat_stream(
                 include_usage: Some(true),
                 include_obfuscation: None,
             })
-            .build()?;
+            .build();
 
-        debug!("Sending streaming request...");
-
-        let mut stream = client.chat().create_stream(request).await?;
-        tool_calls.clear();
-
-        while let Some(result) = stream.next().await {
-            let response = result?;
-
-            // Log token usage statistics from streaming response
-            if let Some(usage) = &response.usage {
-                debug!(
-                    "Token usage - Prompt: {}, Completion: {}, Total: {}",
-                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
-                );
-            }
-
-            for choice in response.choices {
-                // Handle content
-                if let Some(content) = &choice.delta.content {
-                    full_response.push_str(content);
+            let request = match request {
+                Ok(req) => req,
+                Err(e) => {
+                    yield Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+                    break;
                 }
+            };
+
+            debug!("Sending streaming request...");
+
+            let stream_result = client.chat().create_stream(request).await;
+            let mut stream = match stream_result {
+                Ok(s) => s,
+                Err(e) => {
+                    yield Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+                    break;
+                }
+            };
+
+            tool_calls.clear();
+
+            while let Some(result) = stream.next().await {
+                let response = match result {
+                    Ok(r) => r,
+                    Err(e) => {
+                        yield Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+                        break;
+                    }
+                };
+
+                // Log token usage statistics from streaming response
+                if let Some(usage) = &response.usage {
+                    debug!(
+                        "Token usage - Prompt: {}, Completion: {}, Total: {}",
+                        usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                    );
+                }
+
+                for choice in response.choices {
+                    // Handle content - yield it immediately
+                    if let Some(content) = &choice.delta.content {
+                        yield Ok(StreamEvent::Content {
+                            text: content.clone(),
+                        });
+                    }
 
                 // Handle tool calls
                 if let Some(tool_calls_delta) = &choice.delta.tool_calls {
@@ -256,7 +298,7 @@ async fn create_chat_stream(
                             break;
                         }
                         FinishReason::Stop => {
-                            return Ok(full_response);
+                            return;
                         }
                         _ => {}
                     }
@@ -264,12 +306,13 @@ async fn create_chat_stream(
             }
         }
 
-        // If we had tool calls, the loop continues to make another request
-        // If not, we should have returned by now
-        if tool_calls.is_empty() {
-            break;
+            // If we had tool calls, the loop continues to make another request
+            // If not, we should have returned by now
+            if tool_calls.is_empty() {
+                break;
+            }
         }
-    }
+    };
 
-    Ok(full_response)
+    Ok(output_stream)
 }
