@@ -35,6 +35,7 @@ pub struct ChatSession {
     pub messages: Vec<ChatMessage>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub title: Option<String>,
 }
 
 impl ChatSession {
@@ -46,6 +47,7 @@ impl ChatSession {
             messages: Vec::new(),
             created_at: now,
             updated_at: now,
+            title: None,
         }
     }
 
@@ -77,6 +79,29 @@ impl ChatSession {
             .find(|msg| msg.role == "user")
             .map(|msg| msg.sources.clone())
             .unwrap_or_default()
+    }
+
+    /// Generate a title from the first user message
+    /// Returns a truncated version (max 100 chars) of the first user message
+    fn generate_title(&self) -> Option<String> {
+        self.messages
+            .iter()
+            .find(|msg| msg.role == "user")
+            .map(|msg| {
+                let content = msg.content.trim();
+                if content.len() > 100 {
+                    format!("{}...", &content[..97])
+                } else {
+                    content.to_string()
+                }
+            })
+    }
+
+    /// Update the session title if it hasn't been set yet
+    pub fn update_title_if_needed(&mut self) {
+        if self.title.is_none() {
+            self.title = self.generate_title();
+        }
     }
 }
 
@@ -181,6 +206,9 @@ impl SessionManager {
         // Add message to session
         session.add_message("user".to_string(), content, sources.clone());
 
+        // Auto-generate title from first user message if needed
+        session.update_title_if_needed();
+
         // Get the last message
         let message = session.messages.last()
             .ok_or_else(|| "Failed to add message".to_string())?;
@@ -191,11 +219,33 @@ impl SessionManager {
             return Err(format!("Failed to save message: {}", e));
         }
 
+        // Update session in database (to save the title)
+        if let Err(e) = self.db.save_session(&session) {
+            log::error!("Failed to update session in database: {}", e);
+        }
+
         // Update session in cache
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(session_id.to_string(), session);
 
         Ok(sources)
+    }
+
+    /// Update session title
+    pub fn update_session_title(&self, session_id: &str, title: String) -> Result<(), String> {
+        // Update in database
+        if let Err(e) = self.db.update_session_title(session_id, &title) {
+            log::error!("Failed to update session title in database: {}", e);
+            return Err(format!("Failed to update session title: {}", e));
+        }
+
+        // Update cache if session is loaded
+        let mut sessions = self.sessions.write().unwrap();
+        if let Some(session) = sessions.get_mut(session_id) {
+            session.title = Some(title);
+        }
+
+        Ok(())
     }
 
     /// Add an assistant message to a session

@@ -1,7 +1,8 @@
-import { deleteSession, listSessions, type SessionListItem } from '@/lib/chat-api';
+import { deleteSession, listSessions, updateSessionTitle, type SessionListItem } from '@/lib/chat-api';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MessageSquare, Trash2, Plus } from 'lucide-react';
+import { MessageSquare, Trash2, Plus, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -33,6 +34,9 @@ export function SessionList({
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [sessionToEdit, setSessionToEdit] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
 
   const loadSessions = async () => {
     setLoading(true);
@@ -76,6 +80,37 @@ export function SessionList({
     e.stopPropagation();
     setSessionToDelete(sessionId);
     setDeleteDialogOpen(true);
+  };
+
+  const handleEditClick = (session: SessionListItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessionToEdit(session.session_id);
+    setEditTitle(session.title || session.preview || 'New conversation');
+    setEditDialogOpen(true);
+  };
+
+  const handleEditConfirm = async () => {
+    if (!sessionToEdit || !editTitle.trim()) return;
+
+    try {
+      const success = await updateSessionTitle(apiUrl, sessionToEdit, editTitle.trim());
+      if (success) {
+        toast.success('Session renamed');
+        // Update the session in the list
+        setSessions((prev) =>
+          prev.map((s) => (s.session_id === sessionToEdit ? { ...s, title: editTitle.trim() } : s))
+        );
+      } else {
+        toast.error('Failed to rename session');
+      }
+    } catch (error) {
+      console.error('Error renaming session:', error);
+      toast.error('Failed to rename session');
+    } finally {
+      setEditDialogOpen(false);
+      setSessionToEdit(null);
+      setEditTitle('');
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -148,15 +183,27 @@ export function SessionList({
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm">{session.preview || 'New conversation'}</p>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                          onClick={(e) => handleDeleteClick(session.session_id, e)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <p className="line-clamp-2 text-sm font-medium">
+                          {session.title || session.preview || 'New conversation'}
+                        </p>
+                        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => handleEditClick(session, e)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => handleDeleteClick(session.session_id, e)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         <span>{session.message_count} messages</span>
@@ -186,6 +233,33 @@ export function SessionList({
             </Button>
             <Button variant="destructive" onClick={handleDeleteConfirm}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Session</DialogTitle>
+            <DialogDescription>Enter a new name for this conversation.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder="Session title"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleEditConfirm();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditConfirm} disabled={!editTitle.trim()}>
+              Rename
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -40,6 +40,9 @@ impl Database {
         let schema_002 = include_str!("../migrations/002_logs_table.sql");
         conn.execute_batch(schema_002)?;
 
+        let schema_003 = include_str!("../migrations/003_session_titles.sql");
+        conn.execute_batch(schema_003)?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -52,8 +55,8 @@ impl Database {
 
         // Insert or update session
         conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, created_at, updated_at, metadata) VALUES (?1, ?2, ?3, ?4)",
-            params![session.id, session.created_at, session.updated_at, Option::<String>::None],
+            "INSERT OR REPLACE INTO sessions (id, created_at, updated_at, metadata, title) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![session.id, session.created_at, session.updated_at, Option::<String>::None, session.title.as_ref()],
         )?;
 
         Ok(())
@@ -66,13 +69,14 @@ impl Database {
         debug!("Loading session: {}", session_id);
 
         // Load session metadata
-        let mut stmt = conn.prepare("SELECT id, created_at, updated_at FROM sessions WHERE id = ?1")?;
+        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
             Ok(ChatSession {
                 id: row.get(0)?,
                 messages: Vec::new(), // Will be populated below
                 created_at: row.get(1)?,
                 updated_at: row.get(2)?,
+                title: row.get(3)?,
             })
         });
 
@@ -172,6 +176,20 @@ impl Database {
             .collect::<SqliteResult<Vec<String>>>()?;
 
         Ok(sessions)
+    }
+
+    /// Update session title
+    pub fn update_session_title(&self, session_id: &str, title: &str) -> SqliteResult<bool> {
+        let conn = self.conn.lock().unwrap();
+
+        debug!("Updating session title: {} -> {}", session_id, title);
+
+        let updated = conn.execute(
+            "UPDATE sessions SET title = ?1 WHERE id = ?2",
+            params![title, session_id],
+        )?;
+
+        Ok(updated > 0)
     }
 
     /// Delete sessions older than the specified number of seconds

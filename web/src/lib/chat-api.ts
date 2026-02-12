@@ -57,6 +57,7 @@ export interface SessionData {
   messages: SessionMessage[];
   created_at: number;
   updated_at: number;
+  title: string | null;
 }
 
 export interface SessionListItem {
@@ -65,6 +66,7 @@ export interface SessionListItem {
   created_at: number;
   updated_at: number;
   preview: string | null;
+  title: string | null;
 }
 
 export interface SessionListResponse {
@@ -352,6 +354,47 @@ export async function deleteSession(apiUrl: string, sessionId: string): Promise<
     return true;
   } catch (error) {
     console.error('Failed to delete session:', error);
+    return false;
+  }
+}
+
+/**
+ * Update a session's title
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param sessionId - The session ID to update
+ * @param title - The new title for the session
+ * @returns Promise with boolean indicating success
+ *
+ * @example
+ * ```typescript
+ * const success = await updateSessionTitle('', 'abc-123-def-456', 'My new title');
+ * if (success) {
+ *   console.log('Session renamed');
+ * }
+ * ```
+ */
+export async function updateSessionTitle(apiUrl: string, sessionId: string, title: string): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/sessions/${sessionId}` : `/api/sessions/${sessionId}`;
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return false;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to update session title:', error);
     return false;
   }
 }

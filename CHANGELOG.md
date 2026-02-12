@@ -9,18 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Session Titles & Renaming**: Auto-generated titles and rename functionality
+  - Sessions automatically titled from first user message (max 100 chars)
+  - Rename any session with inline editing dialog
+  - Title displayed in session list sidebar with edit button
+  - `PATCH /api/sessions/{id}` - Update session title
+  - Database migration adds `title` column to sessions table
 - **Session Management API**: Complete REST API for managing chat sessions
-  - `GET /api/sessions` - List all sessions with metadata and preview
-  - `GET /api/sessions/{id}` - Load full session history
+  - `GET /api/sessions` - List all sessions with metadata, preview, and title
+  - `GET /api/sessions/{id}` - Load full session history with title
   - `DELETE /api/sessions/{id}` - Delete sessions
   - Sessions sorted by most recent activity
   - Message count and preview text for each session
 - **Session Sidebar**: Visual session management in web UI
   - Browse all past conversations in a collapsible sidebar
   - Click any session to instantly load its full history
+  - Rename sessions with inline edit dialog (pencil icon)
   - Delete sessions with confirmation dialog
   - Toggle sidebar visibility with menu button
-  - Session preview shows first user message (truncated)
+  - Session title or preview shown (auto-generated from first message)
   - Sessions display message count and last activity time
   - Smart date formatting (time/day/date based on age)
   - Auto-refreshes when new sessions are created (no page reload needed)

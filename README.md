@@ -11,7 +11,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
 - 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
-- 📁 **Session Management** - Browse, load, and delete past conversations with visual sidebar
+- 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
 - 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
@@ -493,6 +493,8 @@ The web server will:
 **Web UI Features:**
 - **Chat Page** - Interactive chat interface with session management sidebar
   - Browse and switch between past conversations
+  - Auto-generated session titles from first message
+  - Rename sessions with inline edit dialog
   - Multi-file attachments support
   - Stop streaming responses mid-generation
   - Auto-save all conversations to database
@@ -617,7 +619,8 @@ The web server also provides REST endpoints for managing chat sessions:
       "message_count": 8,
       "created_at": 1707654321,
       "updated_at": 1707658921,
-      "preview": "Explain async/await in Rust"
+      "preview": "Explain async/await in Rust",
+      "title": "Async/await in Rust"
     }
   ],
   "total": 1
@@ -645,7 +648,25 @@ The web server also provides REST endpoints for managing chat sessions:
     }
   ],
   "created_at": 1707654321,
-  "updated_at": 1707658921
+  "updated_at": 1707658921,
+  "title": "Async/await in Rust"
+}
+```
+
+**Update a session (rename):** `PATCH /api/sessions/{session_id}`
+
+**Request:**
+```json
+{
+  "title": "My Custom Session Title"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Session updated successfully"
 }
 ```
 
@@ -661,10 +682,12 @@ The web server also provides REST endpoints for managing chat sessions:
 
 **Web UI Features:**
 - Browse all conversations in the sidebar
+- Sessions automatically titled from first user message
 - Click any session to load its full history
+- Rename sessions with inline edit dialog (pencil icon)
 - Delete sessions with confirmation dialog
 - Toggle sidebar visibility
-- Sessions show preview, message count, and last activity time
+- Sessions show title (or preview), message count, and last activity time
 
 ### View Application Logs
 

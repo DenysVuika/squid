@@ -599,6 +599,7 @@ async fn main() {
                             .route("/chat", web::post().to(api::chat_stream))
                             .route("/sessions", web::get().to(api::list_sessions))
                             .route("/sessions/{session_id}", web::get().to(api::get_session))
+                            .route("/sessions/{session_id}", web::patch().to(api::update_session))
                             .route("/sessions/{session_id}", web::delete().to(api::delete_session))
                             .route("/logs", web::get().to(api::get_logs))
                     )

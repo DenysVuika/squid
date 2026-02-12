@@ -56,13 +56,18 @@ All tasks in this phase have been completed:
 - [ ] Add filtering (by date, search)
 - [ ] POST /api/sessions - Explicit session creation endpoint
 
-### 2.2 Session Metadata
+### 2.2 Session Metadata ✅ COMPLETED
 
-**Features:**
-- [ ] Auto-generate session title from first message
+**Completed Features:**
+- ✅ Auto-generate session title from first message
+- ✅ Store title in database (title column added)
+- ✅ Add user-editable session names (rename functionality)
+- ✅ `PATCH /api/sessions/{id}` endpoint for renaming
+- ✅ Inline edit dialog in session sidebar UI
+
+**Future Enhancements:**
 - [ ] Store token usage per session
 - [ ] Track model used per session
-- [ ] Add user-editable session names
 - [ ] Session tags/categories
 
 ### 2.3 Web UI for Session Management ✅ COMPLETED
@@ -75,14 +80,16 @@ All tasks in this phase have been completed:
 - ✅ Click session to load conversation from sidebar
 - ✅ Delete session with confirmation dialog
 - ✅ Toggle sidebar visibility
+- ✅ Session title display (auto-generated or custom)
 - ✅ Session preview (first user message, truncated to 100 chars)
 - ✅ Message count and last activity timestamp display
 - ✅ Smart date formatting (time/day/date based on age)
 - ✅ Auto-refresh session list on delete
 - ✅ Auto-start new chat when deleting current session
+- ✅ Rename session with inline edit dialog
+- ✅ Edit button (pencil icon) on hover
 
 **Future Enhancements:**
-- [ ] Rename session
 - [ ] Search sessions
 - [ ] Manual sort options (by date/name)
 - [ ] Session export (download as JSON/Markdown)
@@ -290,9 +297,10 @@ CREATE TABLE message_files (
 3. ✅ Session restoration in Web UI
 
 ### ✅ Completed (Phase 2)
-1. ✅ Complete session CRUD API (list, delete)
+1. ✅ Complete session CRUD API (list, delete, update)
 2. ✅ Web UI session list sidebar
-3. ✅ Session management UI (delete, preview, load)
+3. ✅ Session management UI (delete, preview, load, rename)
+4. ✅ Session metadata management (auto-generated titles, rename)
 
 ### Medium Priority (Phase 3)
 1. Session cleanup
@@ -355,7 +363,7 @@ rate_limit_requests_per_minute = 60
 
 Phase 1 is complete! ✅
 
-**Phase 2 is complete! Next steps for Phase 3:**
+**Phase 2 is complete! ✅ All session management features implemented!**
 
 ```bash
 # Test the new session management features:
@@ -365,12 +373,18 @@ cargo run -- serve
 # - Try creating multiple chat sessions
 # - Browse sessions in the sidebar
 # - Load different sessions
+# - Rename sessions with the edit button
 # - Delete sessions
+# - Notice auto-generated titles from first messages
 ```
 
-**Suggested next command:**
+**Suggested next steps (Phase 3):**
 > "Implement session cleanup scheduler (Phase 3.1) with configurable retention policies"
 
 or
 
-> "Add session metadata management - auto-generate titles, store token usage"
+> "Add context management (Phase 3.3) - smart context window limits and summarization"
+
+or
+
+> "Add token usage tracking per session (Phase 2.2 enhancement)"

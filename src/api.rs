@@ -72,6 +72,7 @@ pub struct SessionResponse {
     pub messages: Vec<SessionMessage>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,12 +82,18 @@ pub struct SessionListItem {
     pub created_at: i64,
     pub updated_at: i64,
     pub preview: Option<String>,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct SessionListResponse {
     pub sessions: Vec<SessionListItem>,
     pub total: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSessionRequest {
+    pub title: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,6 +154,7 @@ pub async fn get_session(
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
+                title: session.title.clone(),
             };
             Ok(HttpResponse::Ok().json(response))
         }
@@ -186,6 +194,7 @@ pub async fn list_sessions(
                 created_at: session.created_at,
                 updated_at: session.updated_at,
                 preview,
+                title: session.title.clone(),
             });
         }
     }
@@ -215,6 +224,33 @@ pub async fn delete_session(
         Ok(HttpResponse::NotFound().json(serde_json::json!({
             "error": "Session not found"
         })))
+    }
+}
+
+/// Update a session (e.g., rename)
+pub async fn update_session(
+    session_id: web::Path<String>,
+    update_request: web::Json<UpdateSessionRequest>,
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Updating session: {} with title: {}", session_id, update_request.title);
+
+    // Validate title is not empty
+    let title = update_request.title.trim();
+    if title.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Title cannot be empty"
+        })));
+    }
+
+    match session_manager.update_session_title(&session_id, title.to_string()) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Session updated successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to update session: {}", e)
+        }))),
     }
 }
 
