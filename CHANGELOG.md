@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Browser-based interface for interacting with Squid
   - Configurable port (default: 8080)
   - Works from any directory after installation
+- **Streaming API Endpoint**: REST API for chat interactions at `/api/chat`
+  - Server-Sent Events (SSE) streaming for real-time responses
+  - Supports message context with optional file content
+  - Integrated with chatbot UI for live streaming responses
+  - Web UI and API served from same server for seamless integration
 
 ## [0.7.0] - 2026-02-11
 

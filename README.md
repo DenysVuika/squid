@@ -173,6 +173,26 @@ cargo build --release
 
 For development, use `cargo run --` instead of `squid` in the examples below.
 
+### Building the Web UI
+
+The web UI is built separately and embedded into the binary. To build the complete application with the web UI:
+
+```bash
+# Build the web UI
+cd web
+npm install
+npm run build
+
+# The build output is automatically copied to ../static/
+# Build the Rust application (which embeds the static files)
+cd ..
+cargo build --release
+```
+
+The `squid serve` command will then serve both the web UI and the API from the same server.
+
+**Note:** If you're using a pre-built binary from crates.io or releases, the web UI is already included.
+
 ## Configuration
 
 You can configure squid in two ways:
@@ -464,9 +484,75 @@ squid serve -p 3000
 The web server will:
 - Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
 - Provide a browser-based interface for interacting with Squid
-- Display the server URL on startup
+- Expose a REST API endpoint at `/api/chat` for streaming chat responses
+- Display the server URL and API endpoint on startup
+
+The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
 
 Press `Ctrl+C` to stop the server.
+
+#### API Endpoint
+
+The web server exposes a REST API for programmatic access:
+
+**Endpoint:** `POST /api/chat`
+
+**Request Body:**
+```json
+{
+  "message": "Your question here",
+  "file_content": "optional file content",
+  "file_path": "optional/file/path.rs",
+  "system_prompt": "optional custom system prompt"
+}
+```
+
+**Response:** Server-Sent Events (SSE) stream with JSON events:
+```json
+{"type": "content", "text": "response text chunk"}
+{"type": "done"}
+```
+
+**Example using curl:**
+```bash
+curl -X POST http://127.0.0.1:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Explain Rust async/await"}' \
+  -N
+```
+
+**Example using fetch (JavaScript):**
+```javascript
+const response = await fetch('http://127.0.0.1:8080/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: 'Explain async/await in Rust' })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  const lines = chunk.split('\n');
+  
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      if (event.type === 'content') {
+        console.log(event.text);
+      }
+    }
+  }
+}
+```
+
+See `web/src/lib/chat-api.ts` for a complete TypeScript client implementation.
+
+**Note:** The chatbot UI is served from the same server as the API, so it automatically uses the relative path `/api/chat` without requiring any configuration.
 
 ### Tool Calling (with Multi-Layered Security)
 

@@ -1,10 +1,12 @@
-use actix_web::{App, HttpResponse, HttpServer, web};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use log::{debug, error, info, warn};
 use rust_embed::RustEmbed;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+mod api;
 mod config;
 mod envinfo;
 mod llm;
@@ -535,13 +537,21 @@ async fn main() {
             info!("Starting Squid Web UI on port {}", port);
 
             let bind_address = format!("127.0.0.1:{}", port);
+            let app_config = Arc::new(app_config);
 
             println!("🦑: Starting Squid Web UI...");
             println!("🌐 Server running at: http://{}", bind_address);
+            println!("📡 API endpoint: http://{}/api/chat", bind_address);
             println!("Press Ctrl+C to stop the server\n");
 
             let server = HttpServer::new(move || {
                 App::new()
+                    .app_data(web::Data::new(app_config.clone()))
+                    .wrap(middleware::Logger::default())
+                    .service(
+                        web::scope("/api")
+                            .route("/chat", web::post().to(api::chat_stream))
+                    )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))
             })

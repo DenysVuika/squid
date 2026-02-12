@@ -1,6 +1,7 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
+import { streamChat } from '@/lib/chat-api';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -306,19 +307,6 @@ const suggestions = [
   'Explain cloud computing basics',
 ];
 
-const mockResponses = [
-  "That's a great question! Let me help you understand this concept better. The key thing to remember is that proper implementation requires careful consideration of the underlying principles and best practices in the field.",
-  "I'd be happy to explain this topic in detail. From my understanding, there are several important factors to consider when approaching this problem. Let me break it down step by step for you.",
-  "This is an interesting topic that comes up frequently. The solution typically involves understanding the core concepts and applying them in the right context. Here's what I recommend...",
-  "Great choice of topic! This is something that many developers encounter. The approach I'd suggest is to start with the fundamentals and then build up to more complex scenarios.",
-  "That's definitely worth exploring. From what I can see, the best way to handle this is to consider both the theoretical aspects and practical implementation details.",
-];
-
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 const chefs = ['OpenAI', 'Anthropic', 'Google'];
 
 const AttachmentItem = ({
@@ -424,27 +412,83 @@ const Example = () => {
   }, []);
 
   const streamResponse = useCallback(
-    async (messageId: string, content: string) => {
+    async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
       setStatus('streaming');
       setStreamingMessageId(messageId);
 
-      const words = content.split(' ');
-      let currentContent = '';
+      try {
+        // Read file content if files are attached
+        let fileContent: string | undefined;
+        let fileName: string | undefined;
 
-      for (const [i, word] of words.entries()) {
-        currentContent += (i > 0 ? ' ' : '') + word;
-        updateMessageContent(messageId, currentContent);
-        await delay(Math.random() * 100 + 50);
+        if (files && files.length > 0) {
+          const file = files[0];
+          if (file.type === 'file' && file.url) {
+            fileName = file.url.split('/').pop() || 'attachment';
+            // FileUIPart has a url property - fetch the content
+            try {
+              const response = await fetch(file.url);
+              if (response.ok && file.mediaType?.startsWith('text/')) {
+                fileContent = await response.text();
+              }
+            } catch (e) {
+              console.error('Failed to read file:', e);
+            }
+          }
+        }
+
+        // Use relative path since web UI is served from the same server
+        await streamChat(
+          '',
+          {
+            message: userMessage,
+            file_content: fileContent,
+            file_path: fileName,
+          },
+          {
+            onContent: (text) => {
+              setMessages((prev) =>
+                prev.map((msg) => {
+                  if (msg.versions.some((v) => v.id === messageId)) {
+                    return {
+                      ...msg,
+                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: v.content + text } : v)),
+                    };
+                  }
+                  return msg;
+                })
+              );
+            },
+            onError: (error) => {
+              console.error('Stream error:', error);
+              updateMessageContent(messageId, `Error: ${error}`);
+              toast.error('Failed to get response', {
+                description: error,
+              });
+              setStatus('ready');
+              setStreamingMessageId(null);
+            },
+            onDone: () => {
+              setStatus('ready');
+              setStreamingMessageId(null);
+            },
+          }
+        );
+      } catch (error) {
+        console.error('Chat error:', error);
+        updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
+        toast.error('Failed to send message', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+        setStatus('ready');
+        setStreamingMessageId(null);
       }
-
-      setStatus('ready');
-      setStreamingMessageId(null);
     },
     [updateMessageContent]
   );
 
   const addUserMessage = useCallback(
-    (content: string) => {
+    (content: string, files?: FileUIPart[]) => {
       const userMessage: MessageType = {
         from: 'user',
         key: `user-${Date.now()}`,
@@ -460,7 +504,6 @@ const Example = () => {
 
       setTimeout(() => {
         const assistantMessageId = `assistant-${Date.now()}`;
-        const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
 
         const assistantMessage: MessageType = {
           from: 'assistant',
@@ -474,7 +517,7 @@ const Example = () => {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
-        streamResponse(assistantMessageId, randomResponse);
+        streamResponse(assistantMessageId, content, files);
       }, 500);
     },
     [streamResponse]
@@ -497,7 +540,7 @@ const Example = () => {
         });
       }
 
-      addUserMessage(message.text || 'Sent with attachments');
+      addUserMessage(message.text || 'Sent with attachments', message.files);
       setText('');
     },
     [addUserMessage]

@@ -26,6 +26,7 @@ path = "src/main.rs"
 actix-web = "4.9"
 actix-files = "0.6"
 async-openai = { version = "0.32", features = ["chat-completion"] }
+async-stream = "0.3"
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 console = "0.15"

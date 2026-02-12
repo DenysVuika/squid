@@ -44,6 +44,10 @@ pub fn combine_prompts(task_prompt: &str) -> String {
     format!("{}\n\n{}\n\n{}", PERSONA, TOOLS, task_prompt)
 }
 
+pub fn get_ask_prompt() -> &'static str {
+    ASK_PROMPT
+}
+
 /// Returns the appropriate code review prompt based on file extension
 pub fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
     // Check for files without extensions first (Dockerfile, Makefile, etc.)
