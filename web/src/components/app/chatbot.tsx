@@ -418,23 +418,39 @@ const Example = () => {
       setStreamingMessageId(messageId);
       streamingContentRef.current = ''; // Reset streaming content
 
+      // Debug: log files received
+      console.log('streamResponse called with files:', files);
+
       try {
         // Read file content if files are attached
         let fileContent: string | undefined;
         let fileName: string | undefined;
 
         if (files && files.length > 0) {
+          console.log('Processing file attachment:', files[0]);
           const file = files[0];
           if (file.type === 'file' && file.url) {
-            fileName = file.url.split('/').pop() || 'attachment';
-            // FileUIPart has a url property - fetch the content
+            // Use the actual filename from the file object
+            // FileUIPart from 'ai' package includes filename property
+            fileName = 'filename' in file ? String(file.filename) : 'attachment';
+
+            // Try to read the file content
             try {
               const response = await fetch(file.url);
-              if (response.ok && file.mediaType?.startsWith('text/')) {
+              if (response.ok) {
                 fileContent = await response.text();
+                console.log(`File attached: ${fileName} (${fileContent.length} bytes)`);
+              } else {
+                console.error('Failed to fetch file:', response.statusText);
+                toast.error('Failed to read file', {
+                  description: `Could not read ${fileName}`,
+                });
               }
             } catch (e) {
               console.error('Failed to read file:', e);
+              toast.error('Failed to read file', {
+                description: e instanceof Error ? e.message : String(e),
+              });
             }
           }
         }
