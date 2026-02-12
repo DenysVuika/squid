@@ -33,9 +33,12 @@ impl Database {
     fn migrate(&self) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
 
-        // Read and execute the initial schema
-        let schema = include_str!("../migrations/001_initial_schema.sql");
-        conn.execute_batch(schema)?;
+        // Read and execute migrations in order
+        let schema_001 = include_str!("../migrations/001_initial_schema.sql");
+        conn.execute_batch(schema_001)?;
+
+        let schema_002 = include_str!("../migrations/002_logs_table.sql");
+        conn.execute_batch(schema_002)?;
 
         info!("Database migrations completed successfully");
         Ok(())

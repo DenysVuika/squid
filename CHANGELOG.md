@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sessions stored in SQLite database (`squid.db`)
   - "New Chat" button to start fresh conversations
   - Conversations seamlessly continue where you left off
+- **Database Logging Infrastructure**: SQLite logging support for debugging
+  - Logs table in database schema ready for application logs
+  - New `logs` command to query stored logs: `squid logs`
+  - Filter logs by level, session ID, or limit results
+  - Foundation for correlating logs with chat sessions
 - **Multi-File Attachments**: Send multiple files in a single message
   - Attach multiple files simultaneously from the web UI
   - File contents displayed as sources in assistant responses

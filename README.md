@@ -10,6 +10,8 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
+- 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
+- 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
@@ -553,6 +555,37 @@ while (true) {
 See `web/src/lib/chat-api.ts` for a complete TypeScript client implementation.
 
 **Note:** The chatbot UI is served from the same server as the API, so it automatically uses the relative path `/api/chat` without requiring any configuration.
+
+### View Application Logs
+
+View logs stored in the database for debugging and troubleshooting:
+
+```bash
+# View recent logs (last 50 by default)
+squid logs
+
+# View more logs
+squid logs --limit 100
+
+# Filter by log level
+squid logs --level error
+squid logs --level warn
+squid logs --level info
+
+# View logs for a specific session
+squid logs --session-id 72dd7601-7da4-4252-80f6-7012da923faf
+
+# Combine filters
+squid logs --limit 20 --level error
+```
+
+The logs are stored in the SQLite database (`squid.db`) alongside your chat sessions. This makes it easy to:
+- Debug issues by reviewing what happened during a session
+- Track errors and warnings across server restarts
+- Correlate logs with specific chat conversations
+- Monitor application behavior over time
+
+**Note:** The `logs` command reads from the database. Logs are automatically stored when running the `serve` command.
 
 ### Tool Calling (with Multi-Layered Security)
 

@@ -85,6 +85,18 @@ enum Commands {
         #[arg(short, long, default_value = "8080")]
         port: u16,
     },
+    /// View application logs from the database
+    Logs {
+        /// Number of log entries to display
+        #[arg(short, long, default_value = "50")]
+        limit: usize,
+        /// Filter by log level (trace, debug, info, warn, error)
+        #[arg(short = 'L', long)]
+        level: Option<String>,
+        /// Filter by session ID
+        #[arg(short, long)]
+        session_id: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -101,7 +113,18 @@ async fn main() {
         config::Config::load()
     };
 
-    logger::init(Some(&app_config.log_level));
+    // Initialize logger with database support only for serve command
+    // Other commands use stdout-only logging
+    if matches!(cli.command, Commands::Serve { .. }) {
+        let db_path_buf = std::path::PathBuf::from(&app_config.database_path);
+        logger::init_with_db(
+            Some(&app_config.log_level),
+            Some(db_path_buf),
+            Some(log::LevelFilter::Info),
+        );
+    } else {
+        logger::init(Some(&app_config.log_level));
+    }
 
     match &cli.command {
         Commands::Init {
@@ -594,6 +617,51 @@ async fn main() {
                     println!(
                         "The port might already be in use. Try a different port with --port <PORT>"
                     );
+                }
+            }
+        }
+        Commands::Logs {
+            limit,
+            level,
+            session_id,
+        } => {
+            let db_path = &app_config.database_path;
+
+            println!("🦑: Fetching logs from database: {}", db_path);
+
+            match logger::query_logs(
+                db_path,
+                Some(*limit),
+                level.as_deref(),
+                session_id.as_deref(),
+            ) {
+                Ok(logs) => {
+                    if logs.is_empty() {
+                        println!("No logs found.");
+                    } else {
+                        println!("\n{} log entries:\n", logs.len());
+                        for log in logs {
+                            let timestamp = chrono::DateTime::from_timestamp(log.timestamp, 0)
+                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                .unwrap_or_else(|| "unknown".to_string());
+
+                            let session_info = log
+                                .session_id
+                                .map(|sid| format!(" [session: {}]", &sid[..8]))
+                                .unwrap_or_default();
+
+                            println!(
+                                "[{}] {} {}{}: {}",
+                                timestamp, log.level.to_uppercase(), log.target, session_info, log.message
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to query logs: {}", e);
+                    println!("🦑: Failed to read logs from database - {}", e);
+                    println!("    Database path: {}", db_path);
+                    println!("    Make sure the database exists and is not corrupted.");
                 }
             }
         }
