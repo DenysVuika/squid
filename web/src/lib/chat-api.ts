@@ -45,6 +45,20 @@ export interface StreamHandlers {
   signal?: AbortSignal;
 }
 
+export interface SessionMessage {
+  role: string;
+  content: string;
+  sources: Source[];
+  timestamp: number;
+}
+
+export interface SessionData {
+  session_id: string;
+  messages: SessionMessage[];
+  created_at: number;
+  updated_at: number;
+}
+
 /**
  * Stream chat messages to the Squid API and receive responses via SSE
  *
@@ -227,6 +241,41 @@ export function useChatStream(apiUrl: string) {
   };
 
   return { sendMessage, isStreaming };
+}
+
+/**
+ * Load a session's history from the API
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param sessionId - The session ID to load
+ * @returns Promise with session data or null if not found
+ *
+ * @example
+ * ```typescript
+ * const session = await loadSession('', 'abc-123-def-456');
+ * if (session) {
+ *   console.log(`Loaded ${session.messages.length} messages`);
+ * }
+ * ```
+ */
+export async function loadSession(apiUrl: string, sessionId: string): Promise<SessionData | null> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/sessions/${sessionId}` : `/api/sessions/${sessionId}`;
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: SessionData = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to load session:', error);
+    return null;
+  }
 }
 
 // Re-export React for the hook

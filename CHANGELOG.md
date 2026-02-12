@@ -7,17 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Assistant Message Persistence**: Fixed bug where assistant messages were not saved to database
+  - Messages now correctly accumulated during streaming and saved after completion
+  - Session history restoration now includes both user and assistant messages
+  - Conversations properly persist across page reloads and server restarts
+
 ### Added
 
+- **Session Restoration**: Conversations automatically restored on page reload or server restart
+  - Session ID stored in browser localStorage
+  - GET `/api/sessions/{id}` endpoint to fetch session history
+  - Full conversation history loaded on mount
+  - "New Chat" button to start fresh conversations
+  - Seamless continuation across browser/server restarts
+- **SQLite Session Persistence**: Chat sessions are now persisted to database
+  - Sessions automatically saved to `squid.db` (configurable via `database_path` in config)
+  - Complete conversation history maintained across server restarts
+  - Write-through cache for optimal performance
+  - Automatic database migrations on startup
+  - Session cleanup capabilities for old conversations
+- **Session Management System**: Backend-controlled chat flow
+  - Session IDs automatically generated and tracked
+  - Sources (file attachments) managed server-side
+  - Full message history stored with timestamps
+  - Client only sends new messages, not entire history
+  - Prepared for multi-user support and advanced features
+- **Multi-File Attachment Support**: Send multiple files per message
+  - Web UI supports attaching multiple files simultaneously
+  - All files sent with their content in single request
+  - Sources displayed in assistant responses
+  - Backend receives and processes all attached files
 - **Web UI**: New `serve` command to launch the built-in Squid Web UI
   - Browser-based interface for interacting with Squid
   - Configurable port (default: 8080)
   - Works from any directory after installation
 - **Streaming API Endpoint**: REST API for chat interactions at `/api/chat`
   - Server-Sent Events (SSE) streaming for real-time responses
-  - Supports message context with optional file content
+  - Session-based conversation context
+  - Sources sent before streaming content
   - Integrated with chatbot UI for live streaming responses with incremental text updates
   - Web UI and API served from same server for seamless integration (no configuration needed)
+- **Stop Button**: Ability to abort streaming responses
+  - Click stop button during streaming to cancel request
+  - Graceful abort with partial response preservation
+  - Uses AbortController for clean cancellation
+
+### Changed
+
+- **Configuration**: Added `database_path` field to `squid.config.json` (default: `"squid.db"`)
+- **API Request Format**: Updated to support session IDs and multiple file attachments
+  - `file_content` and `file_path` replaced with `files` array
+  - Added optional `session_id` field for continuing conversations
+- **API Response Format**: Added new event types for session management
+  - `session` event sent first with session ID
+  - `sources` event sent before content streaming
+  - Improved client-server communication flow
 
 ## [0.7.0] - 2026-02-11
 

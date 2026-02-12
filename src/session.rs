@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
+use crate::db::Database;
+
 /// Represents a file attachment in a chat message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileAttachment {
@@ -85,15 +87,18 @@ impl Default for ChatSession {
 }
 
 /// Session manager to handle multiple chat sessions
+/// Uses write-through cache with SQLite persistence
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, ChatSession>>>,
+    db: Arc<Database>,
 }
 
 impl SessionManager {
-    /// Create a new session manager
-    pub fn new() -> Self {
+    /// Create a new session manager with database backend
+    pub fn new(db: Database) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            db: Arc::new(db),
         }
     }
 
@@ -102,6 +107,12 @@ impl SessionManager {
         let session = ChatSession::new();
         let session_id = session.id.clone();
 
+        // Save to database
+        if let Err(e) = self.db.save_session(&session) {
+            log::error!("Failed to save session to database: {}", e);
+        }
+
+        // Cache in memory
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(session_id.clone(), session);
 
@@ -109,13 +120,40 @@ impl SessionManager {
     }
 
     /// Get a session by ID
+    /// First checks memory cache, then falls back to database
     pub fn get_session(&self, session_id: &str) -> Option<ChatSession> {
-        let sessions = self.sessions.read().unwrap();
-        sessions.get(session_id).cloned()
+        // Check memory cache first
+        {
+            let sessions = self.sessions.read().unwrap();
+            if let Some(session) = sessions.get(session_id) {
+                return Some(session.clone());
+            }
+        }
+
+        // Fall back to database
+        match self.db.load_session(session_id) {
+            Ok(Some(session)) => {
+                // Cache for future access
+                let mut sessions = self.sessions.write().unwrap();
+                sessions.insert(session_id.to_string(), session.clone());
+                Some(session)
+            }
+            Ok(None) => None,
+            Err(e) => {
+                log::error!("Failed to load session from database: {}", e);
+                None
+            }
+        }
     }
 
     /// Update a session
     pub fn update_session(&self, session: ChatSession) {
+        // Save to database
+        if let Err(e) = self.db.save_session(&session) {
+            log::error!("Failed to update session in database: {}", e);
+        }
+
+        // Update cache
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(session.id.clone(), session);
     }
@@ -127,9 +165,8 @@ impl SessionManager {
         content: String,
         files: Vec<FileAttachment>,
     ) -> Result<Vec<Source>, String> {
-        let mut sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get_mut(session_id)
+        // Get or load session
+        let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Convert file attachments to sources
@@ -141,7 +178,22 @@ impl SessionManager {
             })
             .collect();
 
+        // Add message to session
         session.add_message("user".to_string(), content, sources.clone());
+
+        // Get the last message
+        let message = session.messages.last()
+            .ok_or_else(|| "Failed to add message".to_string())?;
+
+        // Save message to database
+        if let Err(e) = self.db.save_message(session_id, message) {
+            log::error!("Failed to save message to database: {}", e);
+            return Err(format!("Failed to save message: {}", e));
+        }
+
+        // Update session in cache
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.insert(session_id.to_string(), session);
 
         Ok(sources)
     }
@@ -153,41 +205,68 @@ impl SessionManager {
         content: String,
         sources: Vec<Source>,
     ) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
-        let session = sessions
-            .get_mut(session_id)
+        // Get or load session
+        let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
+        // Add message to session
         session.add_message("assistant".to_string(), content, sources);
+
+        // Get the last message
+        let message = session.messages.last()
+            .ok_or_else(|| "Failed to add message".to_string())?;
+
+        // Save message to database
+        if let Err(e) = self.db.save_message(session_id, message) {
+            log::error!("Failed to save message to database: {}", e);
+            return Err(format!("Failed to save message: {}", e));
+        }
+
+        // Update session in cache
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.insert(session_id.to_string(), session);
 
         Ok(())
     }
 
     /// Delete a session
     pub fn delete_session(&self, session_id: &str) -> bool {
+        // Delete from database
+        let db_deleted = self.db.delete_session(session_id).unwrap_or(false);
+
+        // Remove from cache
         let mut sessions = self.sessions.write().unwrap();
-        sessions.remove(session_id).is_some()
+        let cache_deleted = sessions.remove(session_id).is_some();
+
+        db_deleted || cache_deleted
     }
 
-    /// Get all session IDs
+    /// Get all session IDs from database
     pub fn list_sessions(&self) -> Vec<String> {
-        let sessions = self.sessions.read().unwrap();
-        sessions.keys().cloned().collect()
+        match self.db.list_sessions() {
+            Ok(sessions) => sessions,
+            Err(e) => {
+                log::error!("Failed to list sessions from database: {}", e);
+                Vec::new()
+            }
+        }
     }
 
     /// Clean up old sessions (older than specified seconds)
     pub fn cleanup_old_sessions(&self, max_age_seconds: i64) {
+        // Clean up database
+        if let Err(e) = self.db.cleanup_old_sessions(max_age_seconds) {
+            log::error!("Failed to cleanup old sessions from database: {}", e);
+        }
+
+        // Clean up cache
         let now = chrono::Utc::now().timestamp();
         let mut sessions = self.sessions.write().unwrap();
         sessions.retain(|_, session| (now - session.updated_at) < max_age_seconds);
     }
 }
 
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Note: Default is not implemented as SessionManager requires a Database instance
 
 #[cfg(test)]
 mod tests {
@@ -195,7 +274,8 @@ mod tests {
 
     #[test]
     fn test_create_session() {
-        let manager = SessionManager::new();
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
         let session_id = manager.create_session();
         assert!(!session_id.is_empty());
 
@@ -205,7 +285,8 @@ mod tests {
 
     #[test]
     fn test_add_messages() {
-        let manager = SessionManager::new();
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
         let session_id = manager.create_session();
 
         let files = vec![FileAttachment {
@@ -229,7 +310,8 @@ mod tests {
 
     #[test]
     fn test_delete_session() {
-        let manager = SessionManager::new();
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
         let session_id = manager.create_session();
 
         assert!(manager.delete_session(&session_id));

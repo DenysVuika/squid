@@ -61,10 +61,16 @@ pub struct Config {
     pub permissions: Permissions,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(default = "default_database_path")]
+    pub database_path: String,
 }
 
 fn default_log_level() -> String {
     "error".to_string()
+}
+
+fn default_database_path() -> String {
+    "squid.db".to_string()
 }
 
 impl Default for Config {
@@ -76,6 +82,7 @@ impl Default for Config {
             log_level: default_log_level(),
             permissions: Permissions::default(),
             version: None,
+            database_path: default_database_path(),
         }
     }
 }
@@ -115,6 +122,7 @@ impl Config {
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
             permissions: Permissions::default(),
             version: None,
+            database_path: std::env::var("DATABASE_PATH").unwrap_or_else(|_| Self::default().database_path),
         }
     }
 
@@ -282,6 +290,7 @@ mod tests {
         assert_eq!(config.permissions.allow, vec!["now".to_string()]);
         assert_eq!(config.permissions.deny.len(), 0);
         assert_eq!(config.version, None);
+        assert_eq!(config.database_path, "squid.db");
     }
 
     #[test]

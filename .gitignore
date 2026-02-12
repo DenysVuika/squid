@@ -30,3 +30,4 @@ target
 # Application specific
 /static/*
 !/static/.gitkeep
+squid.db

@@ -1,7 +1,7 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
-import { streamChat } from '@/lib/chat-api';
+import { loadSession, streamChat } from '@/lib/chat-api';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
@@ -49,7 +49,7 @@ import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { CheckIcon, GlobeIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 interface MessageType {
@@ -393,12 +393,64 @@ const Example = () => {
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    // Load session ID from localStorage on mount
+    return localStorage.getItem('squid_session_id');
+  });
   const [, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionLoadedRef = useRef<boolean>(false);
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
+
+  // Load session history on mount if sessionId exists
+  useEffect(() => {
+    if (!sessionId || sessionLoadedRef.current) return;
+    sessionLoadedRef.current = true;
+
+    const loadSessionHistory = async () => {
+      console.log('[Session] Loading session:', sessionId);
+      const session = await loadSession('', sessionId);
+      if (!session) {
+        console.log('[Session] Session not found, starting fresh');
+        localStorage.removeItem('squid_session_id');
+        setSessionId(null);
+        return;
+      }
+
+      console.log(`[Session] Loaded session with ${session.messages.length} messages:`, session.messages);
+
+      // Convert session messages to UI format
+      const uiMessages: MessageType[] = [];
+      for (const msg of session.messages) {
+        console.log(`[Session] Converting message - role: ${msg.role}, content length: ${msg.content.length}`);
+        uiMessages.push({
+          from: msg.role as 'user' | 'assistant',
+          key: `${msg.role}-${msg.timestamp}`,
+          sources:
+            msg.sources.length > 0
+              ? msg.sources.map((s) => ({
+                  href: '#',
+                  title: s.title,
+                }))
+              : undefined,
+          versions: [
+            {
+              id: `${msg.role}-${msg.timestamp}-v1`,
+              content: msg.content,
+            },
+          ],
+        });
+      }
+
+      console.log('[Session] Setting messages in UI:', uiMessages.length);
+      setMessages(uiMessages);
+    };
+
+    loadSessionHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   const updateMessageContent = useCallback((messageId: string, newContent: string) => {
     setMessages((prev) =>
@@ -466,6 +518,8 @@ const Example = () => {
             signal: abortControllerRef.current?.signal,
             onSession: (newSessionId) => {
               setSessionId(newSessionId);
+              // Persist session ID to localStorage
+              localStorage.setItem('squid_session_id', newSessionId);
             },
             onSources: (sources) => {
               // Update the assistant message with sources
@@ -630,10 +684,40 @@ const Example = () => {
     }
   }, []);
 
+  const handleNewChat = useCallback(() => {
+    // Clear session ID from state and localStorage
+    setSessionId(null);
+    localStorage.removeItem('squid_session_id');
+
+    // Reset loaded flag
+    sessionLoadedRef.current = false;
+
+    // Reset messages to empty (clear the chat)
+    setMessages([]);
+
+    // Clear input
+    setText('');
+
+    // Reset status
+    setStatus('ready');
+
+    toast.success('New chat started');
+  }, []);
+
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
   return (
     <div className="relative flex size-full flex-col divide-y overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950">
+        <h2 className="text-sm font-semibold">Squid Chat</h2>
+        <button
+          className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+          onClick={handleNewChat}
+          type="button"
+        >
+          New Chat
+        </button>
+      </div>
       <Conversation>
         <ConversationContent>
           {messages.map(({ versions, ...message }) => (

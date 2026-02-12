@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 mod api;
 mod config;
+mod db;
 mod envinfo;
 mod llm;
 mod logger;
@@ -252,6 +253,7 @@ async fn main() {
                 log_level: final_log_level,
                 permissions: merged_permissions,
                 version: None, // Will be set automatically by save_to_dir()
+                database_path: config::Config::default().database_path,
             };
 
             match config.save_to_dir(dir) {
@@ -538,8 +540,26 @@ async fn main() {
             info!("Starting Squid Web UI on port {}", port);
 
             let bind_address = format!("127.0.0.1:{}", port);
-            let app_config = Arc::new(app_config);
-            let session_manager = Arc::new(session::SessionManager::new());
+            let app_config = Arc::new(app_config.clone());
+
+            // Initialize database
+            let db_path = &app_config.database_path;
+            info!("Initializing database at: {}", db_path);
+            let database = match db::Database::new(db_path) {
+                Ok(db) => {
+                    info!("Database initialized successfully");
+                    db
+                }
+                Err(e) => {
+                    error!("Failed to initialize database: {}", e);
+                    println!("🦑: Failed to initialize database - {}", e);
+                    println!("    Database path: {}", db_path);
+                    println!("    Make sure the directory is writable and the database file is not corrupted.");
+                    return;
+                }
+            };
+
+            let session_manager = Arc::new(session::SessionManager::new(database));
 
             println!("🦑: Starting Squid Web UI...");
             println!("🌐 Server running at: http://{}", bind_address);
@@ -554,6 +574,7 @@ async fn main() {
                     .service(
                         web::scope("/api")
                             .route("/chat", web::post().to(api::chat_stream))
+                            .route("/sessions/{session_id}", web::get().to(api::get_session))
                     )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))

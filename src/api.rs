@@ -58,6 +58,52 @@ pub enum StreamEvent {
     Done,
 }
 
+#[derive(Debug, Serialize)]
+pub struct SessionMessage {
+    pub role: String,
+    pub content: String,
+    pub sources: Vec<Source>,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SessionResponse {
+    pub session_id: String,
+    pub messages: Vec<SessionMessage>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Get session history by ID
+pub async fn get_session(
+    session_id: web::Path<String>,
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Getting session: {}", session_id);
+
+    match session_manager.get_session(&session_id) {
+        Some(session) => {
+            let response = SessionResponse {
+                session_id: session.id,
+                messages: session.messages.iter().map(|msg| SessionMessage {
+                    role: msg.role.clone(),
+                    content: msg.content.clone(),
+                    sources: msg.sources.iter().map(|s| Source {
+                        title: s.title.clone(),
+                    }).collect(),
+                    timestamp: msg.timestamp,
+                }).collect(),
+                created_at: session.created_at,
+                updated_at: session.updated_at,
+            };
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Session not found"
+        }))),
+    }
+}
+
 /// Handles streaming chat requests
 pub async fn chat_stream(
     body: web::Json<ChatRequest>,
@@ -131,12 +177,20 @@ pub async fn chat_stream(
             &app_config_clone,
             &session_manager_clone,
         ).await {
-            Ok((content_stream, assistant_content)) => {
+            Ok(content_stream) => {
+                // Accumulate assistant content as we stream it
+                let mut accumulated_content = String::new();
+
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
                 while let Some(result) = pinned_stream.next().await {
                     match result {
                         Ok(chunk) => {
+                            // Accumulate content chunks
+                            if let StreamEvent::Content { ref text } = chunk {
+                                accumulated_content.push_str(text);
+                            }
+
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
                             yield Ok::<_, actix_web::Error>(
                                 web::Bytes::from(format!("data: {}\n\n", json))
@@ -156,11 +210,19 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                let _ = session_manager_clone.add_assistant_message(
-                    &session_id,
-                    assistant_content,
-                    sources,
-                );
+                if !accumulated_content.is_empty() {
+                    debug!("Saving assistant message to session {} (length: {} chars)", session_id, accumulated_content.len());
+                    match session_manager_clone.add_assistant_message(
+                        &session_id,
+                        accumulated_content,
+                        sources,
+                    ) {
+                        Ok(_) => debug!("Assistant message saved successfully"),
+                        Err(e) => debug!("Failed to save assistant message: {}", e),
+                    }
+                } else {
+                    debug!("Skipping empty assistant message for session {}", session_id);
+                }
 
                 // Send done event
                 let done_event = StreamEvent::Done;
@@ -196,10 +258,7 @@ async fn create_chat_stream(
     app_config: &config::Config,
     session_manager: &session::SessionManager,
 ) -> Result<
-    (
-        impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
-        String,
-    ),
+    impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
 > {
     debug!("Using API URL: {}", app_config.api_url);
@@ -286,8 +345,6 @@ async fn create_chat_stream(
     );
 
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
-    let assistant_content = Arc::new(std::sync::Mutex::new(String::new()));
-    let assistant_content_clone = assistant_content.clone();
 
     let output_stream = async_stream::stream! {
         loop {
@@ -340,13 +397,8 @@ async fn create_chat_stream(
                 }
 
                 for choice in response.choices {
-                    // Handle content - yield it immediately and accumulate
+                    // Handle content - yield it immediately
                     if let Some(content) = &choice.delta.content {
-                        // Accumulate content for session storage
-                        if let Ok(mut acc) = assistant_content.lock() {
-                            acc.push_str(content);
-                        }
-
                         yield Ok(StreamEvent::Content {
                             text: content.clone(),
                         });
@@ -436,6 +488,5 @@ async fn create_chat_stream(
         }
     };
 
-    let final_content = assistant_content_clone.lock().unwrap().clone();
-    Ok((output_stream, final_content))
+    Ok(output_stream)
 }
