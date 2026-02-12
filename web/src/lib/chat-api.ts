@@ -29,6 +29,7 @@ export interface StreamHandlers {
   onToolResult?: (name: string, result: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -36,7 +37,7 @@ export interface StreamHandlers {
  *
  * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
  * @param message - The chat message to send
- * @param handlers - Callbacks for different event types
+ * @param handlers - Callbacks for different event types and optional abort signal
  * @returns Promise that resolves when the stream is complete
  *
  * @example
@@ -63,7 +64,7 @@ export interface StreamHandlers {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onContent, onToolCall, onToolResult, onError, onDone } = handlers;
+  const { onContent, onToolCall, onToolResult, onError, onDone, signal } = handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -74,6 +75,7 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(message),
+      signal,
     });
 
     if (!response.ok) {

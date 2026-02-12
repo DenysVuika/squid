@@ -395,6 +395,7 @@ const Example = () => {
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
   const [, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
@@ -414,12 +415,12 @@ const Example = () => {
 
   const streamResponse = useCallback(
     async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
       setStatus('streaming');
       setStreamingMessageId(messageId);
       streamingContentRef.current = ''; // Reset streaming content
-
-      // Debug: log files received
-      console.log('streamResponse called with files:', files);
 
       try {
         // Read file content if files are attached
@@ -427,7 +428,6 @@ const Example = () => {
         let fileName: string | undefined;
 
         if (files && files.length > 0) {
-          console.log('Processing file attachment:', files[0]);
           const file = files[0];
           if (file.type === 'file' && file.url) {
             // Use the actual filename from the file object
@@ -439,7 +439,6 @@ const Example = () => {
               const response = await fetch(file.url);
               if (response.ok) {
                 fileContent = await response.text();
-                console.log(`File attached: ${fileName} (${fileContent.length} bytes)`);
               } else {
                 console.error('Failed to fetch file:', response.statusText);
                 toast.error('Failed to read file', {
@@ -464,6 +463,7 @@ const Example = () => {
             file_path: fileName,
           },
           {
+            signal: abortControllerRef.current?.signal,
             onContent: (text) => {
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
@@ -492,17 +492,24 @@ const Example = () => {
             },
             onDone: () => {
               streamingContentRef.current = ''; // Clear ref after streaming
+              abortControllerRef.current = null;
               setStatus('ready');
               setStreamingMessageId(null);
             },
           }
         );
       } catch (error) {
-        console.error('Chat error:', error);
-        updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
-        toast.error('Failed to send message', {
-          description: error instanceof Error ? error.message : String(error),
-        });
+        // Don't show error if it was aborted by user
+        if (error instanceof Error && error.name === 'AbortError') {
+          updateMessageContent(messageId, streamingContentRef.current || 'Response stopped by user.');
+        } else {
+          console.error('Chat error:', error);
+          updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
+          toast.error('Failed to send message', {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+        abortControllerRef.current = null;
         setStatus('ready');
         setStreamingMessageId(null);
       }
@@ -594,7 +601,16 @@ const Example = () => {
     setModelSelectorOpen(false);
   }, []);
 
-  const isSubmitDisabled = useMemo(() => !(text.trim() || status) || status === 'streaming', [text, status]);
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setStatus('ready');
+      setStreamingMessageId(null);
+    }
+  }, []);
+
+  const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
   return (
     <div className="relative flex size-full flex-col divide-y overflow-hidden">
@@ -697,7 +713,7 @@ const Example = () => {
                   </ModelSelectorContent>
                 </ModelSelector>
               </PromptInputTools>
-              <PromptInputSubmit disabled={isSubmitDisabled} status={status} />
+              <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
             </PromptInputFooter>
           </PromptInput>
         </div>
