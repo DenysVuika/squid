@@ -535,9 +535,16 @@ const Example = () => {
       setTimeout(() => {
         const assistantMessageId = `assistant-${Date.now()}`;
 
+        // Create sources from attached files
+        const sources = files?.map((file) => ({
+          href: file.url || '#',
+          title: 'filename' in file ? String(file.filename) : 'Attached file',
+        }));
+
         const assistantMessage: MessageType = {
           from: 'assistant',
           key: `assistant-${Date.now()}`,
+          ...(sources && sources.length > 0 && { sources }),
           versions: [
             {
               content: '',
