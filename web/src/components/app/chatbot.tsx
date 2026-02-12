@@ -247,6 +247,58 @@ const Example = () => {
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
+  // Map local/unknown models to similar OpenAI models for cost estimation
+  const getModelIdForPricing = useMemo(() => {
+    const currentModelId = sessionModelId || model;
+
+    // If tokenlens knows this model, use it as-is
+    // Otherwise, map to a similar OpenAI model for cost comparison
+    const modelMappings: Record<string, string> = {
+      // Qwen models -> similar GPT-4 class
+      'qwen2.5-coder': 'gpt-4o',
+      'qwen-coder': 'gpt-4o',
+      qwen: 'gpt-4o',
+
+      // DeepSeek models -> GPT-4o
+      deepseek: 'gpt-4o',
+      'deepseek-coder': 'gpt-4o',
+      devstral: 'gpt-4o',
+
+      // Llama models -> GPT-4o
+      llama: 'gpt-4o',
+      'llama-3': 'gpt-4o',
+      codellama: 'gpt-4o',
+
+      // Mistral models -> GPT-4o
+      mistral: 'gpt-4o',
+      mixtral: 'gpt-4o',
+
+      // Phi models -> GPT-4o-mini (smaller)
+      phi: 'gpt-4o-mini',
+
+      // Gemma models -> GPT-4o-mini
+      gemma: 'gpt-4o-mini',
+
+      // Yi models -> GPT-4o
+      'yi-coder': 'gpt-4o',
+      yi: 'gpt-4o',
+
+      // StarCoder models -> GPT-4o
+      starcoder: 'gpt-4o',
+      wizardcoder: 'gpt-4o',
+    };
+
+    // Check if current model matches any pattern
+    for (const [pattern, fallback] of Object.entries(modelMappings)) {
+      if (currentModelId.toLowerCase().includes(pattern)) {
+        return fallback;
+      }
+    }
+
+    // Default to current model ID if no mapping found
+    return currentModelId;
+  }, [sessionModelId, model]);
+
   // Load session history on mount if sessionId exists
   useEffect(() => {
     if (!sessionId || sessionLoadedRef.current) return;
@@ -676,7 +728,7 @@ const Example = () => {
           <div className="flex items-center gap-2">
             <Context
               maxTokens={128000}
-              modelId={sessionModelId || model}
+              modelId={getModelIdForPricing}
               usage={{
                 inputTokens: tokenUsage.input_tokens,
                 outputTokens: tokenUsage.output_tokens,

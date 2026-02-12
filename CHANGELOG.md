@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Track input, output, reasoning, and cache tokens separately
   - Cost calculation based on model pricing (via tokenlens/models.dev)
   - Automatic token estimation for local models (LM Studio, Ollama) using tiktoken-rs
+  - Fallback pricing for local models maps them to similar OpenAI models (e.g., Qwen → GPT-4o) to show estimated cost savings
 - **Session Management**: Browse, rename, and organize chat sessions
   - Sessions automatically titled from first user message
   - Sidebar for browsing all past conversations
