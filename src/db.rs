@@ -33,15 +33,72 @@ impl Database {
     fn migrate(&self) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
 
-        // Read and execute migrations in order
-        let schema_001 = include_str!("../migrations/001_initial_schema.sql");
-        conn.execute_batch(schema_001)?;
+        // Create migrations tracking table if it doesn't exist
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
 
-        let schema_002 = include_str!("../migrations/002_logs_table.sql");
-        conn.execute_batch(schema_002)?;
+        // Helper function to check if migration was applied
+        let migration_applied = |version: i32| -> SqliteResult<bool> {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = ?1",
+                [version],
+                |row| row.get(0),
+            )?;
+            Ok(count > 0)
+        };
 
-        let schema_003 = include_str!("../migrations/003_session_titles.sql");
-        conn.execute_batch(schema_003)?;
+        // Helper function to mark migration as applied
+        let mark_migration_applied = |version: i32| -> SqliteResult<()> {
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
+                [version, chrono::Utc::now().timestamp() as i32],
+            )?;
+            Ok(())
+        };
+
+        // Helper function to run migration with error handling for duplicate columns
+        let run_migration = |version: i32, name: &str, sql: &str| -> SqliteResult<()> {
+            if !migration_applied(version)? {
+                debug!("Running migration {}: {}", version, name);
+                match conn.execute_batch(sql) {
+                    Ok(_) => {
+                        mark_migration_applied(version)?;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        // If error is about duplicate column, mark as applied (already exists)
+                        let err_msg = e.to_string();
+                        if err_msg.contains("duplicate column name") {
+                            debug!("Migration {} already partially applied (duplicate column), marking as complete", version);
+                            mark_migration_applied(version)?;
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    }
+                }
+            } else {
+                debug!("Skipping migration {} (already applied)", version);
+                Ok(())
+            }
+        };
+
+        // Migration 001: Initial schema
+        run_migration(1, "Initial schema", include_str!("../migrations/001_initial_schema.sql"))?;
+
+        // Migration 002: Logs table
+        run_migration(2, "Logs table", include_str!("../migrations/002_logs_table.sql"))?;
+
+        // Migration 003: Session titles
+        run_migration(3, "Session titles", include_str!("../migrations/003_session_titles.sql"))?;
+
+        // Migration 004: Token tracking
+        run_migration(4, "Token tracking", include_str!("../migrations/004_token_tracking.sql"))?;
 
         info!("Database migrations completed successfully");
         Ok(())
@@ -53,11 +110,45 @@ impl Database {
 
         debug!("Saving session: {}", session.id);
 
-        // Insert or update session
-        conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, created_at, updated_at, metadata, title) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![session.id, session.created_at, session.updated_at, Option::<String>::None, session.title.as_ref()],
+        // Try to update existing session first
+        let updated = conn.execute(
+            "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, model_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12 WHERE id = ?1",
+            params![
+                session.id,
+                session.created_at,
+                session.updated_at,
+                Option::<String>::None,
+                session.title.as_ref(),
+                session.model_id.as_ref(),
+                session.token_usage.total_tokens,
+                session.token_usage.input_tokens,
+                session.token_usage.output_tokens,
+                session.token_usage.reasoning_tokens,
+                session.token_usage.cache_tokens,
+                session.cost_usd,
+            ],
         )?;
+
+        // If no rows were updated, insert new session
+        if updated == 0 {
+            conn.execute(
+                "INSERT INTO sessions (id, created_at, updated_at, metadata, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    session.id,
+                    session.created_at,
+                    session.updated_at,
+                    Option::<String>::None,
+                    session.title.as_ref(),
+                    session.model_id.as_ref(),
+                    session.token_usage.total_tokens,
+                    session.token_usage.input_tokens,
+                    session.token_usage.output_tokens,
+                    session.token_usage.reasoning_tokens,
+                    session.token_usage.cache_tokens,
+                    session.cost_usd,
+                ],
+            )?;
+        }
 
         Ok(())
     }
@@ -69,7 +160,7 @@ impl Database {
         debug!("Loading session: {}", session_id);
 
         // Load session metadata
-        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title FROM sessions WHERE id = ?1")?;
+        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
             Ok(ChatSession {
                 id: row.get(0)?,
@@ -77,6 +168,15 @@ impl Database {
                 created_at: row.get(1)?,
                 updated_at: row.get(2)?,
                 title: row.get(3)?,
+                model_id: row.get(4)?,
+                token_usage: crate::session::TokenUsage {
+                    total_tokens: row.get(5)?,
+                    input_tokens: row.get(6)?,
+                    output_tokens: row.get(7)?,
+                    reasoning_tokens: row.get(8)?,
+                    cache_tokens: row.get(9)?,
+                },
+                cost_usd: row.get(10)?,
             })
         });
 
@@ -128,7 +228,7 @@ impl Database {
     pub fn save_message(&self, session_id: &str, message: &ChatMessage) -> SqliteResult<i64> {
         let conn = self.conn.lock().unwrap();
 
-        debug!("Saving message for session: {}", session_id);
+        debug!("Saving message for session: {} (role: {})", session_id, message.role);
 
         // Insert message
         conn.execute(
@@ -341,5 +441,125 @@ mod tests {
         // Verify session is deleted
         let loaded = db.load_session(&session.id).unwrap();
         assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_messages_persist_after_session_update() {
+        // Regression test for CASCADE DELETE bug where updating a session
+        // would delete all its messages due to INSERT OR REPLACE triggering
+        // ON DELETE CASCADE on the foreign key
+        let db = Database::new(":memory:").unwrap();
+
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        // Save initial session
+        db.save_session(&session).unwrap();
+
+        // Add first user message
+        session.add_message("user".to_string(), "First message".to_string(), vec![]);
+        let message1 = session.messages.last().unwrap();
+        db.save_message(&session_id, message1).unwrap();
+
+        // Update session (this used to trigger CASCADE DELETE)
+        session.title = Some("Test Session".to_string());
+        db.save_session(&session).unwrap();
+
+        // Verify first message still exists
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 1);
+        assert_eq!(loaded.messages[0].content, "First message");
+        assert_eq!(loaded.messages[0].role, "user");
+
+        // Add second assistant message
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        let message2 = session.messages.last().unwrap();
+        db.save_message(&session_id, message2).unwrap();
+
+        // Update session again with token usage
+        session.token_usage.total_tokens = 100;
+        session.token_usage.input_tokens = 50;
+        session.token_usage.output_tokens = 50;
+        db.save_session(&session).unwrap();
+
+        // Verify both messages still exist
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 2);
+        assert_eq!(loaded.messages[0].content, "First message");
+        assert_eq!(loaded.messages[0].role, "user");
+        assert_eq!(loaded.messages[1].content, "Response");
+        assert_eq!(loaded.messages[1].role, "assistant");
+
+        // Verify session metadata was updated
+        assert_eq!(loaded.title, Some("Test Session".to_string()));
+        assert_eq!(loaded.token_usage.total_tokens, 100);
+        assert_eq!(loaded.token_usage.input_tokens, 50);
+        assert_eq!(loaded.token_usage.output_tokens, 50);
+    }
+
+    #[test]
+    fn test_multiple_message_rounds_persist() {
+        // Test that multiple user-assistant message pairs persist correctly
+        // when session is updated between each pair
+        let db = Database::new(":memory:").unwrap();
+
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        // Save initial session
+        db.save_session(&session).unwrap();
+
+        // Simulate 3 rounds of conversation
+        for i in 1..=3 {
+            // Add user message
+            session.add_message(
+                "user".to_string(),
+                format!("User message {}", i),
+                vec![],
+            );
+            let user_msg = session.messages.last().unwrap();
+            db.save_message(&session_id, user_msg).unwrap();
+
+            // Update session
+            db.save_session(&session).unwrap();
+
+            // Add assistant message
+            session.add_message(
+                "assistant".to_string(),
+                format!("Assistant response {}", i),
+                vec![],
+            );
+            let assistant_msg = session.messages.last().unwrap();
+            db.save_message(&session_id, assistant_msg).unwrap();
+
+            // Update session with new token counts
+            session.token_usage.total_tokens += 10;
+            db.save_session(&session).unwrap();
+        }
+
+        // Verify all 6 messages (3 user + 3 assistant) persisted
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 6);
+
+        // Verify message order and content
+        for i in 0..3 {
+            let user_idx = i * 2;
+            let assistant_idx = user_idx + 1;
+
+            assert_eq!(loaded.messages[user_idx].role, "user");
+            assert_eq!(
+                loaded.messages[user_idx].content,
+                format!("User message {}", i + 1)
+            );
+
+            assert_eq!(loaded.messages[assistant_idx].role, "assistant");
+            assert_eq!(
+                loaded.messages[assistant_idx].content,
+                format!("Assistant response {}", i + 1)
+            );
+        }
+
+        // Verify final token count
+        assert_eq!(loaded.token_usage.total_tokens, 30);
     }
 }

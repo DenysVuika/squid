@@ -17,10 +17,26 @@ export interface ChatMessage {
   system_prompt?: string;
 }
 
-export type StreamEventType = 'session' | 'sources' | 'content' | 'tool_call' | 'tool_result' | 'error' | 'done';
+export type StreamEventType =
+  | 'session'
+  | 'sources'
+  | 'content'
+  | 'tool_call'
+  | 'tool_result'
+  | 'usage'
+  | 'error'
+  | 'done';
 
 export interface Source {
   title: string;
+}
+
+export interface TokenUsage {
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cache_tokens: number;
 }
 
 export interface StreamEvent {
@@ -31,6 +47,10 @@ export interface StreamEvent {
   name?: string;
   arguments?: string;
   result?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  reasoning_tokens?: number;
+  cache_tokens?: number;
   message?: string;
 }
 
@@ -40,6 +60,12 @@ export interface StreamHandlers {
   onContent: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
+  onUsage?: (usage: {
+    input_tokens: number;
+    output_tokens: number;
+    reasoning_tokens: number;
+    cache_tokens: number;
+  }) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
   signal?: AbortSignal;
@@ -58,6 +84,9 @@ export interface SessionData {
   created_at: number;
   updated_at: number;
   title: string | null;
+  model_id: string | null;
+  token_usage: TokenUsage;
+  cost_usd: number;
 }
 
 export interface SessionListItem {
@@ -67,6 +96,9 @@ export interface SessionListItem {
   updated_at: number;
   preview: string | null;
   title: string | null;
+  model_id: string | null;
+  token_usage: TokenUsage;
+  cost_usd: number;
 }
 
 export interface SessionListResponse {
@@ -106,7 +138,7 @@ export interface SessionListResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onSession, onSources, onContent, onToolCall, onToolResult, onError, onDone, signal } = handlers;
+  const { onSession, onSources, onContent, onToolCall, onToolResult, onUsage, onError, onDone, signal } = handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -178,6 +210,17 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
               case 'tool_result':
                 if (onToolResult && event.name && event.result) {
                   onToolResult(event.name, event.result);
+                }
+                break;
+
+              case 'usage':
+                if (onUsage && event.input_tokens !== undefined && event.output_tokens !== undefined) {
+                  onUsage({
+                    input_tokens: event.input_tokens,
+                    output_tokens: event.output_tokens,
+                    reasoning_tokens: event.reasoning_tokens || 0,
+                    cache_tokens: event.cache_tokens || 0,
+                  });
                 }
                 break;
 

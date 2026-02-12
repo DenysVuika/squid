@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Token Usage Tracking**: Per-session token and cost tracking
+  - Real-time token usage display in chat header using Context component
+  - Track input, output, reasoning, and cache tokens separately
+  - Session-level token accumulation across multiple turns
+  - Model tracking per session (first model used)
+  - Visual token usage indicator with percentage and counts
+  - Detailed token breakdown on hover (input/output/reasoning/cache)
+  - Cost calculation using tokenlens library (sources from models.dev)
+  - Token usage data persisted in database
+  - Token usage shown in session list API responses
+  - Database migration adds token tracking columns to sessions table
+  - `Usage` stream event type for real-time token updates during streaming
+  - Comprehensive documentation at `docs/TOKEN_TRACKING.md`
 - **Session Titles & Renaming**: Auto-generated titles and rename functionality
   - Sessions automatically titled from first user message (max 100 chars)
   - Rename any session with inline editing dialog
@@ -31,7 +44,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sessions display message count and last activity time
   - Smart date formatting (time/day/date based on age)
   - Auto-refreshes when new sessions are created (no page reload needed)
-  - Shimmer loading indicator shown while AI is thinking (before streaming starts)
+  - **Shimmer loading indicator** shown while AI is thinking (before streaming starts)
+
+### Fixed
+
+- **Critical: User Messages Not Persisting**: Fixed database CASCADE DELETE issue where user messages were being deleted when sessions were updated
+  - Changed session save logic from `INSERT OR REPLACE` to `UPDATE`/`INSERT` pattern
+  - Prevents foreign key CASCADE from deleting messages when updating session metadata
+  - User messages now properly persist across session switches and server restarts
+  - Added comprehensive regression tests to ensure messages persist through session updates
+
+
+- **Migration System**: Database migrations now tracked to prevent duplicate runs
+  - Added `schema_migrations` table to track applied migrations
+  - Migrations are idempotent (safe to run multiple times)
+  - Gracefully handles databases with partially applied migrations
+  - Fixes "duplicate column name: title" error on existing databases
+- TypeScript type errors in Context component usage prop (now correctly implements LanguageModelUsage interface)
 - **Persistent Chat Sessions**: All conversations now automatically saved and restored
   - Chat history persists across page reloads and server restarts
   - Sessions stored in SQLite database (`squid.db`)

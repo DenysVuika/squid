@@ -52,6 +52,13 @@ pub enum StreamEvent {
     ToolCall { name: String, arguments: String },
     #[serde(rename = "tool_result")]
     ToolResult { name: String, result: String },
+    #[serde(rename = "usage")]
+    Usage {
+        input_tokens: i64,
+        output_tokens: i64,
+        reasoning_tokens: i64,
+        cache_tokens: i64,
+    },
     #[serde(rename = "error")]
     Error { message: String },
     #[serde(rename = "done")]
@@ -67,12 +74,24 @@ pub struct SessionMessage {
 }
 
 #[derive(Debug, Serialize)]
+pub struct TokenUsageResponse {
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SessionResponse {
     pub session_id: String,
     pub messages: Vec<SessionMessage>,
     pub created_at: i64,
     pub updated_at: i64,
     pub title: Option<String>,
+    pub model_id: Option<String>,
+    pub token_usage: TokenUsageResponse,
+    pub cost_usd: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,6 +102,9 @@ pub struct SessionListItem {
     pub updated_at: i64,
     pub preview: Option<String>,
     pub title: Option<String>,
+    pub model_id: Option<String>,
+    pub token_usage: TokenUsageResponse,
+    pub cost_usd: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,6 +177,15 @@ pub async fn get_session(
                 created_at: session.created_at,
                 updated_at: session.updated_at,
                 title: session.title.clone(),
+                model_id: session.model_id.clone(),
+                token_usage: TokenUsageResponse {
+                    total_tokens: session.token_usage.total_tokens,
+                    input_tokens: session.token_usage.input_tokens,
+                    output_tokens: session.token_usage.output_tokens,
+                    reasoning_tokens: session.token_usage.reasoning_tokens,
+                    cache_tokens: session.token_usage.cache_tokens,
+                },
+                cost_usd: session.cost_usd,
             };
             Ok(HttpResponse::Ok().json(response))
         }
@@ -189,12 +220,21 @@ pub async fn list_sessions(
                 });
 
             sessions.push(SessionListItem {
-                session_id: session.id,
+                session_id: session.id.clone(),
                 message_count: session.messages.len(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
                 preview,
                 title: session.title.clone(),
+                model_id: session.model_id.clone(),
+                token_usage: TokenUsageResponse {
+                    total_tokens: session.token_usage.total_tokens,
+                    input_tokens: session.token_usage.input_tokens,
+                    output_tokens: session.token_usage.output_tokens,
+                    reasoning_tokens: session.token_usage.reasoning_tokens,
+                    cache_tokens: session.token_usage.cache_tokens,
+                },
+                cost_usd: session.cost_usd,
             });
         }
     }
@@ -270,6 +310,7 @@ pub async fn chat_stream(
     let system_prompt = body.system_prompt.clone();
     let app_config_clone = app_config.get_ref().clone();
     let session_manager_clone = session_manager.get_ref().clone();
+    let model_id = app_config.api_model.clone();
 
     // Get or create session
     let session_id = body.session_id.clone().unwrap_or_else(|| {
@@ -328,8 +369,12 @@ pub async fn chat_stream(
             &session_manager_clone,
         ).await {
             Ok(content_stream) => {
-                // Accumulate assistant content as we stream it
+                // Accumulate assistant content and token usage as we stream
                 let mut accumulated_content = String::new();
+                let mut total_input_tokens = 0i64;
+                let mut total_output_tokens = 0i64;
+                let mut total_reasoning_tokens = 0i64;
+                let mut total_cache_tokens = 0i64;
 
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
@@ -339,6 +384,14 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
+                            }
+
+                            // Accumulate token usage
+                            if let StreamEvent::Usage { input_tokens, output_tokens, reasoning_tokens, cache_tokens } = chunk {
+                                total_input_tokens += input_tokens;
+                                total_output_tokens += output_tokens;
+                                total_reasoning_tokens += reasoning_tokens;
+                                total_cache_tokens += cache_tokens;
                             }
 
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
@@ -372,6 +425,22 @@ pub async fn chat_stream(
                     }
                 } else {
                     debug!("Skipping empty assistant message for session {}", session_id);
+                }
+
+                // Update session with token usage and model info
+                if total_input_tokens > 0 || total_output_tokens > 0 {
+                    debug!("Updating session {} with token usage: input={}, output={}",
+                           session_id, total_input_tokens, total_output_tokens);
+                    if let Err(e) = session_manager_clone.update_token_usage(
+                        &session_id,
+                        &model_id,
+                        total_input_tokens,
+                        total_output_tokens,
+                        total_reasoning_tokens,
+                        total_cache_tokens,
+                    ) {
+                        debug!("Failed to update token usage: {}", e);
+                    }
                 }
 
                 // Send done event
@@ -538,12 +607,19 @@ async fn create_chat_stream(
                     }
                 };
 
-                // Log token usage statistics from streaming response
+                // Yield token usage statistics from streaming response
                 if let Some(usage) = &response.usage {
                     debug!(
                         "Token usage - Prompt: {}, Completion: {}, Total: {}",
                         usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                     );
+
+                    yield Ok(StreamEvent::Usage {
+                        input_tokens: usage.prompt_tokens as i64,
+                        output_tokens: usage.completion_tokens as i64,
+                        reasoning_tokens: 0, // Not provided by OpenAI streaming API
+                        cache_tokens: 0,     // Not provided by OpenAI streaming API
+                    });
                 }
 
                 for choice in response.choices {

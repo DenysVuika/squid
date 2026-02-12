@@ -5,6 +5,18 @@ import { loadSession, streamChat } from '@/lib/chat-api';
 import { SessionList } from '@/components/app/session-list';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
+import {
+  Context,
+  ContextCacheUsage,
+  ContextContent,
+  ContextContentBody,
+  ContextContentFooter,
+  ContextContentHeader,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextReasoningUsage,
+  ContextTrigger,
+} from '@/components/ai-elements/context';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
   Message,
@@ -223,6 +235,16 @@ const Example = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0);
 
+  // Token usage tracking
+  const [tokenUsage, setTokenUsage] = useState({
+    total_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    reasoning_tokens: 0,
+    cache_tokens: 0,
+  });
+  const [sessionModelId, setSessionModelId] = useState<string | null>(null);
+
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
 
   // Load session history on mount if sessionId exists
@@ -245,7 +267,6 @@ const Example = () => {
       // Convert session messages to UI format
       const uiMessages: MessageType[] = [];
       for (const msg of session.messages) {
-        console.log(`[Session] Converting message - role: ${msg.role}, content length: ${msg.content.length}`);
         uiMessages.push({
           from: msg.role as 'user' | 'assistant',
           key: `${msg.role}-${msg.timestamp}`,
@@ -265,8 +286,13 @@ const Example = () => {
         });
       }
 
-      console.log('[Session] Setting messages in UI:', uiMessages.length);
+      console.log(`[Session] Loaded ${uiMessages.length} messages`);
       setMessages(uiMessages);
+
+      // Load token usage from session
+      setTokenUsage(session.token_usage);
+      setSessionModelId(session.model_id);
+      console.log('[Session] Token usage:', session.token_usage);
     };
 
     loadSessionHistory();
@@ -362,21 +388,48 @@ const Example = () => {
               );
             },
             onContent: (text) => {
+              console.log('[Stream] Received content chunk:', text.substring(0, 50));
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
               const currentContent = streamingContentRef.current;
+              console.log('[Stream] Looking for messageId:', messageId);
 
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  if (msg.versions.some((v) => v.id === messageId)) {
+              setMessages((prev) => {
+                console.log('[Stream] Current messages:', prev.length);
+                const updated = prev.map((msg) => {
+                  const hasVersion = msg.versions.some((v) => v.id === messageId);
+                  console.log('[Stream] Message key:', msg.key, 'has matching version:', hasVersion);
+                  if (hasVersion) {
                     return {
                       ...msg,
                       versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: currentContent } : v)),
                     };
                   }
                   return msg;
-                })
-              );
+                });
+                console.log('[Stream] Updated messages:', updated.length);
+                return updated;
+              });
+            },
+            onUsage: (usage) => {
+              console.log('[Token Usage] Received:', usage);
+              // Update token usage
+              setTokenUsage((prev) => {
+                const updated = {
+                  total_tokens:
+                    prev.total_tokens +
+                    usage.input_tokens +
+                    usage.output_tokens +
+                    usage.reasoning_tokens +
+                    usage.cache_tokens,
+                  input_tokens: prev.input_tokens + usage.input_tokens,
+                  output_tokens: prev.output_tokens + usage.output_tokens,
+                  reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
+                  cache_tokens: prev.cache_tokens + usage.cache_tokens,
+                };
+                console.log('[Token Usage] Updated from:', prev, 'to:', updated);
+                return updated;
+              });
             },
             onError: (error) => {
               console.error('Stream error:', error);
@@ -524,6 +577,16 @@ const Example = () => {
     // Reset status
     setStatus('ready');
 
+    // Reset token usage
+    setTokenUsage({
+      total_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      reasoning_tokens: 0,
+      cache_tokens: 0,
+    });
+    setSessionModelId(null);
+
     toast.success('New chat started');
   }, []);
 
@@ -566,9 +629,15 @@ const Example = () => {
         });
       }
 
+      console.log(`[Session] Switched to session with ${uiMessages.length} messages`);
       setMessages(uiMessages);
       setText('');
       setStatus('ready');
+
+      // Load token usage from session
+      setTokenUsage(session.token_usage);
+      setSessionModelId(session.model_id);
+      console.log('[Session] Token usage:', session.token_usage);
 
       toast.success('Session loaded');
     },
@@ -604,13 +673,48 @@ const Example = () => {
             </button>
             <h2 className="text-sm font-semibold">Squid Chat</h2>
           </div>
-          <button
-            className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-            onClick={handleNewChat}
-            type="button"
-          >
-            New Chat
-          </button>
+          <div className="flex items-center gap-2">
+            <Context
+              maxTokens={128000}
+              modelId={sessionModelId || model}
+              usage={{
+                inputTokens: tokenUsage.input_tokens,
+                outputTokens: tokenUsage.output_tokens,
+                totalTokens: tokenUsage.total_tokens,
+                inputTokenDetails: {
+                  noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
+                  cacheReadTokens: tokenUsage.cache_tokens,
+                  cacheWriteTokens: undefined,
+                },
+                outputTokenDetails: {
+                  textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
+                  reasoningTokens: tokenUsage.reasoning_tokens,
+                },
+              }}
+              usedTokens={tokenUsage.total_tokens}
+            >
+              <ContextTrigger />
+              <ContextContent>
+                <ContextContentHeader />
+                <ContextContentBody>
+                  <div className="space-y-2">
+                    <ContextInputUsage />
+                    <ContextOutputUsage />
+                    <ContextReasoningUsage />
+                    <ContextCacheUsage />
+                  </div>
+                </ContextContentBody>
+                <ContextContentFooter />
+              </ContextContent>
+            </Context>
+            <button
+              className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+              onClick={handleNewChat}
+              type="button"
+            >
+              New Chat
+            </button>
+          </div>
         </div>
         <Conversation>
           <ConversationContent>

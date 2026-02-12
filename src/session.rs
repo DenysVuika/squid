@@ -28,6 +28,16 @@ pub struct Source {
     pub content: String,
 }
 
+/// Token usage tracking for a session
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TokenUsage {
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+}
+
 /// Represents a chat session with history and context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSession {
@@ -36,6 +46,9 @@ pub struct ChatSession {
     pub created_at: i64,
     pub updated_at: i64,
     pub title: Option<String>,
+    pub model_id: Option<String>,
+    pub token_usage: TokenUsage,
+    pub cost_usd: f64,
 }
 
 impl ChatSession {
@@ -48,6 +61,29 @@ impl ChatSession {
             created_at: now,
             updated_at: now,
             title: None,
+            model_id: None,
+            token_usage: TokenUsage::default(),
+            cost_usd: 0.0,
+        }
+    }
+
+    /// Update token usage for this session
+    pub fn add_tokens(&mut self, input: i64, output: i64, reasoning: i64, cache: i64) {
+        self.token_usage.input_tokens += input;
+        self.token_usage.output_tokens += output;
+        self.token_usage.reasoning_tokens += reasoning;
+        self.token_usage.cache_tokens += cache;
+        self.token_usage.total_tokens =
+            self.token_usage.input_tokens +
+            self.token_usage.output_tokens +
+            self.token_usage.reasoning_tokens +
+            self.token_usage.cache_tokens;
+    }
+
+    /// Set the model used for this session
+    pub fn set_model(&mut self, model_id: String) {
+        if self.model_id.is_none() {
+            self.model_id = Some(model_id);
         }
     }
 
@@ -314,6 +350,39 @@ impl SessionManager {
         let mut sessions = self.sessions.write().unwrap();
         sessions.retain(|_, session| (now - session.updated_at) < max_age_seconds);
     }
+
+    /// Update token usage for a session
+    pub fn update_token_usage(
+        &self,
+        session_id: &str,
+        model_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+        reasoning_tokens: i64,
+        cache_tokens: i64,
+    ) -> Result<(), String> {
+        // Get or load session
+        let mut session = self.get_session(session_id)
+            .ok_or_else(|| "Session not found".to_string())?;
+
+        // Set model if not already set
+        session.set_model(model_id.to_string());
+
+        // Add token usage
+        session.add_tokens(input_tokens, output_tokens, reasoning_tokens, cache_tokens);
+
+        // Update session in database
+        if let Err(e) = self.db.save_session(&session) {
+            log::error!("Failed to update session token usage in database: {}", e);
+            return Err(format!("Failed to update token usage: {}", e));
+        }
+
+        // Update cache
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.insert(session_id.to_string(), session);
+
+        Ok(())
+    }
 }
 
 // Note: Default is not implemented as SessionManager requires a Database instance
@@ -366,5 +435,146 @@ mod tests {
 
         assert!(manager.delete_session(&session_id));
         assert!(manager.get_session(&session_id).is_none());
+    }
+
+    #[test]
+    fn test_messages_persist_after_multiple_updates() {
+        // Regression test for CASCADE DELETE bug
+        // Ensures user messages persist when session metadata is updated
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Add first user message
+        manager
+            .add_user_message(&session_id, "First question".to_string(), vec![])
+            .unwrap();
+
+        // Verify message exists
+        let session = manager.get_session(&session_id).unwrap();
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, "user");
+        assert_eq!(session.messages[0].content, "First question");
+
+        // Add assistant response
+        manager
+            .add_assistant_message(&session_id, "First answer".to_string(), vec![])
+            .unwrap();
+
+        // Verify both messages exist
+        let session = manager.get_session(&session_id).unwrap();
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].role, "user");
+        assert_eq!(session.messages[1].role, "assistant");
+
+        // Add second round of messages
+        manager
+            .add_user_message(&session_id, "Second question".to_string(), vec![])
+            .unwrap();
+
+        manager
+            .add_assistant_message(&session_id, "Second answer".to_string(), vec![])
+            .unwrap();
+
+        // Verify all 4 messages persist
+        let session = manager.get_session(&session_id).unwrap();
+        assert_eq!(session.messages.len(), 4);
+        assert_eq!(session.messages[0].content, "First question");
+        assert_eq!(session.messages[1].content, "First answer");
+        assert_eq!(session.messages[2].content, "Second question");
+        assert_eq!(session.messages[3].content, "Second answer");
+    }
+
+    #[test]
+    fn test_user_messages_persist_across_reload() {
+        // Test that user messages persist when session is loaded from database
+        // This simulates clearing the in-memory cache and reloading from DB
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Add multiple user-assistant pairs
+        for i in 1..=3 {
+            manager
+                .add_user_message(&session_id, format!("Question {}", i), vec![])
+                .unwrap();
+
+            manager
+                .add_assistant_message(&session_id, format!("Answer {}", i), vec![])
+                .unwrap();
+        }
+
+        // Clear the in-memory cache to force reload from database
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        // Load session from database (should be loaded fresh from DB)
+        let session = manager.get_session(&session_id).unwrap();
+
+        // Verify all 6 messages (3 user + 3 assistant) were persisted
+        assert_eq!(session.messages.len(), 6);
+
+        for i in 0..3 {
+            let user_idx = i * 2;
+            let assistant_idx = user_idx + 1;
+
+            assert_eq!(session.messages[user_idx].role, "user");
+            assert_eq!(
+                session.messages[user_idx].content,
+                format!("Question {}", i + 1)
+            );
+
+            assert_eq!(session.messages[assistant_idx].role, "assistant");
+            assert_eq!(
+                session.messages[assistant_idx].content,
+                format!("Answer {}", i + 1)
+            );
+        }
+    }
+
+    #[test]
+    fn test_token_usage_updates_dont_delete_messages() {
+        // Ensure updating token usage doesn't trigger message deletion
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Add initial messages
+        manager
+            .add_user_message(&session_id, "Test message".to_string(), vec![])
+            .unwrap();
+
+        manager
+            .add_assistant_message(&session_id, "Test response".to_string(), vec![])
+            .unwrap();
+
+        // Update token usage multiple times (simulates streaming updates)
+        for i in 1..=5 {
+            manager.update_token_usage(
+                &session_id,
+                "test-model",
+                i * 5,
+                i * 5,
+                0,
+                0,
+            ).unwrap();
+        }
+
+        // Clear cache and reload from database
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        // Verify messages still exist after multiple token updates
+        let session = manager.get_session(&session_id).unwrap();
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].content, "Test message");
+        assert_eq!(session.messages[1].content, "Test response");
+        // Token usage accumulates: sum of (1+2+3+4+5) * 5 for each = 75
+        assert_eq!(session.token_usage.input_tokens, 75);
+        assert_eq!(session.token_usage.output_tokens, 75);
     }
 }

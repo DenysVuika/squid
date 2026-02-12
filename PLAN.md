@@ -64,11 +64,17 @@ All tasks in this phase have been completed:
 - ✅ Add user-editable session names (rename functionality)
 - ✅ `PATCH /api/sessions/{id}` endpoint for renaming
 - ✅ Inline edit dialog in session sidebar UI
+- ✅ Store token usage per session (input, output, reasoning, cache tokens)
+- ✅ Track model used per session (first model used is stored)
+- ✅ Real-time token usage display in chat UI with Context component
+- ✅ Cost calculation using tokenlens library
+- ✅ Token usage data persisted in database
+- ✅ `Usage` stream event type for real-time token updates
 
 **Future Enhancements:**
-- [ ] Store token usage per session
-- [ ] Track model used per session
 - [ ] Session tags/categories
+- [ ] Token usage analytics and reporting
+- [ ] Cost tracking over time with charts
 
 ### 2.3 Web UI for Session Management ✅ COMPLETED
 
@@ -378,6 +384,8 @@ cargo run -- serve
 # - Notice auto-generated titles from first messages
 ```
 
+**Phase 2.2 Token Tracking is complete! ✅ All session management features including token tracking are now implemented!**
+
 **Suggested next steps (Phase 3):**
 > "Implement session cleanup scheduler (Phase 3.1) with configurable retention policies"
 
@@ -387,4 +395,4 @@ or
 
 or
 
-> "Add token usage tracking per session (Phase 2.2 enhancement)"
+> "Enhance file handling (Phase 3.4) - file hashing, deduplication, and binary file support"
