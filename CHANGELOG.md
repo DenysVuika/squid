@@ -27,12 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Delete sessions with confirmation
   - Smart date formatting and auto-refresh
 - **Shimmer Loading Indicator**: Visual feedback while AI is thinking
+- **File Content Deduplication**: Identical file attachments are stored only once in the database
+  - Reduces database size when same files are attached multiple times
+  - Uses SHA-256 hashing to identify duplicate content
+- **File Content Compression**: All file attachments are compressed with gzip in the database
+  - Automatic compression/decompression when saving and loading files
+  - Significantly reduces storage requirements
+  - Logging shows compression ratio for each file
+- **File Size Limits**: Files larger than 10MB are rejected with clear error messages
+  - Prevents accidentally uploading very large files
+  - Protects database from growing too large
+- **Clickable Source Files**: Click on "Used X sources" to view file contents in a right sidebar
+  - Shows full file content in a scrollable, formatted view
+  - Displays file size and character count
+  - Slides in from the right, no content overflow issues
+  - Easy to close and review what context the AI used
 
 ### Fixed
 
+- **Sources Display on Restored Sessions**: "Used X sources" now only shows on assistant messages, not user messages
 - **User Messages Not Persisting**: Fixed messages being deleted when switching sessions
 - **Token Counts for Local Models**: Token estimates now display correctly in UI
 - **Database Migrations**: Prevented duplicate migrations and "duplicate column" errors
+- **Session List Scrolling**: Session sidebar now properly scrolls when many sessions are present
 
 ### Changed
 

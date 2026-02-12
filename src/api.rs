@@ -37,6 +37,7 @@ pub struct ChatRequest {
 #[derive(Debug, Serialize, Clone)]
 pub struct Source {
     pub title: String,
+    pub content: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -173,6 +174,7 @@ pub async fn get_session(
                     content: msg.content.clone(),
                     sources: msg.sources.iter().map(|s| Source {
                         title: s.title.clone(),
+                        content: s.content.clone(),
                     }).collect(),
                     timestamp: msg.timestamp,
                 }).collect(),
@@ -309,6 +311,18 @@ pub async fn chat_stream(
     debug!("Received chat request: {:?}", body);
 
     let question = body.message.clone();
+
+    // Validate file sizes (10MB limit per file)
+    const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
+    for file in &body.files {
+        if file.content.len() > MAX_FILE_SIZE {
+            return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+                "error": format!("File '{}' exceeds size limit of 10MB ({} bytes > {} bytes)",
+                    file.filename, file.content.len(), MAX_FILE_SIZE)
+            })));
+        }
+    }
+
     let files: Vec<session::FileAttachment> = body.files.iter().map(|f| session::FileAttachment {
         filename: f.filename.clone(),
         content: f.content.clone(),
@@ -359,6 +373,7 @@ pub async fn chat_stream(
             let sources_event = StreamEvent::Sources {
                 sources: sources.iter().map(|s| Source {
                     title: s.title.clone(),
+                    content: s.content.clone(),
                 }).collect(),
             };
             let json = serde_json::to_string(&sources_event).unwrap_or_default();

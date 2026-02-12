@@ -58,7 +58,8 @@ import {
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { CheckIcon, GlobeIcon } from 'lucide-react';
@@ -68,7 +69,7 @@ import { toast } from 'sonner';
 interface MessageType {
   key: string;
   from: 'user' | 'assistant';
-  sources?: { href: string; title: string }[];
+  sources?: { href: string; title: string; content: string }[];
   versions: {
     id: string;
     content: string;
@@ -234,6 +235,8 @@ const Example = () => {
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0);
+  const [sourceContentOpen, setSourceContentOpen] = useState(false);
+  const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
   // Token usage tracking
   const [tokenUsage, setTokenUsage] = useState({
@@ -325,6 +328,7 @@ const Example = () => {
             ? msg.sources.map((s) => ({
                 href: '#',
                 title: s.title,
+                content: s.content,
               }))
             : undefined,
         versions: [
@@ -434,6 +438,7 @@ const Example = () => {
                       sources: sources.map((s) => ({
                         href: '#',
                         title: s.title,
+                        content: s.content,
                       })),
                     };
                   }
@@ -685,6 +690,7 @@ const Example = () => {
               ? msg.sources.map((s) => ({
                   href: '#',
                   title: s.title,
+                  content: s.content,
                 }))
               : undefined,
           versions: [
@@ -713,10 +719,15 @@ const Example = () => {
 
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
+  const handleViewSourceContent = useCallback((title: string, content: string) => {
+    setSourceContentData({ title, content });
+    setSourceContentOpen(true);
+  }, []);
+
   return (
     <div className="relative flex size-full overflow-hidden">
       {sidebarOpen && (
-        <div className="w-64 shrink-0">
+        <div className="flex h-full w-64 shrink-0">
           <SessionList
             currentSessionId={sessionId}
             onSessionSelect={handleSessionSelect}
@@ -791,12 +802,33 @@ const Example = () => {
                   {versions.map((version) => (
                     <Message from={message.from} key={`${message.key}-${version.id}`}>
                       <div>
-                        {message.sources?.length && (
+                        {message.from === 'assistant' && message.sources?.length && (
                           <Sources>
                             <SourcesTrigger count={message.sources.length} />
                             <SourcesContent>
                               {message.sources.map((source) => (
-                                <Source href={source.href} key={source.href} title={source.title} />
+                                <button
+                                  key={source.href}
+                                  className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
+                                  onClick={() => handleViewSourceContent(source.title, source.content)}
+                                  type="button"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                                    />
+                                  </svg>
+                                  <span className="block font-medium">{source.title}</span>
+                                </button>
                               ))}
                             </SourcesContent>
                           </Sources>
@@ -892,6 +924,40 @@ const Example = () => {
           </div>
         </div>
       </div>
+
+      {/* Source Content Sidebar */}
+      {sourceContentOpen && sourceContentData && (
+        <div className="fixed right-0 top-0 h-full w-96 border-l bg-background shadow-lg z-50 flex flex-col">
+          <div className="flex items-center justify-between border-b p-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold truncate">{sourceContentData.title}</h3>
+              <p className="text-xs text-muted-foreground">
+                {sourceContentData.content.length.toLocaleString()} characters
+              </p>
+            </div>
+            <button
+              onClick={() => setSourceContentOpen(false)}
+              className="ml-2 rounded-md p-2 hover:bg-accent"
+              type="button"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <ScrollArea className="flex-1">
+            <pre className="p-4 text-sm">
+              <code>{sourceContentData.content}</code>
+            </pre>
+          </ScrollArea>
+        </div>
+      )}
     </div>
   );
 };

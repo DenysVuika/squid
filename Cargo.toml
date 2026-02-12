@@ -48,3 +48,5 @@ uuid = { version = "1.0", features = ["v4"] }
 walkdir = "2.5"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 tiktoken-rs = "0.9.1"
+flate2 = "1.0"
+sha2 = "0.10"

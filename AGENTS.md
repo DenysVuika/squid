@@ -90,6 +90,12 @@ Only maintain these files:
 - **Compatibility**: LM Studio and OpenAI APIs.
 - **Streaming**: Must be maintained.
 
+### **Web UI Components**
+- **`web/src/components/ai-elements/`**: Reusable UI components - **DO NOT MODIFY** unless fixing bugs.
+- **`web/src/components/app/`**: Application-specific components - Can be freely modified.
+- **Component customization**: Extend ai-elements behavior in parent components, not by changing ai-elements themselves.
+- **Example**: Instead of adding props to `Source` component, handle clicks in the parent `chatbot.tsx`.
+
 ---
 
 ## Documentation Summary

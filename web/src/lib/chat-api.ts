@@ -29,6 +29,7 @@ export type StreamEventType =
 
 export interface Source {
   title: string;
+  content: string;
 }
 
 export interface TokenUsage {

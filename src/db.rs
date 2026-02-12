@@ -2,6 +2,11 @@ use log::{debug, info};
 use rusqlite::{params, Connection, Result as SqliteResult};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::io::{Read, Write};
+use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use sha2::{Sha256, Digest};
 
 use crate::session::{ChatMessage, ChatSession, Source};
 
@@ -103,6 +108,9 @@ impl Database {
         // Migration 005: Context window
         run_migration(5, "Context window", include_str!("../migrations/005_context_window.sql"))?;
 
+        // Migration 006: Deduplicate sources
+        run_migration(6, "Deduplicate sources", include_str!("../migrations/006_deduplicate_sources.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -199,23 +207,54 @@ impl Database {
         )?;
 
         let messages = msg_stmt.query_map(params![session_id], |row| {
-            let message_id: i64 = row.get(0)?;
-            let role: String = row.get(1)?;
-            let content: String = row.get(2)?;
-            let timestamp: i64 = row.get(3)?;
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?
+            ))
+        })?
+        .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
 
-            // Load sources for this message
+        // Convert to ChatMessages and load sources for each
+        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
+            // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
-                "SELECT title, content FROM sources WHERE message_id = ?1"
+                "SELECT s.title, s.content, s.content_id, fc.content_compressed
+                 FROM sources s
+                 LEFT JOIN file_contents fc ON s.content_id = fc.id
+                 WHERE s.message_id = ?1"
             )?;
 
             let sources = source_stmt.query_map(params![message_id], |row| {
+                let title: String = row.get(0)?;
+
+                // Try to get content from new schema first (compressed)
+                let content = if let Ok(Some(compressed_data)) = row.get::<_, Option<Vec<u8>>>(3) {
+                    // Decompress content
+                    let mut decoder = GzDecoder::new(&compressed_data[..]);
+                    let mut decompressed = String::new();
+                    decoder.read_to_string(&mut decompressed).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            3,
+                            rusqlite::types::Type::Blob,
+                            Box::new(e)
+                        )
+                    })?;
+                    decompressed
+                } else if let Ok(Some(old_content)) = row.get::<_, Option<String>>(1) {
+                    // Fall back to old schema (uncompressed, might be NULL)
+                    old_content
+                } else {
+                    // Should not happen, but handle gracefully
+                    String::new()
+                };
+
                 Ok(Source {
-                    title: row.get(0)?,
-                    content: row.get(1)?,
+                    title,
+                    content,
                 })
-            })?
-            .collect::<SqliteResult<Vec<Source>>>()?;
+            })?.collect::<SqliteResult<Vec<Source>>>()?;
 
             Ok(ChatMessage {
                 role,
@@ -223,8 +262,7 @@ impl Database {
                 sources,
                 timestamp,
             })
-        })?
-        .collect::<SqliteResult<Vec<ChatMessage>>>()?;
+        }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
 
         session.messages = messages;
 
@@ -245,11 +283,63 @@ impl Database {
 
         let message_id = conn.last_insert_rowid();
 
-        // Insert sources
+        // Insert sources with deduplication and compression
         for source in &message.sources {
+            // Check file size limit (10MB)
+            const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
+            if source.content.len() > MAX_FILE_SIZE {
+                debug!("Source '{}' exceeds size limit ({} bytes > {} bytes), skipping",
+                    source.title, source.content.len(), MAX_FILE_SIZE);
+                continue;
+            }
+
+            // Calculate hash of content
+            let mut hasher = Sha256::new();
+            hasher.update(source.content.as_bytes());
+            let hash = format!("{:x}", hasher.finalize());
+
+            // Check if content already exists
+            let content_id: Option<i64> = conn.query_row(
+                "SELECT id FROM file_contents WHERE content_hash = ?1",
+                params![hash],
+                |row| row.get(0),
+            ).ok();
+
+            let content_id = if let Some(id) = content_id {
+                // Content already exists, reuse it
+                debug!("Reusing existing content (hash: {})", hash);
+                id
+            } else {
+                // Compress content
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                encoder.write_all(source.content.as_bytes()).map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+                })?;
+                let compressed = encoder.finish().map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+                })?;
+
+                let original_size = source.content.len() as i64;
+                let compressed_size = compressed.len() as i64;
+
+                debug!("Compressed content from {} to {} bytes ({:.1}% reduction)",
+                    original_size, compressed_size,
+                    100.0 * (1.0 - compressed_size as f64 / original_size as f64));
+
+                // Insert new content
+                conn.execute(
+                    "INSERT INTO file_contents (content_hash, content_compressed, original_size, compressed_size, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![hash, compressed, original_size, compressed_size, chrono::Utc::now().timestamp()],
+                )?;
+
+                conn.last_insert_rowid()
+            };
+
+            // Insert source reference
             conn.execute(
-                "INSERT INTO sources (message_id, title, content) VALUES (?1, ?2, ?3)",
-                params![message_id, source.title, source.content],
+                "INSERT INTO sources (message_id, title, content_id) VALUES (?1, ?2, ?3)",
+                params![message_id, source.title, content_id],
             )?;
         }
 
