@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `logs` command to query stored logs: `squid logs`
   - Filter logs by level, session ID, or limit results
   - Foundation for correlating logs with chat sessions
+- **Logs Viewing Page**: Dedicated web UI page for viewing application logs
+  - Browse all application logs with pagination support
+  - Filter logs by level (error, warn, info, debug, trace)
+  - Adjustable page size (25, 50, 100, 200 entries)
+  - Clean table view with color-coded log levels
+  - Shows timestamp, level, target, message, and session ID
+  - Navigation accessible from main app navigation bar
+  - REST API endpoint: `GET /api/logs` with pagination parameters
 - **Multi-File Attachments**: Send multiple files in a single message
   - Attach multiple files simultaneously from the web UI
   - File contents displayed as sources in assistant responses
@@ -48,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New chats start with empty conversation instead of demo messages
   - Saved sessions automatically load when you return
   - Sidebar layout for browsing and switching between conversations
+  - React Router integration for multi-page navigation
+  - Navigation bar with Chat and Logs pages
   - Deleting current session automatically starts a new chat
 
 ## [0.7.0] - 2026-02-11

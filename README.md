@@ -487,18 +487,30 @@ squid serve -p 3000
 The web server will:
 - Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
 - Provide a browser-based interface for interacting with Squid
-- Expose a REST API endpoint at `/api/chat` for streaming chat responses
+- Expose REST API endpoints for chat, sessions, and logs
 - Display the server URL and API endpoint on startup
+
+**Web UI Features:**
+- **Chat Page** - Interactive chat interface with session management sidebar
+  - Browse and switch between past conversations
+  - Multi-file attachments support
+  - Stop streaming responses mid-generation
+  - Auto-save all conversations to database
+- **Logs Page** - View application logs with pagination
+  - Filter by log level (error, warn, info, debug, trace)
+  - Adjustable page size (25, 50, 100, 200 entries)
+  - Color-coded log levels and timestamps
+  - Session ID tracking for debugging
 
 The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
 
 Press `Ctrl+C` to stop the server.
 
-#### API Endpoint
+#### API Endpoints
 
-The web server exposes a REST API for programmatic access:
+The web server exposes REST API endpoints for programmatic access:
 
-**Endpoint:** `POST /api/chat`
+**Chat Endpoint:** `POST /api/chat`
 
 **Request Body:**
 ```json
@@ -514,6 +526,39 @@ The web server exposes a REST API for programmatic access:
 ```json
 {"type": "content", "text": "response text chunk"}
 {"type": "done"}
+```
+
+**Sessions Endpoints:**
+- `GET /api/sessions` - List all sessions with metadata
+- `GET /api/sessions/{id}` - Load full session history
+- `DELETE /api/sessions/{id}` - Delete a session
+
+**Logs Endpoint:** `GET /api/logs`
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `page_size` - Entries per page (default: 50)
+- `level` - Filter by level (error, warn, info, debug, trace)
+- `session_id` - Filter by session ID
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": 1,
+      "timestamp": 1234567890,
+      "level": "info",
+      "target": "squid::api",
+      "message": "Server started",
+      "session_id": null
+    }
+  ],
+  "total": 100,
+  "page": 1,
+  "page_size": 50,
+  "total_pages": 2
+}
 ```
 
 **Example using curl:**

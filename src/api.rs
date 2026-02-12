@@ -15,7 +15,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::{config, envinfo, llm, session, tools};
+use crate::{config, envinfo, llm, logger, session, tools};
 
 #[derive(Debug, Deserialize)]
 pub struct FileAttachment {
@@ -87,6 +87,43 @@ pub struct SessionListItem {
 pub struct SessionListResponse {
     pub sessions: Vec<SessionListItem>,
     pub total: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LogsQuery {
+    #[serde(default = "default_page")]
+    pub page: usize,
+    #[serde(default = "default_page_size")]
+    pub page_size: usize,
+    pub level: Option<String>,
+    pub session_id: Option<String>,
+}
+
+fn default_page() -> usize {
+    1
+}
+
+fn default_page_size() -> usize {
+    50
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogEntryResponse {
+    pub id: i64,
+    pub timestamp: i64,
+    pub level: String,
+    pub target: String,
+    pub message: String,
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogsResponse {
+    pub logs: Vec<LogEntryResponse>,
+    pub total: usize,
+    pub page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
 }
 
 /// Get session history by ID
@@ -566,4 +603,52 @@ async fn create_chat_stream(
     };
 
     Ok(output_stream)
+}
+
+/// Get logs with pagination
+pub async fn get_logs(
+    query: web::Query<LogsQuery>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    let db_path = &app_config.get_ref().database_path;
+
+    // Calculate offset from page number
+    let offset = (query.page.saturating_sub(1)) * query.page_size;
+
+    // Query logs with limit for total count + 1 to check if there are more
+    let all_logs = logger::query_logs(
+        db_path,
+        None, // Get all to calculate total
+        query.level.as_deref(),
+        query.session_id.as_deref(),
+    )
+    .map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Failed to query logs: {}", e))
+    })?;
+
+    let total = all_logs.len();
+    let total_pages = (total + query.page_size - 1) / query.page_size;
+
+    // Get the paginated subset
+    let logs: Vec<LogEntryResponse> = all_logs
+        .into_iter()
+        .skip(offset)
+        .take(query.page_size)
+        .map(|entry| LogEntryResponse {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            level: entry.level,
+            target: entry.target,
+            message: entry.message,
+            session_id: entry.session_id,
+        })
+        .collect();
+
+    Ok(HttpResponse::Ok().json(LogsResponse {
+        logs,
+        total,
+        page: query.page,
+        page_size: query.page_size,
+        total_pages,
+    }))
 }
