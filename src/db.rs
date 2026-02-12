@@ -100,6 +100,9 @@ impl Database {
         // Migration 004: Token tracking
         run_migration(4, "Token tracking", include_str!("../migrations/004_token_tracking.sql"))?;
 
+        // Migration 005: Context window
+        run_migration(5, "Context window", include_str!("../migrations/005_context_window.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -112,7 +115,7 @@ impl Database {
 
         // Try to update existing session first
         let updated = conn.execute(
-            "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, model_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12 WHERE id = ?1",
+            "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, model_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12, context_window = ?13 WHERE id = ?1",
             params![
                 session.id,
                 session.created_at,
@@ -126,13 +129,14 @@ impl Database {
                 session.token_usage.reasoning_tokens,
                 session.token_usage.cache_tokens,
                 session.cost_usd,
+                session.token_usage.context_window,
             ],
         )?;
 
         // If no rows were updated, insert new session
         if updated == 0 {
             conn.execute(
-                "INSERT INTO sessions (id, created_at, updated_at, metadata, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                "INSERT INTO sessions (id, created_at, updated_at, metadata, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     session.id,
                     session.created_at,
@@ -146,6 +150,7 @@ impl Database {
                     session.token_usage.reasoning_tokens,
                     session.token_usage.cache_tokens,
                     session.cost_usd,
+                    session.token_usage.context_window,
                 ],
             )?;
         }
@@ -160,7 +165,7 @@ impl Database {
         debug!("Loading session: {}", session_id);
 
         // Load session metadata
-        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd FROM sessions WHERE id = ?1")?;
+        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, model_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
             Ok(ChatSession {
                 id: row.get(0)?,
@@ -175,6 +180,8 @@ impl Database {
                     output_tokens: row.get(7)?,
                     reasoning_tokens: row.get(8)?,
                     cache_tokens: row.get(9)?,
+                    context_window: row.get(11)?,
+                    context_utilization: 0.0, // Will be calculated
                 },
                 cost_usd: row.get(10)?,
             })

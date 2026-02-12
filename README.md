@@ -228,12 +228,14 @@ INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
+? Context Window (tokens): 32768
 ? Log Level: error
 
 Configuration saved to: "squid.config.json"
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
+  Context Window: 32768 tokens
   Log Level: error
 
 ✓ Default permissions configured
@@ -296,10 +298,27 @@ squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-h
 **Available options:**
 - `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
 - `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- `--api-key <KEY>` - API Key (optional for local models)
+- `--key <KEY>` - API Key (optional for local models)
+- `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
 - `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
 
 The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
+
+**Example `squid.config.json`:**
+```json
+{
+  "api_url": "http://127.0.0.1:1234/v1",
+  "api_model": "qwen2.5-coder",
+  "context_window": 32768,
+  "log_level": "error",
+  "permissions": {
+    "allow": ["now"],
+    "deny": []
+  },
+  "database_path": "squid.db",
+  "version": "0.7.0"
+}
+```
 
 ### Option 2: Manual Configuration
 
@@ -310,6 +329,7 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
+CONTEXT_WINDOW=32768
 ```
 
 **Important Notes:**
@@ -337,6 +357,11 @@ API_KEY=not-needed
   - Ollama: `not-needed` (no authentication required)
   - OpenAI: Your actual API key (e.g., `sk-...`)
   - Other: Your provider's API key
+
+- `CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
+  - Used to calculate context utilization and prevent exceeding limits
+  - Set via `squid init --context-window 32768` or in config file
+  - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models
 
 - `LOG_LEVEL`: Logging verbosity (optional, default: `error`)
   - `error`: Only errors (default)
@@ -366,6 +391,47 @@ API_KEY=not-needed
     - **Always** - Add to allow list and auto-save config (bash commands save as `bash:command`)
     - **Never** - Add to deny list and auto-save config (bash commands save as `bash:command`)
   - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
+
+### Common Context Window Sizes
+
+<details>
+<summary><b>📊 Click to expand - Context window sizes for popular models</b></summary>
+
+| Model | Context Window | Config Value |
+|-------|---------------|--------------|
+| **Qwen2.5-Coder-7B** | 32K tokens | `32768` |
+| **GPT-4** | 128K tokens | `128000` |
+| **GPT-4o** | 128K tokens | `128000` |
+| **GPT-3.5-turbo** | 16K tokens | `16385` |
+| **Claude 3 Opus** | 200K tokens | `200000` |
+| **Claude 3.5 Sonnet** | 200K tokens | `200000` |
+| **Llama 3.1-8B** | 128K tokens | `131072` |
+| **Mistral Large** | 128K tokens | `131072` |
+| **DeepSeek Coder** | 16K tokens | `16384` |
+| **CodeLlama** | 16K tokens | `16384` |
+
+**How to find your model's context window:**
+1. Check your model's documentation on Hugging Face
+2. Look in the model card or `config.json`
+3. Check your LLM provider's documentation
+4. For LM Studio: Look at the model details in the UI
+
+**Why it matters:**
+- ✅ Real-time utilization percentage (e.g., "45% of 32K context used")
+- ✅ Prevents API errors from exceeding model capacity
+- ✅ Accurate token usage statistics displayed in web UI
+- ✅ Better planning for long conversations
+
+**Example configuration:**
+```bash
+# For Qwen2.5-Coder with 32K context
+squid init --context-window 32768
+
+# For GPT-4 with 128K context
+squid init --context-window 128000
+```
+
+</details>
 
 ## Usage
 

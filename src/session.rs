@@ -36,6 +36,29 @@ pub struct TokenUsage {
     pub output_tokens: i64,
     pub reasoning_tokens: i64,
     pub cache_tokens: i64,
+    pub context_window: u32,
+    pub context_utilization: f64,
+}
+
+impl TokenUsage {
+    /// Calculate context utilization percentage (0.0 to 1.0)
+    pub fn update_utilization(&mut self) {
+        if self.context_window > 0 {
+            self.context_utilization = (self.total_tokens as f64) / (self.context_window as f64);
+        } else {
+            self.context_utilization = 0.0;
+        }
+    }
+
+    /// Check if context usage is approaching the limit (>80%)
+    pub fn is_approaching_limit(&self) -> bool {
+        self.context_utilization > 0.8
+    }
+
+    /// Check if context usage has exceeded the limit
+    pub fn is_over_limit(&self) -> bool {
+        self.context_utilization > 1.0
+    }
 }
 
 /// Represents a chat session with history and context
@@ -78,6 +101,9 @@ impl ChatSession {
             self.token_usage.output_tokens +
             self.token_usage.reasoning_tokens +
             self.token_usage.cache_tokens;
+
+        // Update context utilization
+        self.token_usage.update_utilization();
     }
 
     /// Set the model used for this session
@@ -85,6 +111,12 @@ impl ChatSession {
         if self.model_id.is_none() {
             self.model_id = Some(model_id);
         }
+    }
+
+    /// Set the context window size for this session
+    pub fn set_context_window(&mut self, context_window: u32) {
+        self.token_usage.context_window = context_window;
+        self.token_usage.update_utilization();
     }
 
     /// Add a message to the session
@@ -360,6 +392,7 @@ impl SessionManager {
         output_tokens: i64,
         reasoning_tokens: i64,
         cache_tokens: i64,
+        context_window: u32,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self.get_session(session_id)
@@ -367,6 +400,9 @@ impl SessionManager {
 
         // Set model if not already set
         session.set_model(model_id.to_string());
+
+        // Set context window
+        session.set_context_window(context_window);
 
         // Add token usage
         session.add_tokens(input_tokens, output_tokens, reasoning_tokens, cache_tokens);
@@ -559,6 +595,7 @@ mod tests {
                 i * 5,
                 0,
                 0,
+                8192,
             ).unwrap();
         }
 

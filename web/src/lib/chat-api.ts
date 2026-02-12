@@ -37,6 +37,8 @@ export interface TokenUsage {
   output_tokens: number;
   reasoning_tokens: number;
   cache_tokens: number;
+  context_window: number;
+  context_utilization: number;
 }
 
 export interface StreamEvent {

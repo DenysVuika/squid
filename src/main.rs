@@ -47,7 +47,10 @@ enum Commands {
         model: Option<String>,
         /// API Key (skips interactive prompt if provided)
         #[arg(long)]
-        api_key: Option<String>,
+        key: Option<String>,
+        /// Context window size in tokens (skips interactive prompt if provided)
+        #[arg(long)]
+        context_window: Option<u32>,
         /// Log Level (skips interactive prompt if provided)
         #[arg(long)]
         log_level: Option<String>,
@@ -132,7 +135,8 @@ async fn main() {
             dir,
             url,
             model,
-            api_key,
+            key: api_key,
+            context_window,
             log_level,
         } => {
             info!("Initializing squid configuration in {:?}...", dir);
@@ -197,6 +201,30 @@ async fn main() {
                     .prompt()
                 {
                     Ok(m) => m,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                }
+            };
+
+            let final_context_window = if context_window.is_some() {
+                context_window.unwrap()
+            } else {
+                match inquire::Text::new("Context Window (tokens):")
+                    .with_default(&default_config.context_window.to_string())
+                    .with_help_message(
+                        "Max context window size for your model (e.g., 32768 for Qwen2.5-Coder, 128000 for GPT-4)",
+                    )
+                    .prompt()
+                {
+                    Ok(ctx_str) => match ctx_str.parse::<u32>() {
+                        Ok(ctx) => ctx,
+                        Err(_) => {
+                            eprintln!("Invalid context window size, using default: {}", default_config.context_window);
+                            default_config.context_window
+                        }
+                    },
                     Err(_) => {
                         error!("Configuration initialization cancelled or failed");
                         return;
@@ -274,6 +302,7 @@ async fn main() {
                 api_url: final_url,
                 api_model: final_model,
                 api_key: final_api_key,
+                context_window: final_context_window,
                 log_level: final_log_level,
                 permissions: merged_permissions,
                 version: None, // Will be set automatically by save_to_dir()
@@ -292,6 +321,7 @@ async fn main() {
                     } else {
                         println!("  API Key: [not set]");
                     }
+                    println!("  Context Window: {} tokens", config.context_window);
                     println!("  Log Level: {}", config.log_level);
 
                     // Show info about permissions

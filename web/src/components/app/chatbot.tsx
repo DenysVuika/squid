@@ -242,6 +242,8 @@ const Example = () => {
     output_tokens: 0,
     reasoning_tokens: 0,
     cache_tokens: 0,
+    context_window: 0,
+    context_utilization: 0,
   });
   const [sessionModelId, setSessionModelId] = useState<string | null>(null);
 
@@ -300,54 +302,54 @@ const Example = () => {
   }, [sessionModelId, model]);
 
   // Load session history on mount if sessionId exists
+  const loadSessionHistory = useCallback(async (targetSessionId: string) => {
+    console.log('[Session] Loading session:', targetSessionId);
+    const session = await loadSession('', targetSessionId);
+    if (!session) {
+      console.log('[Session] Session not found, starting fresh');
+      localStorage.removeItem('squid_session_id');
+      setSessionId(null);
+      return;
+    }
+
+    console.log(`[Session] Loaded session with ${session.messages.length} messages:`, session.messages);
+
+    // Convert session messages to UI format
+    const uiMessages: MessageType[] = [];
+    for (const msg of session.messages) {
+      uiMessages.push({
+        from: msg.role as 'user' | 'assistant',
+        key: `${msg.role}-${msg.timestamp}`,
+        sources:
+          msg.sources.length > 0
+            ? msg.sources.map((s) => ({
+                href: '#',
+                title: s.title,
+              }))
+            : undefined,
+        versions: [
+          {
+            id: `${msg.role}-${msg.timestamp}-v1`,
+            content: msg.content,
+          },
+        ],
+      });
+    }
+
+    console.log(`[Session] Loaded ${uiMessages.length} messages`);
+    setMessages(uiMessages);
+
+    // Load token usage from session
+    setTokenUsage(session.token_usage);
+    setSessionModelId(session.model_id);
+    console.log('[Session] Token usage:', session.token_usage);
+  }, []);
+
   useEffect(() => {
     if (!sessionId || sessionLoadedRef.current) return;
     sessionLoadedRef.current = true;
 
-    const loadSessionHistory = async () => {
-      console.log('[Session] Loading session:', sessionId);
-      const session = await loadSession('', sessionId);
-      if (!session) {
-        console.log('[Session] Session not found, starting fresh');
-        localStorage.removeItem('squid_session_id');
-        setSessionId(null);
-        return;
-      }
-
-      console.log(`[Session] Loaded session with ${session.messages.length} messages:`, session.messages);
-
-      // Convert session messages to UI format
-      const uiMessages: MessageType[] = [];
-      for (const msg of session.messages) {
-        uiMessages.push({
-          from: msg.role as 'user' | 'assistant',
-          key: `${msg.role}-${msg.timestamp}`,
-          sources:
-            msg.sources.length > 0
-              ? msg.sources.map((s) => ({
-                  href: '#',
-                  title: s.title,
-                }))
-              : undefined,
-          versions: [
-            {
-              id: `${msg.role}-${msg.timestamp}-v1`,
-              content: msg.content,
-            },
-          ],
-        });
-      }
-
-      console.log(`[Session] Loaded ${uiMessages.length} messages`);
-      setMessages(uiMessages);
-
-      // Load token usage from session
-      setTokenUsage(session.token_usage);
-      setSessionModelId(session.model_id);
-      console.log('[Session] Token usage:', session.token_usage);
-    };
-
-    loadSessionHistory();
+    loadSessionHistory(sessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
@@ -478,6 +480,8 @@ const Example = () => {
                   output_tokens: prev.output_tokens + usage.output_tokens,
                   reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
                   cache_tokens: prev.cache_tokens + usage.cache_tokens,
+                  context_window: prev.context_window,
+                  context_utilization: prev.context_utilization,
                 };
                 console.log('[Token Usage] Updated from:', prev, 'to:', updated);
                 return updated;
@@ -492,11 +496,20 @@ const Example = () => {
               setStatus('ready');
               setStreamingMessageId(null);
             },
-            onDone: () => {
+            onDone: async () => {
               streamingContentRef.current = ''; // Clear ref after streaming
               abortControllerRef.current = null;
               setStatus('ready');
               setStreamingMessageId(null);
+
+              // Reload session to get updated context_window and token usage from backend
+              if (sessionId) {
+                try {
+                  await loadSessionHistory(sessionId);
+                } catch (error) {
+                  console.error('Failed to reload session after streaming:', error);
+                }
+              }
             },
           }
         );
@@ -516,7 +529,7 @@ const Example = () => {
         setStreamingMessageId(null);
       }
     },
-    [updateMessageContent, sessionId]
+    [updateMessageContent, sessionId, loadSessionHistory]
   );
 
   const addUserMessage = useCallback(
@@ -636,6 +649,8 @@ const Example = () => {
       output_tokens: 0,
       reasoning_tokens: 0,
       cache_tokens: 0,
+      context_window: 0,
+      context_utilization: 0,
     });
     setSessionModelId(null);
 
@@ -727,7 +742,7 @@ const Example = () => {
           </div>
           <div className="flex items-center gap-2">
             <Context
-              maxTokens={128000}
+              maxTokens={tokenUsage.context_window || 128000}
               modelId={getModelIdForPricing}
               usage={{
                 inputTokens: tokenUsage.input_tokens,

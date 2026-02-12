@@ -35,6 +35,7 @@ impl Default for Permissions {
 /// - `api_url`: Base URL for the LLM API (e.g., `http://127.0.0.1:1234/v1`)
 /// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 /// - `api_key`: Optional API key (use `None` for local models)
+/// - `context_window`: Maximum context window size in tokens (e.g., `32768` for Qwen2.5-Coder)
 /// - `log_level`: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 /// - `version`: Config file version (matches app version when created)
 ///
@@ -55,6 +56,8 @@ pub struct Config {
     pub api_model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    #[serde(default = "default_context_window")]
+    pub context_window: u32,
     #[serde(default = "default_log_level")]
     pub log_level: String,
     #[serde(default)]
@@ -63,6 +66,12 @@ pub struct Config {
     pub version: Option<String>,
     #[serde(default = "default_database_path")]
     pub database_path: String,
+}
+
+fn default_context_window() -> u32 {
+    // Default to 8192 tokens (common for many local models)
+    // Users should override this based on their model's actual context window
+    8192
 }
 
 fn default_log_level() -> String {
@@ -79,6 +88,7 @@ impl Default for Config {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
             api_model: "local-model".to_string(),
             api_key: None,
+            context_window: default_context_window(),
             log_level: default_log_level(),
             permissions: Permissions::default(),
             version: None,
@@ -119,6 +129,10 @@ impl Config {
             api_url: std::env::var("API_URL").unwrap_or_else(|_| Self::default().api_url),
             api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
             api_key: std::env::var("API_KEY").ok(),
+            context_window: std::env::var("CONTEXT_WINDOW")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(default_context_window),
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
             permissions: Permissions::default(),
             version: None,
@@ -286,6 +300,7 @@ mod tests {
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
         assert_eq!(config.api_model, "local-model");
         assert_eq!(config.api_key, None);
+        assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");
         assert_eq!(config.permissions.allow, vec!["now".to_string()]);
         assert_eq!(config.permissions.deny.len(), 0);

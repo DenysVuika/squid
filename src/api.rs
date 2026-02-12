@@ -80,6 +80,8 @@ pub struct TokenUsageResponse {
     pub output_tokens: i64,
     pub reasoning_tokens: i64,
     pub cache_tokens: i64,
+    pub context_window: u32,
+    pub context_utilization: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -184,6 +186,8 @@ pub async fn get_session(
                     output_tokens: session.token_usage.output_tokens,
                     reasoning_tokens: session.token_usage.reasoning_tokens,
                     cache_tokens: session.token_usage.cache_tokens,
+                    context_window: session.token_usage.context_window,
+                    context_utilization: session.token_usage.context_utilization,
                 },
                 cost_usd: session.cost_usd,
             };
@@ -233,6 +237,8 @@ pub async fn list_sessions(
                     output_tokens: session.token_usage.output_tokens,
                     reasoning_tokens: session.token_usage.reasoning_tokens,
                     cache_tokens: session.token_usage.cache_tokens,
+                    context_window: session.token_usage.context_window,
+                    context_utilization: session.token_usage.context_utilization,
                 },
                 cost_usd: session.cost_usd,
             });
@@ -512,6 +518,7 @@ pub async fn chat_stream(
                         total_output_tokens,
                         total_reasoning_tokens,
                         total_cache_tokens,
+                        app_config_clone.context_window,
                     ) {
                         debug!("Failed to update token usage: {}", e);
                     }
