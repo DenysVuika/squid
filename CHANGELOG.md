@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Session history restoration now includes both user and assistant messages
   - Conversations properly persist across page reloads and server restarts
 
+### Changed
+
+- **Web UI**: Removed demo messages from initial state
+  - Chat now starts with empty conversation instead of example React hooks messages
+  - Clean, focused experience for new users
+  - Conversations properly load from saved sessions when available
+
 ### Added
 
 - **Session Restoration**: Conversations automatically restored on page reload or server restart
