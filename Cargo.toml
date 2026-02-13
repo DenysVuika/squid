@@ -12,6 +12,9 @@ readme = "README.md"
 include = [
     "/src",
     "/static",
+    "/migrations",
+    "/.squidignore.example",
+    "/squid.config.json.example",
     "/Cargo.toml",
     "/Cargo.lock",
     "/README.md",
