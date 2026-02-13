@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+## [0.8.0] - 2026-02-13
+
+### Added
+
 - **Context Window Configuration**: Configure model context limits for accurate usage tracking
   - New `context_window` field in `squid.config.json` (e.g., `32768` for Qwen2.5-Coder)
   - Context utilization percentage displayed in web UI
