@@ -2,7 +2,6 @@ import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
 import { fetchModels, loadSession, streamChat, type ModelInfo } from '@/lib/chat-api';
-import { SessionList } from '@/components/app/session-list';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import {
@@ -178,7 +177,12 @@ const ModelItem = ({
   );
 };
 
-const Example = () => {
+interface ChatBotProps {
+  selectedSessionId?: string | null;
+  onSessionChange?: (sessionId: string | null) => void;
+}
+
+const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelGroups, setModelGroups] = useState<string[]>([]);
   const [model, setModel] = useState<string>('');
@@ -187,18 +191,14 @@ const Example = () => {
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    // Load session ID from localStorage on mount
-    return localStorage.getItem('squid_session_id');
-  });
+  const [sessionId, setSessionId] = useState<string | null>(selectedSessionId || null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
   const streamingReasoningRef = useRef<string>('');
   const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0);
+
   const [sourceContentOpen, setSourceContentOpen] = useState(false);
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
@@ -232,15 +232,19 @@ const Example = () => {
     return modelData?.pricing_model || currentModelId;
   }, [sessionModelId, model, models]);
 
-  // Load session history on mount if sessionId exists
+  // Load session history from API
   const loadSessionHistory = useCallback(
-    async (targetSessionId: string) => {
-      const session = await loadSession('', targetSessionId);
+    async (selectedSessionId: string) => {
+      console.log('[Session] Loading session:', selectedSessionId);
+      const session = await loadSession('', selectedSessionId);
+
       if (!session) {
-        localStorage.removeItem('squid_session_id');
-        setSessionId(null);
+        toast.error('Session not found');
         return;
       }
+
+      // Update session ID
+      setSessionId(selectedSessionId);
 
       // Convert session messages to UI format
       const uiMessages: MessageType[] = [];
@@ -271,8 +275,10 @@ const Example = () => {
         });
       }
 
-      console.log(`[Session] Loaded ${uiMessages.length} messages`);
+      console.log(`[Session] Loaded session with ${uiMessages.length} messages`);
       setMessages(uiMessages);
+      setText('');
+      setStatus('ready');
 
       // Load token usage from session
       setTokenUsage(session.token_usage);
@@ -295,9 +301,47 @@ const Example = () => {
           setModel(matchedModel.id);
         }
       }
+      toast.success('Session loaded');
     },
     [models]
   );
+
+  // Handle new chat
+  const handleNewChat = useCallback(() => {
+    // Clear session ID from state and localStorage
+    setSessionId(null);
+    localStorage.removeItem('squid_session_id');
+
+    // Reset loaded flag
+    sessionLoadedRef.current = false;
+
+    // Reset messages to empty (clear the chat)
+    setMessages([]);
+
+    // Clear input
+    setText('');
+
+    // Reset status
+    setStatus('ready');
+
+    // Reset token usage
+    setTokenUsage({
+      total_tokens: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      reasoning_tokens: 0,
+      cache_tokens: 0,
+      context_window: 0,
+      context_utilization: 0,
+    });
+
+    setSessionModelId(null);
+
+    // Notify parent component
+    onSessionChange?.(null);
+
+    toast.success('New chat started');
+  }, [onSessionChange]);
 
   // Fetch available models on mount
   useEffect(() => {
@@ -328,6 +372,23 @@ const Example = () => {
     loadModels();
   }, []);
 
+  // Sync with selectedSessionId prop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Only execute if there's an actual change
+    if (selectedSessionId === undefined || selectedSessionId === sessionId) {
+      return;
+    }
+
+    if (selectedSessionId === null) {
+      // New chat requested from parent
+      handleNewChat();
+    } else {
+      // Load the selected session
+      loadSessionHistory(selectedSessionId);
+    }
+  }, [selectedSessionId, sessionId]);
+
   // Update context window when model changes
   useEffect(() => {
     if (model && models.length > 0) {
@@ -340,14 +401,6 @@ const Example = () => {
       }
     }
   }, [model, models]);
-
-  useEffect(() => {
-    if (!sessionId || sessionLoadedRef.current) return;
-    sessionLoadedRef.current = true;
-
-    loadSessionHistory(sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
 
   const updateMessageContent = useCallback((messageId: string, newContent: string) => {
     setMessages((prev) =>
@@ -418,10 +471,8 @@ const Example = () => {
             signal: abortControllerRef.current?.signal,
             onSession: (newSessionId) => {
               setSessionId(newSessionId);
-              // Persist session ID to localStorage
-              localStorage.setItem('squid_session_id', newSessionId);
-              // Trigger session list refresh
-              setSessionListRefreshTrigger((prev) => prev + 1);
+              // Notify parent component
+              onSessionChange?.(newSessionId);
             },
             onSources: (sources) => {
               // Update the assistant message with sources
@@ -555,7 +606,8 @@ const Example = () => {
         setStreamingMessageId(null);
       }
     },
-    [updateMessageContent, sessionId, loadSessionHistory, model]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [updateMessageContent, sessionId, model, onSessionChange]
   );
 
   const addUserMessage = useCallback(
@@ -663,115 +715,6 @@ const Example = () => {
     }
   }, []);
 
-  const handleNewChat = useCallback(() => {
-    // Clear session ID from state and localStorage
-    setSessionId(null);
-    localStorage.removeItem('squid_session_id');
-
-    // Reset loaded flag
-    sessionLoadedRef.current = false;
-
-    // Reset messages to empty (clear the chat)
-    setMessages([]);
-
-    // Clear input
-    setText('');
-
-    // Reset status
-    setStatus('ready');
-
-    // Reset token usage
-    setTokenUsage({
-      total_tokens: 0,
-      input_tokens: 0,
-      output_tokens: 0,
-      reasoning_tokens: 0,
-      cache_tokens: 0,
-      context_window: 0,
-      context_utilization: 0,
-    });
-    setSessionModelId(null);
-
-    toast.success('New chat started');
-  }, []);
-
-  const handleSessionSelect = useCallback(
-    async (selectedSessionId: string) => {
-      // Don't reload if already on this session
-      if (selectedSessionId === sessionId) return;
-
-      console.log('[Session] Selecting session:', selectedSessionId);
-      const session = await loadSession('', selectedSessionId);
-
-      if (!session) {
-        toast.error('Session not found');
-        return;
-      }
-
-      // Update session ID
-      setSessionId(selectedSessionId);
-      localStorage.setItem('squid_session_id', selectedSessionId);
-
-      // Convert session messages to UI format
-      const uiMessages: MessageType[] = [];
-      for (const msg of session.messages) {
-        uiMessages.push({
-          from: msg.role as 'user' | 'assistant',
-          key: `${msg.role}-${msg.timestamp}`,
-          sources:
-            msg.sources.length > 0
-              ? msg.sources.map((s) => ({
-                  href: '#',
-                  title: s.title,
-                  content: s.content,
-                }))
-              : undefined,
-          versions: [
-            {
-              id: `${msg.role}-${msg.timestamp}-v1`,
-              content: msg.content,
-            },
-          ],
-          reasoning: msg.reasoning
-            ? {
-                content: msg.reasoning,
-                duration: undefined,
-              }
-            : undefined,
-        });
-      }
-
-      console.log(`[Session] Switched to session with ${uiMessages.length} messages`);
-      setMessages(uiMessages);
-      setText('');
-      setStatus('ready');
-
-      // Load token usage from session
-      setTokenUsage(session.token_usage);
-      setSessionModelId(session.model_id);
-
-      // Update model selector if session has a model_id
-      if (session.model_id && models.length > 0) {
-        // Try exact match first
-        let matchedModel = models.find((m) => m.id === session.model_id);
-
-        // If no exact match, try fuzzy matching
-        if (!matchedModel) {
-          const sessionModelLower = session.model_id.toLowerCase();
-          matchedModel = models.find(
-            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
-          );
-        }
-
-        if (matchedModel) {
-          setModel(matchedModel.id);
-        }
-      }
-      toast.success('Session loaded');
-    },
-    [sessionId, models]
-  );
-
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
   const handleViewSourceContent = useCallback((title: string, content: string) => {
@@ -831,73 +774,41 @@ const Example = () => {
 
   return (
     <div className="relative flex size-full overflow-hidden">
-      {sidebarOpen && (
-        <div className="flex h-full w-64 shrink-0">
-          <SessionList
-            currentSessionId={sessionId}
-            onSessionSelect={handleSessionSelect}
-            onNewChat={handleNewChat}
-            refreshTrigger={sessionListRefreshTrigger}
-            apiUrl=""
-          />
-        </div>
-      )}
       <div className="relative flex size-full flex-col divide-y overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950">
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              type="button"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h2 className="text-sm font-semibold">Squid Chat</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <Context
-              maxTokens={tokenUsage.context_window || 128000}
-              modelId={getModelIdForPricing}
-              usage={{
-                inputTokens: tokenUsage.input_tokens,
-                outputTokens: tokenUsage.output_tokens,
-                totalTokens: tokenUsage.total_tokens,
-                inputTokenDetails: {
-                  noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
-                  cacheReadTokens: tokenUsage.cache_tokens,
-                  cacheWriteTokens: undefined,
-                },
-                outputTokenDetails: {
-                  textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
-                  reasoningTokens: tokenUsage.reasoning_tokens,
-                },
-              }}
-              usedTokens={tokenUsage.total_tokens}
-            >
-              <ContextTrigger />
-              <ContextContent>
-                <ContextContentHeader />
-                <ContextContentBody>
-                  <div className="space-y-2">
-                    <ContextInputUsage />
-                    <ContextOutputUsage />
-                    <ContextReasoningUsage />
-                    <ContextCacheUsage />
-                  </div>
-                </ContextContentBody>
-                <ContextContentFooter />
-              </ContextContent>
-            </Context>
-            <button
-              className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-              onClick={handleNewChat}
-              type="button"
-            >
-              New Chat
-            </button>
-          </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950">
+          <Context
+            maxTokens={tokenUsage.context_window || 128000}
+            modelId={getModelIdForPricing}
+            usage={{
+              inputTokens: tokenUsage.input_tokens,
+              outputTokens: tokenUsage.output_tokens,
+              totalTokens: tokenUsage.total_tokens,
+              inputTokenDetails: {
+                noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
+                cacheReadTokens: tokenUsage.cache_tokens,
+                cacheWriteTokens: undefined,
+              },
+              outputTokenDetails: {
+                textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
+                reasoningTokens: tokenUsage.reasoning_tokens,
+              },
+            }}
+            usedTokens={tokenUsage.total_tokens}
+          >
+            <ContextTrigger />
+            <ContextContent>
+              <ContextContentHeader />
+              <ContextContentBody>
+                <div className="space-y-2">
+                  <ContextInputUsage />
+                  <ContextOutputUsage />
+                  <ContextReasoningUsage />
+                  <ContextCacheUsage />
+                </div>
+              </ContextContentBody>
+              <ContextContentFooter />
+            </ContextContent>
+          </Context>
         </div>
         <Conversation>
           <ConversationContent>
