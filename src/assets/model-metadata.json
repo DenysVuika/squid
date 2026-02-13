@@ -9,13 +9,13 @@
     },
     "qwen/qwen3-8b": {
       "name": "Qwen 3 8B",
-      "max_context_length": 32768,
+      "max_context_length": 40960,
       "provider": "Qwen",
       "pricing_model": "gpt-4o"
     },
     "qwen/qwen3-vl-8b": {
       "name": "Qwen 3 VL 8B",
-      "max_context_length": 32768,
+      "max_context_length": 262144,
       "provider": "Qwen",
       "pricing_model": "gpt-4o"
     },
@@ -45,7 +45,7 @@
     },
     "smollm3-3b-mlx": {
       "name": "SmolLM 3 3B",
-      "max_context_length": 8192,
+      "max_context_length": 65536,
       "provider": "HuggingFace",
       "pricing_model": "gpt-4o-mini"
     },
