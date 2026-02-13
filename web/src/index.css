@@ -119,7 +119,8 @@
     @apply border-border outline-ring/50;
   }
   html,
-  body {
+  body,
+  #root {
     @apply bg-background text-foreground;
     height: 100%;
     overflow: hidden;

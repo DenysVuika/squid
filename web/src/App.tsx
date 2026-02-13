@@ -59,7 +59,7 @@ function AppContent() {
 
   useEffect(() => {
     loadSessions();
-  }, [refreshTrigger, loadSessions]);
+  }, [refreshTrigger]);
 
   const handleSessionSelect = (sessionId: string) => {
     setActiveSessionId(sessionId);
@@ -78,7 +78,7 @@ function AppContent() {
   const isLogsPage = location.pathname === '/logs';
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-full">
       {!isLogsPage && (
         <AppSidebar
           sessions={sessions}
@@ -148,7 +148,9 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <div className="h-full">
+        <AppContent />
+      </div>
     </BrowserRouter>
   );
 }

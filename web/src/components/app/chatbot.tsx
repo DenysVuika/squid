@@ -773,7 +773,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
   }, []);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background">
+    <div className="relative flex flex-1 w-full flex-col overflow-hidden rounded-xl border bg-background min-h-0">
       <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
         <Context
           maxTokens={tokenUsage.context_window || 128000}
@@ -809,8 +809,9 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
           </ContextContent>
         </Context>
       </div>
-      <Conversation>
-        <ConversationContent>
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <Conversation>
+          <ConversationContent>
           {messages.map(({ versions, ...message }) => (
             <MessageBranch defaultBranch={0} key={message.key}>
               <MessageBranchContent>
@@ -889,6 +890,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
+      </div>
       <div className="grid shrink-0 gap-4 border-t pt-4">
         <Suggestions className="px-4">
           {suggestions.map((suggestion) => (
