@@ -9,13 +9,24 @@ edition = "2024"
 keywords = ["ai", "code-review", "command-line", "developer-tools"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
+include = [
+    "src/**/*",
+    "static/**/*",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
 
 [[bin]]
 name = "squid"
 path = "src/main.rs"
 
 [dependencies]
+actix-web = "4.9"
+actix-files = "0.6"
 async-openai = { version = "0.32", features = ["chat-completion"] }
+async-stream = "0.3"
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 console = "0.15"
@@ -24,6 +35,8 @@ env_logger = "0.11.8"
 futures = "0.3"
 indicatif = "0.17"
 inquire = "0.9"
+mime_guess = "2.0"
+rust-embed = "8.5"
 log = "0.4.29"
 regex = "1.10"
 serde = { version = "1.0", features = ["derive"] }
@@ -31,4 +44,9 @@ serde_json = "1.0.149"
 sysinfo = "0.38.0"
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
+uuid = { version = "1.0", features = ["v4"] }
 walkdir = "2.5"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+tiktoken-rs = "0.9.1"
+flate2 = "1.0"
+sha2 = "0.10"

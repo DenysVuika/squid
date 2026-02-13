@@ -26,3 +26,8 @@ target
 /target
 
 .env
+
+# Application specific
+/static/*
+!/static/.gitkeep
+squid.db

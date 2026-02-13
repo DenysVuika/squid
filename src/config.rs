@@ -35,6 +35,7 @@ impl Default for Permissions {
 /// - `api_url`: Base URL for the LLM API (e.g., `http://127.0.0.1:1234/v1`)
 /// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 /// - `api_key`: Optional API key (use `None` for local models)
+/// - `context_window`: Maximum context window size in tokens (e.g., `32768` for Qwen2.5-Coder)
 /// - `log_level`: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 /// - `version`: Config file version (matches app version when created)
 ///
@@ -55,16 +56,30 @@ pub struct Config {
     pub api_model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    #[serde(default = "default_context_window")]
+    pub context_window: u32,
     #[serde(default = "default_log_level")]
     pub log_level: String,
     #[serde(default)]
     pub permissions: Permissions,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(default = "default_database_path")]
+    pub database_path: String,
+}
+
+fn default_context_window() -> u32 {
+    // Default to 8192 tokens (common for many local models)
+    // Users should override this based on their model's actual context window
+    8192
 }
 
 fn default_log_level() -> String {
     "error".to_string()
+}
+
+fn default_database_path() -> String {
+    "squid.db".to_string()
 }
 
 impl Default for Config {
@@ -73,9 +88,11 @@ impl Default for Config {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
             api_model: "local-model".to_string(),
             api_key: None,
+            context_window: default_context_window(),
             log_level: default_log_level(),
             permissions: Permissions::default(),
             version: None,
+            database_path: default_database_path(),
         }
     }
 }
@@ -83,17 +100,37 @@ impl Default for Config {
 impl Config {
     /// Load configuration from squid.config.json if it exists, otherwise from environment variables
     pub fn load() -> Self {
-        let config_path = PathBuf::from("squid.config.json");
+        // Search for config file in current directory and parent directories
+        let config_path = Self::find_config_file().unwrap_or_else(|| PathBuf::from("squid.config.json"));
 
         if config_path.exists() {
             debug!("Loading configuration from squid.config.json");
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_json::from_str::<Config>(&content) {
-                    Ok(config) => {
+                    Ok(mut config) => {
                         // Check version and warn if outdated
                         if let Some(warning) = config.version_warning() {
                             eprintln!("\n{}\n", warning);
                         }
+
+                        // Resolve database_path relative to config file directory
+                        let db_path = PathBuf::from(&config.database_path);
+                        if db_path.is_relative() {
+                            // Get the directory containing the config file
+                            let config_dir = config_path
+                                .parent()
+                                .unwrap_or_else(|| std::path::Path::new("."));
+
+                            // Resolve database path relative to config directory
+                            let absolute_db_path = config_dir.join(&config.database_path);
+
+                            // Convert to string, using the original if conversion fails
+                            if let Some(path_str) = absolute_db_path.to_str() {
+                                config.database_path = path_str.to_string();
+                                debug!("Resolved database path to: {}", config.database_path);
+                            }
+                        }
+
                         return config;
                     }
                     Err(e) => {
@@ -108,14 +145,68 @@ impl Config {
 
         // Fallback to environment variables
         debug!("Loading configuration from environment variables");
+
+        // Try to find existing database in parent directories
+        let db_path = std::env::var("DATABASE_PATH")
+            .ok()
+            .or_else(|| Self::find_database_file().and_then(|p| p.to_str().map(String::from)))
+            .unwrap_or_else(|| Self::default().database_path);
+
         Self {
             api_url: std::env::var("API_URL").unwrap_or_else(|_| Self::default().api_url),
             api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
             api_key: std::env::var("API_KEY").ok(),
+            context_window: std::env::var("CONTEXT_WINDOW")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(default_context_window),
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
             permissions: Permissions::default(),
             version: None,
+            database_path: db_path,
         }
+    }
+
+    /// Search for squid.config.json in current directory and parent directories
+    fn find_config_file() -> Option<PathBuf> {
+        let mut current_dir = std::env::current_dir().ok()?;
+
+        loop {
+            let config_path = current_dir.join("squid.config.json");
+            if config_path.exists() {
+                debug!("Found config file at: {:?}", config_path);
+                return Some(config_path);
+            }
+
+            // Try parent directory
+            if !current_dir.pop() {
+                // Reached root, no config found
+                break;
+            }
+        }
+
+        None
+    }
+
+    /// Search for squid.db in current directory and parent directories
+    fn find_database_file() -> Option<PathBuf> {
+        let mut current_dir = std::env::current_dir().ok()?;
+
+        loop {
+            let db_path = current_dir.join("squid.db");
+            if db_path.exists() {
+                debug!("Found database file at: {:?}", db_path);
+                return Some(db_path);
+            }
+
+            // Try parent directory
+            if !current_dir.pop() {
+                // Reached root, no database found
+                break;
+            }
+        }
+
+        None
     }
 
     /// Get the current application version
@@ -278,10 +369,12 @@ mod tests {
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
         assert_eq!(config.api_model, "local-model");
         assert_eq!(config.api_key, None);
+        assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");
         assert_eq!(config.permissions.allow, vec!["now".to_string()]);
         assert_eq!(config.permissions.deny.len(), 0);
         assert_eq!(config.version, None);
+        assert_eq!(config.database_path, "squid.db");
     }
 
     #[test]

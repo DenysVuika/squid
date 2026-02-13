@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Context Window Configuration**: Configure model context limits for accurate usage tracking
+  - New `context_window` field in `squid.config.json` (e.g., `32768` for Qwen2.5-Coder)
+  - Context utilization percentage displayed in web UI
+  - Helps prevent API errors from exceeding context limits
+  - Can be set via `squid init --context-window 32768` or environment variable `CONTEXT_WINDOW`
+- **Token Usage & Cost Tracking**: Real-time token counts and cost estimates
+  - Visual token usage indicator in chat header with percentage and breakdown
+  - Track input, output, reasoning, and cache tokens separately
+  - Cost calculation based on model pricing (via tokenlens/models.dev)
+  - Automatic token estimation for local models (LM Studio, Ollama) using tiktoken-rs
+  - Fallback pricing for local models maps them to similar OpenAI models (e.g., Qwen → GPT-4o) to show estimated cost savings
+- **Session Management**: Browse, rename, and organize chat sessions
+  - Sessions automatically titled from first user message
+  - Sidebar for browsing all past conversations
+  - Rename any session with inline editing
+  - Delete sessions with confirmation
+  - Smart date formatting and auto-refresh
+- **Shimmer Loading Indicator**: Visual feedback while AI is thinking
+- **File Content Deduplication**: Identical file attachments are stored only once in the database
+  - Reduces database size when same files are attached multiple times
+  - Uses SHA-256 hashing to identify duplicate content
+- **File Content Compression**: All file attachments are compressed with gzip in the database
+  - Automatic compression/decompression when saving and loading files
+  - Significantly reduces storage requirements
+  - Logging shows compression ratio for each file
+- **File Size Limits**: Files larger than 10MB are rejected with clear error messages
+  - Prevents accidentally uploading very large files
+  - Protects database from growing too large
+- **Clickable Source Files**: Click on "Used X sources" to view file contents in a right sidebar
+  - Syntax-highlighted code view with line numbers
+  - Auto-detects language from file extension (supports 40+ languages)
+  - Copy button to copy entire file content
+  - Horizontal and vertical scrolling for large files
+  - 600px wide sidebar slides in from the right
+  - Easy to close and review what context the AI used
+- **File Size Validation**: Client-side validation for file uploads
+  - 10MB file size limit enforced in browser before upload
+  - User-friendly error messages when files are too large
+  - Backend also validates file size and content type
+
+### Fixed
+
+- **Sources Display on Restored Sessions**: "Used X sources" now only shows on assistant messages, not user messages
+- **User Messages Not Persisting**: Fixed messages being deleted when switching sessions
+- **Token Counts for Local Models**: Token estimates now display correctly in UI
+- **Database Migrations**: Prevented duplicate migrations and "duplicate column" errors
+- **Session List Scrolling**: Session sidebar now properly scrolls when many sessions are present
+
+### Changed
+
+- New chats start empty (no demo messages)
+- Sidebar layout for session management
+- Navigation bar with Chat and Logs pages
+
 ## [0.7.0] - 2026-02-11
 
 ### Added

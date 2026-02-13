@@ -9,6 +9,10 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🔍 AI-powered code reviews with language-specific prompts
 - 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
+- 🌐 **Web UI** - Built-in web interface for interacting with Squid
+- 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
+- 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
+- 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
 - 🌊 Streaming support for real-time responses
@@ -172,6 +176,26 @@ cargo build --release
 
 For development, use `cargo run --` instead of `squid` in the examples below.
 
+### Building the Web UI
+
+The web UI is built separately and embedded into the binary. To build the complete application with the web UI:
+
+```bash
+# Build the web UI
+cd web
+npm install
+npm run build
+
+# The build output is automatically copied to ../static/
+# Build the Rust application (which embeds the static files)
+cd ..
+cargo build --release
+```
+
+The `squid serve` command will then serve both the web UI and the API from the same server.
+
+**Note:** If you're using a pre-built binary from crates.io or releases, the web UI is already included.
+
 ## Configuration
 
 You can configure squid in two ways:
@@ -204,12 +228,14 @@ INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
 ? API Model: local-model
 ? API Key (optional, press Enter to skip): 
+? Context Window (tokens): 32768
 ? Log Level: error
 
 Configuration saved to: "squid.config.json"
   API URL: http://127.0.0.1:1234/v1
   API Model: local-model
   API Key: [not set]
+  Context Window: 32768 tokens
   Log Level: error
 
 ✓ Default permissions configured
@@ -272,10 +298,27 @@ squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-h
 **Available options:**
 - `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
 - `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- `--api-key <KEY>` - API Key (optional for local models)
+- `--key <KEY>` - API Key (optional for local models)
+- `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
 - `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
 
 The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
+
+**Example `squid.config.json`:**
+```json
+{
+  "api_url": "http://127.0.0.1:1234/v1",
+  "api_model": "qwen2.5-coder",
+  "context_window": 32768,
+  "log_level": "error",
+  "permissions": {
+    "allow": ["now"],
+    "deny": []
+  },
+  "database_path": "squid.db",
+  "version": "0.7.0"
+}
+```
 
 ### Option 2: Manual Configuration
 
@@ -286,6 +329,8 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
+CONTEXT_WINDOW=32768
+DATABASE_PATH=squid.db
 ```
 
 **Important Notes:**
@@ -314,12 +359,28 @@ API_KEY=not-needed
   - OpenAI: Your actual API key (e.g., `sk-...`)
   - Other: Your provider's API key
 
+- `CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
+  - Used to calculate context utilization and prevent exceeding limits
+  - Set via `squid init --context-window 32768` or in config file
+  - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models
+
 - `LOG_LEVEL`: Logging verbosity (optional, default: `error`)
   - `error`: Only errors (default)
   - `warn`: Warnings and errors
   - `info`: Informational messages
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
+
+- `DATABASE_PATH`: Path to the SQLite database file (optional, default: `squid.db`)
+  - Used to store chat sessions, messages, and logs
+  - Can be relative (e.g., `squid.db`) or absolute (e.g., `/path/to/squid.db`)
+  - When relative, resolved based on:
+    1. Config file location (if `squid.config.json` exists)
+    2. Existing database in parent directories (searches upward)
+    3. Current working directory (creates new database)
+  - **Important**: The server automatically finds the correct database when running from subdirectories
+  - Set via `.env` file to override automatic detection
+  - Example: `DATABASE_PATH=/Users/you/squid-data/squid.db`
 
 - `permissions`: Tool execution permissions (optional)
   - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
@@ -342,6 +403,47 @@ API_KEY=not-needed
     - **Always** - Add to allow list and auto-save config (bash commands save as `bash:command`)
     - **Never** - Add to deny list and auto-save config (bash commands save as `bash:command`)
   - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
+
+### Common Context Window Sizes
+
+<details>
+<summary><b>📊 Click to expand - Context window sizes for popular models</b></summary>
+
+| Model | Context Window | Config Value |
+|-------|---------------|--------------|
+| **Qwen2.5-Coder-7B** | 32K tokens | `32768` |
+| **GPT-4** | 128K tokens | `128000` |
+| **GPT-4o** | 128K tokens | `128000` |
+| **GPT-3.5-turbo** | 16K tokens | `16385` |
+| **Claude 3 Opus** | 200K tokens | `200000` |
+| **Claude 3.5 Sonnet** | 200K tokens | `200000` |
+| **Llama 3.1-8B** | 128K tokens | `131072` |
+| **Mistral Large** | 128K tokens | `131072` |
+| **DeepSeek Coder** | 16K tokens | `16384` |
+| **CodeLlama** | 16K tokens | `16384` |
+
+**How to find your model's context window:**
+1. Check your model's documentation on Hugging Face
+2. Look in the model card or `config.json`
+3. Check your LLM provider's documentation
+4. For LM Studio: Look at the model details in the UI
+
+**Why it matters:**
+- ✅ Real-time utilization percentage (e.g., "45% of 32K context used")
+- ✅ Prevents API errors from exceeding model capacity
+- ✅ Accurate token usage statistics displayed in web UI
+- ✅ Better planning for long conversations
+
+**Example configuration:**
+```bash
+# For Qwen2.5-Coder with 32K context
+squid init --context-window 32768
+
+# For GPT-4 with 128K context
+squid init --context-window 128000
+```
+
+</details>
 
 ## Usage
 
@@ -447,7 +549,269 @@ The review command automatically selects the appropriate review prompt based on 
 - **Markdown** (`.md`, `.markdown`) - Structure, accessibility, consistency, content
 - **Other files** - Generic code quality and best practices
 
+### Squid Web UI
 
+![Squid Web UI](docs/assets/screenshot.png)
+
+*Modern chat interface with session management, token usage tracking, and real-time cost estimates*
+
+Start the built-in web interface for Squid:
+
+```bash
+# Start Web UI on default port (8080)
+squid serve
+
+# Specify a custom port
+squid serve --port 3000
+squid serve -p 3000
+```
+
+The web server will:
+- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
+- Provide a browser-based interface for interacting with Squid
+- Expose REST API endpoints for chat, sessions, and logs
+- Display the server URL and API endpoint on startup
+
+**Web UI Features:**
+- **Chat Page** - Interactive chat interface with session management sidebar
+  - 📊 **Token usage indicator** - Real-time context utilization percentage (e.g., "5.6% • 7.1K / 128K")
+  - 💰 **Cost tracking** - Displays estimated cost for both cloud and local models
+  - 🗂️ **Session sidebar** - Browse and switch between past conversations
+  - ✏️ **Auto-generated titles** - Sessions titled from first message, editable inline
+  - 📎 **Multi-file attachments** - Add context from multiple files
+  - ⏹️ **Stop generation** - Halt streaming responses mid-generation
+  - 💾 **Auto-save** - All conversations automatically saved to database
+- **Logs Page** - View application logs with pagination
+  - 🔍 Filter by log level (error, warn, info, debug, trace)
+  - 📄 Adjustable page size (25, 50, 100, 200 entries)
+  - 🎨 Color-coded log levels and timestamps
+  - 🔗 Session ID tracking for debugging
+
+The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
+
+**Database & Persistence:**
+- All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)
+- Sessions persist across server restarts - your conversation history is always preserved
+- The database location is automatically detected:
+  - If `squid.config.json` exists, database is stored relative to the config file
+  - If no config file, searches parent directories for existing `squid.db`
+  - Falls back to current directory if no database found
+- You can override the location with `DATABASE_PATH` environment variable or in config file
+- Run the server from any subdirectory - it will find and use the same database
+
+Press `Ctrl+C` to stop the server.
+
+#### API Endpoints
+
+The web server exposes REST API endpoints for programmatic access:
+
+**Chat Endpoint:** `POST /api/chat`
+
+**Request Body:**
+```json
+{
+  "message": "Your question here",
+  "file_content": "optional file content",
+  "file_path": "optional/file/path.rs",
+  "system_prompt": "optional custom system prompt"
+}
+```
+
+**Response:** Server-Sent Events (SSE) stream with JSON events:
+```json
+{"type": "content", "text": "response text chunk"}
+{"type": "done"}
+```
+
+**Sessions Endpoints:**
+- `GET /api/sessions` - List all sessions with metadata
+- `GET /api/sessions/{id}` - Load full session history
+- `DELETE /api/sessions/{id}` - Delete a session
+
+**Logs Endpoint:** `GET /api/logs`
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `page_size` - Entries per page (default: 50)
+- `level` - Filter by level (error, warn, info, debug, trace)
+- `session_id` - Filter by session ID
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": 1,
+      "timestamp": 1234567890,
+      "level": "info",
+      "target": "squid::api",
+      "message": "Server started",
+      "session_id": null
+    }
+  ],
+  "total": 100,
+  "page": 1,
+  "page_size": 50,
+  "total_pages": 2
+}
+```
+
+**Example using curl:**
+```bash
+curl -X POST http://127.0.0.1:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Explain Rust async/await"}' \
+  -N
+```
+
+**Example using fetch (JavaScript):**
+```javascript
+const response = await fetch('http://127.0.0.1:8080/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: 'Explain async/await in Rust' })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  const lines = chunk.split('\n');
+  
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      if (event.type === 'content') {
+        console.log(event.text);
+      }
+    }
+  }
+}
+```
+
+See `web/src/lib/chat-api.ts` for a complete TypeScript client implementation.
+
+**Note:** The chatbot UI is served from the same server as the API, so it automatically uses the relative path `/api/chat` without requiring any configuration.
+
+#### Session Management API
+
+The web server also provides REST endpoints for managing chat sessions:
+
+**List all sessions:** `GET /api/sessions`
+
+**Response:**
+```json
+{
+  "sessions": [
+    {
+      "session_id": "abc-123-def-456",
+      "message_count": 8,
+      "created_at": 1707654321,
+      "updated_at": 1707658921,
+      "preview": "Explain async/await in Rust",
+      "title": "Async/await in Rust"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Get session details:** `GET /api/sessions/{session_id}`
+
+**Response:**
+```json
+{
+  "session_id": "abc-123-def-456",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain async/await in Rust",
+      "sources": [],
+      "timestamp": 1707654321
+    },
+    {
+      "role": "assistant",
+      "content": "Async/await in Rust...",
+      "sources": [{"title": "sample.rs"}],
+      "timestamp": 1707654325
+    }
+  ],
+  "created_at": 1707654321,
+  "updated_at": 1707658921,
+  "title": "Async/await in Rust"
+}
+```
+
+**Update a session (rename):** `PATCH /api/sessions/{session_id}`
+
+**Request:**
+```json
+{
+  "title": "My Custom Session Title"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Session updated successfully"
+}
+```
+
+**Delete a session:** `DELETE /api/sessions/{session_id}`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Session deleted successfully"
+}
+```
+
+**Web UI Features:**
+- Browse all conversations in the sidebar
+- Sessions automatically titled from first user message
+- Click any session to load its full history
+- Rename sessions with inline edit dialog (pencil icon)
+- Delete sessions with confirmation dialog
+- Toggle sidebar visibility
+- Sessions show title (or preview), message count, and last activity time
+
+### View Application Logs
+
+View logs stored in the database for debugging and troubleshooting:
+
+```bash
+# View recent logs (last 50 by default)
+squid logs
+
+# View more logs
+squid logs --limit 100
+
+# Filter by log level
+squid logs --level error
+squid logs --level warn
+squid logs --level info
+
+# View logs for a specific session
+squid logs --session-id 72dd7601-7da4-4252-80f6-7012da923faf
+
+# Combine filters
+squid logs --limit 20 --level error
+```
+
+The logs are stored in the SQLite database (`squid.db`) alongside your chat sessions. This makes it easy to:
+- Debug issues by reviewing what happened during a session
+- Track errors and warnings across server restarts
+- Correlate logs with specific chat conversations
+- Monitor application behavior over time
+
+**Note:** The `logs` command reads from the database. Logs are automatically stored when running the `serve` command.
 
 ### Tool Calling (with Multi-Layered Security)
 
