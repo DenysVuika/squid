@@ -330,6 +330,7 @@ API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
 CONTEXT_WINDOW=32768
+DATABASE_PATH=squid.db
 ```
 
 **Important Notes:**
@@ -369,6 +370,17 @@ CONTEXT_WINDOW=32768
   - `info`: Informational messages
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
+
+- `DATABASE_PATH`: Path to the SQLite database file (optional, default: `squid.db`)
+  - Used to store chat sessions, messages, and logs
+  - Can be relative (e.g., `squid.db`) or absolute (e.g., `/path/to/squid.db`)
+  - When relative, resolved based on:
+    1. Config file location (if `squid.config.json` exists)
+    2. Existing database in parent directories (searches upward)
+    3. Current working directory (creates new database)
+  - **Important**: The server automatically finds the correct database when running from subdirectories
+  - Set via `.env` file to override automatic detection
+  - Example: `DATABASE_PATH=/Users/you/squid-data/squid.db`
 
 - `permissions`: Tool execution permissions (optional)
   - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
@@ -576,6 +588,16 @@ The web server will:
   - 🔗 Session ID tracking for debugging
 
 The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
+
+**Database & Persistence:**
+- All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)
+- Sessions persist across server restarts - your conversation history is always preserved
+- The database location is automatically detected:
+  - If `squid.config.json` exists, database is stored relative to the config file
+  - If no config file, searches parent directories for existing `squid.db`
+  - Falls back to current directory if no database found
+- You can override the location with `DATABASE_PATH` environment variable or in config file
+- Run the server from any subdirectory - it will find and use the same database
 
 Press `Ctrl+C` to stop the server.
 

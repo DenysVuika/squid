@@ -100,17 +100,37 @@ impl Default for Config {
 impl Config {
     /// Load configuration from squid.config.json if it exists, otherwise from environment variables
     pub fn load() -> Self {
-        let config_path = PathBuf::from("squid.config.json");
+        // Search for config file in current directory and parent directories
+        let config_path = Self::find_config_file().unwrap_or_else(|| PathBuf::from("squid.config.json"));
 
         if config_path.exists() {
             debug!("Loading configuration from squid.config.json");
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_json::from_str::<Config>(&content) {
-                    Ok(config) => {
+                    Ok(mut config) => {
                         // Check version and warn if outdated
                         if let Some(warning) = config.version_warning() {
                             eprintln!("\n{}\n", warning);
                         }
+
+                        // Resolve database_path relative to config file directory
+                        let db_path = PathBuf::from(&config.database_path);
+                        if db_path.is_relative() {
+                            // Get the directory containing the config file
+                            let config_dir = config_path
+                                .parent()
+                                .unwrap_or_else(|| std::path::Path::new("."));
+
+                            // Resolve database path relative to config directory
+                            let absolute_db_path = config_dir.join(&config.database_path);
+
+                            // Convert to string, using the original if conversion fails
+                            if let Some(path_str) = absolute_db_path.to_str() {
+                                config.database_path = path_str.to_string();
+                                debug!("Resolved database path to: {}", config.database_path);
+                            }
+                        }
+
                         return config;
                     }
                     Err(e) => {
@@ -125,6 +145,13 @@ impl Config {
 
         // Fallback to environment variables
         debug!("Loading configuration from environment variables");
+
+        // Try to find existing database in parent directories
+        let db_path = std::env::var("DATABASE_PATH")
+            .ok()
+            .or_else(|| Self::find_database_file().and_then(|p| p.to_str().map(String::from)))
+            .unwrap_or_else(|| Self::default().database_path);
+
         Self {
             api_url: std::env::var("API_URL").unwrap_or_else(|_| Self::default().api_url),
             api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
@@ -136,8 +163,50 @@ impl Config {
             log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
             permissions: Permissions::default(),
             version: None,
-            database_path: std::env::var("DATABASE_PATH").unwrap_or_else(|_| Self::default().database_path),
+            database_path: db_path,
         }
+    }
+
+    /// Search for squid.config.json in current directory and parent directories
+    fn find_config_file() -> Option<PathBuf> {
+        let mut current_dir = std::env::current_dir().ok()?;
+
+        loop {
+            let config_path = current_dir.join("squid.config.json");
+            if config_path.exists() {
+                debug!("Found config file at: {:?}", config_path);
+                return Some(config_path);
+            }
+
+            // Try parent directory
+            if !current_dir.pop() {
+                // Reached root, no config found
+                break;
+            }
+        }
+
+        None
+    }
+
+    /// Search for squid.db in current directory and parent directories
+    fn find_database_file() -> Option<PathBuf> {
+        let mut current_dir = std::env::current_dir().ok()?;
+
+        loop {
+            let db_path = current_dir.join("squid.db");
+            if db_path.exists() {
+                debug!("Found database file at: {:?}", db_path);
+                return Some(db_path);
+            }
+
+            // Try parent directory
+            if !current_dir.pop() {
+                // Reached root, no database found
+                break;
+            }
+        }
+
+        None
     }
 
     /// Get the current application version
