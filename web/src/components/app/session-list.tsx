@@ -154,69 +154,71 @@ export function SessionList({
 
   return (
     <>
-      <div className="flex h-full flex-col border-r bg-muted/10">
-        <div className="p-4">
+      <div className="relative flex h-full flex-col border-r bg-muted/10">
+        <div className="shrink-0 p-4">
           <Button onClick={onNewChat} className="w-full justify-start gap-2" variant="outline">
             <Plus className="h-4 w-4" />
             New Chat
           </Button>
         </div>
 
-        <Separator />
+        <Separator className="shrink-0" />
 
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {loading ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">Loading sessions...</div>
-            ) : sessions.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">No sessions yet. Start a new chat!</div>
-            ) : (
-              <div className="space-y-1">
-                {sessions.map((session) => (
-                  <div
-                    key={session.session_id}
-                    className={`group relative flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent ${
-                      session.session_id === currentSessionId ? 'bg-accent' : ''
-                    }`}
-                    onClick={() => onSessionSelect(session.session_id)}
-                  >
-                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm font-medium">
-                          {session.title || session.preview || 'New conversation'}
-                        </p>
-                        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => handleEditClick(session, e)}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => handleDeleteClick(session.session_id, e)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+        <div className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
+            <div className="p-2">
+              {loading ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">Loading sessions...</div>
+              ) : sessions.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">No sessions yet. Start a new chat!</div>
+              ) : (
+                <div className="space-y-1">
+                  {sessions.map((session) => (
+                    <div
+                      key={session.session_id}
+                      className={`group relative flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent ${
+                        session.session_id === currentSessionId ? 'bg-accent' : ''
+                      }`}
+                      onClick={() => onSessionSelect(session.session_id)}
+                    >
+                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="line-clamp-2 text-sm font-medium">
+                            {session.title || session.preview || 'New conversation'}
+                          </p>
+                          <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => handleEditClick(session, e)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => handleDeleteClick(session.session_id, e)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{session.message_count} messages</span>
+                          <span>•</span>
+                          <span>{formatDate(session.updated_at)}</span>
                         </div>
                       </div>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{session.message_count} messages</span>
-                        <span>•</span>
-                        <span>{formatDate(session.updated_at)}</span>
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
       </div>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
