@@ -1,7 +1,7 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
-import { loadSession, streamChat } from '@/lib/chat-api';
+import { fetchModels, loadSession, streamChat, type ModelInfo } from '@/lib/chat-api';
 import { SessionList } from '@/components/app/session-list';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -37,8 +37,6 @@ import {
   ModelSelectorInput,
   ModelSelectorItem,
   ModelSelectorList,
-  ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
@@ -98,44 +96,6 @@ interface MessageType {
 
 const initialMessages: MessageType[] = [];
 
-const models = [
-  {
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    providers: ['openai', 'azure'],
-  },
-  {
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    providers: ['openai', 'azure'],
-  },
-  {
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    id: 'claude-opus-4-20250514',
-    name: 'Claude 4 Opus',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude 4 Sonnet',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    chef: 'Google',
-    chefSlug: 'google',
-    id: 'gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash',
-    providers: ['google'],
-  },
-];
-
 const suggestions = [
   'What are the latest trends in AI?',
   'How does machine learning work?',
@@ -146,8 +106,6 @@ const suggestions = [
   'What is the difference between SQL and NoSQL?',
   'Explain cloud computing basics',
 ];
-
-const chefs = ['OpenAI', 'Anthropic', 'Google'];
 
 const AttachmentItem = ({
   attachment,
@@ -204,7 +162,7 @@ const ModelItem = ({
   isSelected,
   onSelect,
 }: {
-  m: (typeof models)[0];
+  m: ModelInfo;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }) => {
@@ -214,20 +172,16 @@ const ModelItem = ({
 
   return (
     <ModelSelectorItem onSelect={handleSelect} value={m.id}>
-      <ModelSelectorLogo provider={m.chefSlug} />
       <ModelSelectorName>{m.name}</ModelSelectorName>
-      <ModelSelectorLogoGroup>
-        {m.providers.map((provider) => (
-          <ModelSelectorLogo key={provider} provider={provider} />
-        ))}
-      </ModelSelectorLogoGroup>
       {isSelected ? <CheckIcon className="ml-auto size-4" /> : <div className="ml-auto size-4" />}
     </ModelSelectorItem>
   );
 };
 
 const Example = () => {
-  const [model, setModel] = useState<string>(models[0].id);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelGroups, setModelGroups] = useState<string[]>([]);
+  const [model, setModel] = useState<string>('');
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const [text, setText] = useState<string>('');
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
@@ -258,7 +212,7 @@ const Example = () => {
   });
   const [sessionModelId, setSessionModelId] = useState<string | null>(null);
 
-  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
+  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model, models]);
 
   // Map local/unknown models to similar OpenAI models for cost estimation
   const getModelIdForPricing = useMemo(() => {
@@ -355,6 +309,37 @@ const Example = () => {
     setTokenUsage(session.token_usage);
     setSessionModelId(session.model_id);
     console.log('[Session] Token usage:', session.token_usage);
+  }, []);
+
+  // Fetch available models on mount
+  useEffect(() => {
+    const loadModels = async () => {
+      console.log('[Models] Fetching available models...');
+      const { models: fetchedModels } = await fetchModels('');
+      console.log('[Models] Fetched models:', fetchedModels);
+
+      if (fetchedModels.length > 0) {
+        setModels(fetchedModels);
+
+        // Extract unique providers and sort them
+        const providers = Array.from(new Set(fetchedModels.map((m) => m.provider))).sort();
+        setModelGroups(providers);
+
+        // Set default model - prefer Qwen Coder 2.5
+        const defaultModel =
+          fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
+          fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
+          fetchedModels.find((m) => m.provider === 'Qwen') ||
+          fetchedModels[0];
+
+        if (defaultModel) {
+          setModel(defaultModel.id);
+          console.log('[Models] Default model set to:', defaultModel.id);
+        }
+      }
+    };
+
+    loadModels();
   }, []);
 
   useEffect(() => {
@@ -973,18 +958,18 @@ const Example = () => {
                   <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                     <ModelSelectorTrigger asChild>
                       <PromptInputButton>
-                        {selectedModelData?.chefSlug && <ModelSelectorLogo provider={selectedModelData.chefSlug} />}
                         {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                        {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
                       </PromptInputButton>
                     </ModelSelectorTrigger>
                     <ModelSelectorContent>
                       <ModelSelectorInput placeholder="Search models..." />
                       <ModelSelectorList>
                         <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                        {chefs.map((chef) => (
-                          <ModelSelectorGroup heading={chef} key={chef}>
+                        {modelGroups.map((provider) => (
+                          <ModelSelectorGroup heading={provider} key={provider}>
                             {models
-                              .filter((m) => m.chef === chef)
+                              .filter((m) => m.provider === provider)
                               .map((m) => (
                                 <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
                               ))}

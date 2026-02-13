@@ -54,3 +54,4 @@ rusqlite = { version = "0.38.0", features = ["bundled"] }
 tiktoken-rs = "0.9.1"
 flate2 = "1.0"
 sha2 = "0.10"
+reqwest = { version = "0.12", features = ["json"] }

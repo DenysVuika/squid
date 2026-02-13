@@ -109,6 +109,18 @@ export interface SessionListResponse {
   total: number;
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  max_context_length: number;
+  provider: string;
+  type?: string;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+}
+
 /**
  * Stream chat messages to the Squid API and receive responses via SSE
  *
@@ -442,6 +454,35 @@ export async function updateSessionTitle(apiUrl: string, sessionId: string, titl
   } catch (error) {
     console.error('Failed to update session title:', error);
     return false;
+  }
+}
+
+/**
+ * Fetch available models from the API
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with list of available models
+ *
+ * @example
+ * ```typescript
+ * const { models } = await fetchModels('');
+ * console.log(`Found ${models.length} models`);
+ * ```
+ */
+export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/models` : '/api/models';
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: ModelsResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch models:', error);
+    return { models: [] };
   }
 }
 
