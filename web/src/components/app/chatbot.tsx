@@ -82,7 +82,7 @@ interface MessageType {
   }[];
   reasoning?: {
     content: string;
-    duration: number;
+    duration?: number;
   };
   tools?: {
     name: string;
@@ -195,6 +195,7 @@ const Example = () => {
   const streamingContentRef = useRef<string>('');
   const streamingReasoningRef = useRef<string>('');
   const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
+  const reasoningStartTimeRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -265,7 +266,7 @@ const Example = () => {
           reasoning: msg.reasoning
             ? {
                 content: msg.reasoning,
-                duration: 0,
+                duration: undefined,
               }
             : undefined,
         });
@@ -373,6 +374,7 @@ const Example = () => {
       streamingContentRef.current = ''; // Reset streaming content
       streamingReasoningRef.current = ''; // Reset streaming reasoning
       setIsReasoningStreaming(false);
+      reasoningStartTimeRef.current = null; // Reset reasoning timer
 
       try {
         // Read file contents if files are attached
@@ -464,9 +466,12 @@ const Example = () => {
                 displayContent = fullContent.substring(0, thinkStart);
               }
 
-              // Update reasoning if found
-              if (reasoningContent && !isReasoningStreaming) {
-                setIsReasoningStreaming(true);
+              // Update reasoning if found and start timer
+              if (reasoningContent) {
+                if (!isReasoningStreaming) {
+                  setIsReasoningStreaming(true);
+                  reasoningStartTimeRef.current = Date.now();
+                }
               }
 
               setMessages((prev) => {
@@ -516,6 +521,32 @@ const Example = () => {
               setStreamingMessageId(null);
             },
             onDone: async () => {
+              // Calculate reasoning duration if we were tracking it
+              let reasoningDuration = 0;
+              if (reasoningStartTimeRef.current !== null) {
+                reasoningDuration = Math.ceil((Date.now() - reasoningStartTimeRef.current) / 1000);
+                reasoningStartTimeRef.current = null;
+              }
+
+              // Update message with final reasoning duration
+              if (reasoningDuration > 0) {
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    const hasVersion = msg.versions.some((v) => v.id === messageId);
+                    if (hasVersion && msg.reasoning) {
+                      return {
+                        ...msg,
+                        reasoning: {
+                          ...msg.reasoning,
+                          duration: reasoningDuration,
+                        },
+                      };
+                    }
+                    return msg;
+                  })
+                );
+              }
+
               streamingContentRef.current = ''; // Clear ref after streaming
               streamingReasoningRef.current = ''; // Clear reasoning ref
               setIsReasoningStreaming(false);
@@ -730,7 +761,7 @@ const Example = () => {
           reasoning: msg.reasoning
             ? {
                 content: msg.reasoning,
-                duration: 0,
+                duration: undefined,
               }
             : undefined,
         });
