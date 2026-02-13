@@ -214,7 +214,7 @@ const Example = () => {
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model, models]);
 
-  // Map local/unknown models to similar OpenAI models for cost estimation
+  // Get pricing model from backend metadata or fallback to model ID
   const getModelIdForPricing = useMemo(() => {
     const currentModelId = sessionModelId || model;
 
@@ -223,60 +223,12 @@ const Example = () => {
       return 'gpt-4o';
     }
 
-    // Convert to lowercase once for all comparisons
-    const modelIdLower = currentModelId.toLowerCase();
+    // Find the model in the models list
+    const modelData = models.find((m) => m.id === currentModelId);
 
-    // If tokenlens knows this model, use it as-is
-    // Otherwise, map to a similar OpenAI model for cost comparison
-    const modelMappings: Record<string, string> = {
-      // Qwen models -> similar GPT-4 class
-      'qwen2.5-coder': 'gpt-4o',
-      'qwen-coder': 'gpt-4o',
-      qwen: 'gpt-4o',
-
-      // DeepSeek models -> GPT-4o
-      deepseek: 'gpt-4o',
-      'deepseek-coder': 'gpt-4o',
-      devstral: 'gpt-4o',
-
-      // Llama models -> GPT-4o
-      llama: 'gpt-4o',
-      'llama-3': 'gpt-4o',
-      codellama: 'gpt-4o',
-
-      // Mistral models -> GPT-4o
-      mistral: 'gpt-4o',
-      mixtral: 'gpt-4o',
-
-      // Liquid models -> GPT-4o-mini (smaller)
-      lfm: 'gpt-4o-mini',
-      liquid: 'gpt-4o-mini',
-
-      // Phi models -> GPT-4o-mini (smaller)
-      phi: 'gpt-4o-mini',
-
-      // Gemma models -> GPT-4o-mini
-      gemma: 'gpt-4o-mini',
-
-      // Yi models -> GPT-4o
-      'yi-coder': 'gpt-4o',
-      yi: 'gpt-4o',
-
-      // StarCoder models -> GPT-4o
-      starcoder: 'gpt-4o',
-      wizardcoder: 'gpt-4o',
-    };
-
-    // Check if current model matches any pattern
-    for (const [pattern, fallback] of Object.entries(modelMappings)) {
-      if (modelIdLower.includes(pattern)) {
-        return fallback;
-      }
-    }
-
-    // Default to current model ID if no mapping found
-    return currentModelId;
-  }, [sessionModelId, model]);
+    // Use pricing_model from backend if available, otherwise use the model ID itself
+    return modelData?.pricing_model || currentModelId;
+  }, [sessionModelId, model, models]);
 
   // Load session history on mount if sessionId exists
   const loadSessionHistory = useCallback(

@@ -877,12 +877,16 @@ pub struct ModelMetadata {
     pub aliases: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing_model: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ModelMetadataFile {
     models: HashMap<String, ModelMetadata>,
     default_max_context_length: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    default_pricing_model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -893,6 +897,8 @@ pub struct ModelInfo {
     pub provider: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing_model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -973,6 +979,7 @@ pub async fn get_models(
                         max_context_length: meta.max_context_length,
                         provider: meta.provider,
                         r#type: meta.r#type,
+                        pricing_model: meta.pricing_model,
                     }
                 } else {
                     // Use defaults if no metadata found
@@ -982,6 +989,7 @@ pub async fn get_models(
                         max_context_length: metadata_file.default_max_context_length,
                         provider: "Unknown".to_string(),
                         r#type: None,
+                        pricing_model: metadata_file.default_pricing_model.clone(),
                     }
                 };
 

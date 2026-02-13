@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Centralized Pricing Model Metadata**: Token pricing estimation now uses backend metadata
+  - Added `pricing_model` field to model metadata JSON for mapping models to pricing references
+  - Removed hardcoded model-to-pricing mappings from frontend
+  - Backend now provides pricing model information via `/api/models` endpoint
+  - All models (Qwen, DeepSeek, Llama, Mistral, etc.) now have consistent pricing estimation
+  - Added `default_pricing_model` to metadata for unknown models (defaults to `gpt-4o`)
+
 - **Model Selection in Web UI**: Dynamic model selector with real-time model discovery
   - New `/api/models` endpoint fetches available models from LLM provider (LM Studio, Ollama, etc.)
   - Models augmented with metadata including friendly names, context window sizes, and providers

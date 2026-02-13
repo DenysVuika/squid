@@ -116,6 +116,7 @@ export interface ModelInfo {
   max_context_length: number;
   provider: string;
   type?: string;
+  pricing_model?: string;
 }
 
 export interface ModelsResponse {
