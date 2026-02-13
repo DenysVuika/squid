@@ -191,8 +191,10 @@ const Example = () => {
     // Load session ID from localStorage on mount
     return localStorage.getItem('squid_session_id');
   });
-  const [, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
+  const streamingReasoningRef = useRef<string>('');
+  const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -260,6 +262,12 @@ const Example = () => {
               content: msg.content,
             },
           ],
+          reasoning: msg.reasoning
+            ? {
+                content: msg.reasoning,
+                duration: 0,
+              }
+            : undefined,
         });
       }
 
@@ -363,6 +371,8 @@ const Example = () => {
       setStatus('streaming');
       setStreamingMessageId(messageId);
       streamingContentRef.current = ''; // Reset streaming content
+      streamingReasoningRef.current = ''; // Reset streaming reasoning
+      setIsReasoningStreaming(false);
 
       try {
         // Read file contents if files are attached
@@ -434,7 +444,30 @@ const Example = () => {
             onContent: (text) => {
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
-              const currentContent = streamingContentRef.current;
+              const fullContent = streamingContentRef.current;
+
+              // Parse out <think> tags
+              let displayContent = fullContent;
+              let reasoningContent = '';
+
+              const thinkStart = fullContent.indexOf('<think>');
+              const thinkEnd = fullContent.indexOf('</think>');
+
+              if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
+                // Extract reasoning between tags
+                reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
+                // Remove the entire <think>...</think> section from display content
+                displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
+              } else if (thinkStart !== -1) {
+                // Opening tag found but no closing tag yet
+                reasoningContent = fullContent.substring(thinkStart + 7);
+                displayContent = fullContent.substring(0, thinkStart);
+              }
+
+              // Update reasoning if found
+              if (reasoningContent && !isReasoningStreaming) {
+                setIsReasoningStreaming(true);
+              }
 
               setMessages((prev) => {
                 const updated = prev.map((msg) => {
@@ -442,7 +475,13 @@ const Example = () => {
                   if (hasVersion) {
                     return {
                       ...msg,
-                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: currentContent } : v)),
+                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
+                      reasoning: reasoningContent
+                        ? {
+                            content: reasoningContent,
+                            duration: 0,
+                          }
+                        : msg.reasoning,
                     };
                   }
                   return msg;
@@ -478,6 +517,8 @@ const Example = () => {
             },
             onDone: async () => {
               streamingContentRef.current = ''; // Clear ref after streaming
+              streamingReasoningRef.current = ''; // Clear reasoning ref
+              setIsReasoningStreaming(false);
               abortControllerRef.current = null;
               setStatus('ready');
               setStreamingMessageId(null);
@@ -682,10 +723,16 @@ const Example = () => {
               : undefined,
           versions: [
             {
-              id: `${msg.role}-${msg.timestamp}`,
+              id: `${msg.role}-${msg.timestamp}-v1`,
               content: msg.content,
             },
           ],
+          reasoning: msg.reasoning
+            ? {
+                content: msg.reasoning,
+                duration: 0,
+              }
+            : undefined,
         });
       }
 
@@ -887,13 +934,21 @@ const Example = () => {
                           </Sources>
                         )}
                         {message.reasoning && (
-                          <Reasoning duration={message.reasoning.duration}>
+                          <Reasoning
+                            duration={message.reasoning.duration}
+                            isStreaming={
+                              isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
+                            }
+                          >
                             <ReasoningTrigger />
                             <ReasoningContent>{message.reasoning.content}</ReasoningContent>
                           </Reasoning>
                         )}
                         <MessageContent>
-                          {message.from === 'assistant' && !version.content && status === 'streaming' ? (
+                          {message.from === 'assistant' &&
+                          !version.content &&
+                          status === 'streaming' &&
+                          !message.reasoning ? (
                             <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                           ) : (
                             <MessageResponse>{version.content}</MessageResponse>

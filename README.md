@@ -12,6 +12,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
 - 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
 - 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
+- 🧠 **Reasoning Mode** - View LLM's thinking process with collapsible reasoning sections (supports `<think>` tags)
 - 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)

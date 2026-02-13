@@ -53,6 +53,8 @@ pub enum StreamEvent {
     Sources { sources: Vec<Source> },
     #[serde(rename = "content")]
     Content { text: String },
+    #[serde(rename = "reasoning")]
+    Reasoning { text: String },
     #[serde(rename = "tool_call")]
     ToolCall { name: String, arguments: String },
     #[serde(rename = "tool_result")]
@@ -76,6 +78,8 @@ pub struct SessionMessage {
     pub content: String,
     pub sources: Vec<Source>,
     pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -181,6 +185,7 @@ pub async fn get_session(
                         content: s.content.clone(),
                     }).collect(),
                     timestamp: msg.timestamp,
+                    reasoning: msg.reasoning.clone(),
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
@@ -399,6 +404,7 @@ pub async fn chat_stream(
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
                 let mut accumulated_content = String::new();
+                let mut accumulated_reasoning = String::new();
                 let mut total_input_tokens = 0i64;
                 let mut total_output_tokens = 0i64;
                 let mut total_reasoning_tokens = 0i64;
@@ -413,6 +419,11 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
+                            }
+
+                            // Accumulate reasoning chunks
+                            if let StreamEvent::Reasoning { ref text } = chunk {
+                                accumulated_reasoning.push_str(text);
                             }
 
                             // Accumulate token usage
@@ -445,12 +456,20 @@ pub async fn chat_stream(
                 // Add assistant message to session with sources
                 // Clone accumulated_content before moving it, as we need it later for token estimation
                 let accumulated_content_clone = accumulated_content.clone();
+                let reasoning_opt = if !accumulated_reasoning.is_empty() {
+                    Some(accumulated_reasoning)
+                } else {
+                    None
+                };
+
                 if !accumulated_content.is_empty() {
-                    debug!("Saving assistant message to session {} (length: {} chars)", session_id, accumulated_content.len());
+                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {})",
+                        session_id, accumulated_content.len(), reasoning_opt.is_some());
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         accumulated_content_clone,
                         sources,
+                        reasoning_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),
@@ -807,6 +826,8 @@ async fn create_chat_stream(
                     }
                 }
             }
+
+
         }
 
             // If we had tool calls, the loop continues to make another request

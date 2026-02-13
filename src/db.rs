@@ -111,6 +111,9 @@ impl Database {
         // Migration 006: Deduplicate sources
         run_migration(6, "Deduplicate sources", include_str!("../migrations/006_deduplicate_sources.sql"))?;
 
+        // Migration 007: Reasoning column
+        run_migration(7, "Reasoning column", include_str!("../migrations/007_reasoning_column.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -203,7 +206,7 @@ impl Database {
 
         // Load messages
         let mut msg_stmt = conn.prepare(
-            "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
+            "SELECT id, role, content, timestamp, reasoning FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
         let messages = msg_stmt.query_map(params![session_id], |row| {
@@ -211,13 +214,14 @@ impl Database {
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?
+                row.get::<_, i64>(3)?,
+                row.get::<_, Option<String>>(4)?
             ))
         })?
-        .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
+        .collect::<SqliteResult<Vec<(i64, String, String, i64, Option<String>)>>>()?;
 
         // Convert to ChatMessages and load sources for each
-        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
+        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning)| {
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -261,6 +265,7 @@ impl Database {
                 content,
                 sources,
                 timestamp,
+                reasoning,
             })
         }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
 
@@ -277,8 +282,8 @@ impl Database {
 
         // Insert message
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
-            params![session_id, message.role, message.content, message.timestamp],
+            "INSERT INTO messages (session_id, role, content, timestamp, reasoning) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![session_id, message.role, message.content, message.timestamp, message.reasoning.as_ref()],
         )?;
 
         let message_id = conn.last_insert_rowid();

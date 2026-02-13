@@ -22,6 +22,7 @@ export type StreamEventType =
   | 'session'
   | 'sources'
   | 'content'
+  | 'reasoning'
   | 'tool_call'
   | 'tool_result'
   | 'usage'
@@ -62,6 +63,7 @@ export interface StreamHandlers {
   onSession?: (sessionId: string) => void;
   onSources?: (sources: Source[]) => void;
   onContent: (text: string) => void;
+  onReasoning?: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
   onUsage?: (usage: {
@@ -80,6 +82,7 @@ export interface SessionMessage {
   content: string;
   sources: Source[];
   timestamp: number;
+  reasoning?: string;
 }
 
 export interface SessionData {
@@ -155,7 +158,8 @@ export interface ModelsResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onSession, onSources, onContent, onToolCall, onToolResult, onUsage, onError, onDone, signal } = handlers;
+  const { onSession, onSources, onContent, onReasoning, onToolCall, onToolResult, onUsage, onError, onDone, signal } =
+    handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -215,6 +219,12 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
               case 'content':
                 if (event.text) {
                   onContent(event.text);
+                }
+                break;
+
+              case 'reasoning':
+                if (onReasoning && event.text) {
+                  onReasoning(event.text);
                 }
                 break;
 

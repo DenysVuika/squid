@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reasoning Mode Support**: View LLM's thinking process in the Web UI
+  - Added support for `<think>` tags in streaming responses
+  - Reasoning content is parsed and displayed separately from regular response
+  - Collapsible reasoning sections with automatic open/close during streaming
+  - Shows thinking duration after completion
+  - Stateful parser handles tags split across streaming chunks
+  - New `Reasoning` stream event type in API
+  - Frontend tracks reasoning state and displays it using the `Reasoning` component
+  - **Reasoning persisted to database** - thinking process saved with messages and restored on session load
+  - Added `reasoning` column to messages table (migration 007)
+  - Reasoning content displayed on page reload and session switching
+  - "Thinking..." placeholder hidden once reasoning starts
+  - Fixed stream error after reasoning by properly flushing content buffer when stream ends
+
 - **Centralized Pricing Model Metadata**: Token pricing estimation now uses backend metadata
   - Added `pricing_model` field to model metadata JSON for mapping models to pricing references
   - Removed hardcoded model-to-pricing mappings from frontend
