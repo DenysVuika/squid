@@ -10,58 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Reasoning Mode Support**: View LLM's thinking process in the Web UI
-  - Added support for `<think>...</think>` tags in streaming responses
-  - Reasoning content parsed and displayed separately from regular response
-  - Collapsible reasoning sections with automatic open/close during streaming
-  - **Real-time duration tracking**: Shows "Thinking..." shimmer while reasoning, then "Thought for X seconds"
-  - Frontend parses `<think>` tags from streaming content for live display
-  - Backend parses tags from accumulated content before saving to database
-  - **Reasoning persisted to database** - thinking process saved with messages and restored on session load
-  - Added `reasoning` column to messages table (migration 007)
-  - Reasoning content displayed on page reload (shows "Thought for a few seconds")
-  - "Thinking..." placeholder hidden once reasoning starts
-  - Content saved without `<think>` tags; reasoning stored separately for clean display
-  - Duration calculated from when `<think>` appears to when `</think>` closes
-  - Reasoning component manages timing internally via `isStreaming` prop
+  - Collapsible reasoning sections showing the model's thought process
+  - Real-time duration tracking displays "Thinking..." while processing, then "Thought for X seconds"
+  - Thinking process saved with messages and restored when loading previous sessions
 
-- **Centralized Pricing Model Metadata**: Token pricing estimation now uses backend metadata
-  - Added `pricing_model` field to model metadata JSON for mapping models to pricing references
-  - Removed hardcoded model-to-pricing mappings from frontend
-  - Backend now provides pricing model information via `/api/models` endpoint
-  - All models (Qwen, DeepSeek, Llama, Mistral, etc.) now have consistent pricing estimation
-  - Added `default_pricing_model` to metadata for unknown models (defaults to `gpt-4o`)
+- **Improved Pricing Estimation**: Token pricing now works consistently across all models
+  - All models (Qwen, DeepSeek, Llama, Mistral, etc.) now have accurate pricing estimation
+  - Pricing information provided by backend for consistent display
 
-- **Model Selection in Web UI**: Dynamic model selector with real-time model discovery
-  - New `/api/models` endpoint fetches available models from LLM provider (LM Studio, Ollama, etc.)
-  - Models augmented with metadata including friendly names, context window sizes, and providers
-  - Model selector defaults to Qwen Coder 2.5 (preferred for coding tasks)
+- **Model Selection in Web UI**: Choose from available models directly in the interface
+  - Dynamic model selector with real-time discovery of available models from your LLM provider
+  - Models display friendly names, context window sizes, and provider information
   - Models grouped by provider for easy navigation
-  - Selected model is passed to API with each request, overriding config default
-  - Built-in model metadata for 30+ popular models (Qwen, Llama, GPT, Claude, Gemini, etc.)
-  - Unknown models handled gracefully with 8192 token default context
-- **Per-Request Model Override**: Chat requests can now specify a model
-  - Optional `model` field in `/api/chat` endpoint
-  - Falls back to `api_model` from config if not specified
-  - Allows Web UI to use different models without changing configuration
+  - Defaults to Qwen Coder 2.5 (optimized for coding tasks)
+  - Built-in metadata for 30+ popular models
+  - Switch models per-session without changing configuration
 
 ### Fixed
 
-- **Cost Calculation for Liquid Models**: Added support for LFM/Liquid models in pricing estimation
-  - Models like `lfm2.5-1.2b-thinking` and `liquid/lfm2.5-1.2b` now properly mapped to GPT-4o-mini for cost comparison
-- **Model Selector Sync**: Model selector now updates when switching between sessions
-  - Previously, the model selector would not reflect the model used in a loaded session
-  - Now correctly displays and selects the model associated with each session
-  - Includes fuzzy matching to handle model ID changes (e.g., `qwen2.5-coder` → `qwen2.5-coder-7b-instruct-mlx`)
-  - Old sessions with outdated model IDs will automatically select the closest matching current model
-- **Context Window Updates**: Context window size now updates when switching models
-  - Ensures accurate token usage percentage and prevents calculation errors
-  - Automatically uses the selected model's max context length
+- **Cost Calculation for Liquid Models**: LFM/Liquid models now properly estimated in pricing calculations
+- **Model Selector Sync**: Model selector now correctly updates when switching between sessions
+  - Displays the model used in each loaded session
+  - Fuzzy matching handles model ID changes (e.g., when model names are updated)
+  - Old sessions automatically select the closest matching current model
+- **Context Window Updates**: Context window size now updates when switching models for accurate token usage display
 
 ### Changed
 
-- **Default Model**: Changed from `local-model` to `qwen2.5-coder-7b-instruct` for better defaults
-  - More specific default that works well with LM Studio and Ollama
-  - Still overridable via config or Web UI model selector
+- **Default Model**: Changed from `local-model` to `qwen2.5-coder-7b-instruct`
+  - Better default for coding tasks, works well with LM Studio and Ollama
+  - Can be overridden via config or Web UI model selector
 
 ## [0.8.0] - 2026-02-13
 
