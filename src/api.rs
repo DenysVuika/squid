@@ -454,20 +454,33 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Clone accumulated_content before moving it, as we need it later for token estimation
-                let accumulated_content_clone = accumulated_content.clone();
-                let reasoning_opt = if !accumulated_reasoning.is_empty() {
-                    Some(accumulated_reasoning)
-                } else {
-                    None
-                };
+                // Parse out <think> tags from accumulated content
+                let mut final_content = accumulated_content.clone();
+                let mut reasoning_opt = None;
 
-                if !accumulated_content.is_empty() {
+                // Look for <think>...</think> tags
+                if let Some(think_start) = accumulated_content.find("<think>") {
+                    if let Some(think_end) = accumulated_content.find("</think>") {
+                        if think_end > think_start {
+                            // Extract reasoning between tags
+                            let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
+                            // Remove the entire <think>...</think> section from content
+                            final_content = format!(
+                                "{}{}",
+                                &accumulated_content[..think_start],
+                                &accumulated_content[think_end + 8..]
+                            );
+                            reasoning_opt = Some(reasoning_text);
+                        }
+                    }
+                }
+
+                if !final_content.is_empty() {
                     debug!("Saving assistant message to session {} (length: {} chars, reasoning: {})",
-                        session_id, accumulated_content.len(), reasoning_opt.is_some());
+                        session_id, final_content.len(), reasoning_opt.is_some());
                     match session_manager_clone.add_assistant_message(
                         &session_id,
-                        accumulated_content_clone,
+                        final_content.clone(),
                         sources,
                         reasoning_opt,
                     ) {
@@ -477,6 +490,9 @@ pub async fn chat_stream(
                 } else {
                     debug!("Skipping empty assistant message for session {}", session_id);
                 }
+
+                // Use final_content for token estimation
+                let accumulated_content_clone = final_content;
 
                 // If provider didn't send usage stats, estimate them client-side
                 if !received_usage {
