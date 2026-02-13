@@ -9,9 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reasoning Mode Support**: View LLM's thinking process in the Web UI
+  - Collapsible reasoning sections showing the model's thought process
+  - Real-time duration tracking displays "Thinking..." while processing, then "Thought for X seconds"
+  - Thinking process saved with messages and restored when loading previous sessions
+
+- **Improved Pricing Estimation**: Token pricing now works consistently across all models
+  - All models (Qwen, DeepSeek, Llama, Mistral, etc.) now have accurate pricing estimation
+  - Pricing information provided by backend for consistent display
+
+- **Model Selection in Web UI**: Choose from available models directly in the interface
+  - Dynamic model selector with real-time discovery of available models from your LLM provider
+  - Models display friendly names, context window sizes, and provider information
+  - Models grouped by provider for easy navigation
+  - Defaults to Qwen Coder 2.5 (optimized for coding tasks)
+  - Built-in metadata for 30+ popular models
+  - Switch models per-session without changing configuration
+
 ### Fixed
 
+- **Cost Calculation for Liquid Models**: LFM/Liquid models now properly estimated in pricing calculations
+- **Model Selector Sync**: Model selector now correctly updates when switching between sessions
+  - Displays the model used in each loaded session
+  - Fuzzy matching handles model ID changes (e.g., when model names are updated)
+  - Old sessions automatically select the closest matching current model
+- **Context Window Updates**: Context window size now updates when switching models for accurate token usage display
+
 ### Changed
+
+- **Default Model**: Changed from `local-model` to `qwen2.5-coder-7b-instruct`
+  - Better default for coding tasks, works well with LM Studio and Ollama
+  - Can be overridden via config or Web UI model selector
 
 ## [0.8.0] - 2026-02-13
 

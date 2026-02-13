@@ -1,0 +1,181 @@
+{
+  "models": {
+    "qwen2.5-coder-7b-instruct": {
+      "name": "Qwen 2.5 Coder 7B Instruct",
+      "max_context_length": 32768,
+      "provider": "Qwen",
+      "aliases": ["qwen2.5-coder-7b-instruct-mlx"],
+      "pricing_model": "gpt-4o"
+    },
+    "qwen/qwen3-8b": {
+      "name": "Qwen 3 8B",
+      "max_context_length": 40960,
+      "provider": "Qwen",
+      "pricing_model": "gpt-4o"
+    },
+    "qwen/qwen3-vl-8b": {
+      "name": "Qwen 3 VL 8B",
+      "max_context_length": 262144,
+      "provider": "Qwen",
+      "pricing_model": "gpt-4o"
+    },
+    "lfm2.5-1.2b-thinking": {
+      "name": "LFM 2.5 1.2B Thinking",
+      "max_context_length": 128000,
+      "provider": "Liquid",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "liquid/lfm2.5-1.2b": {
+      "name": "LFM 2.5 1.2B",
+      "max_context_length": 128000,
+      "provider": "Liquid",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "zai-org/glm-4.6v-flash": {
+      "name": "GLM 4.6V Flash",
+      "max_context_length": 131072,
+      "provider": "Zhipu AI",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "mistralai/ministral-3-3b": {
+      "name": "Ministral 3 3B",
+      "max_context_length": 131072,
+      "provider": "Mistral AI",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "smollm3-3b-mlx": {
+      "name": "SmolLM 3 3B",
+      "max_context_length": 65536,
+      "provider": "HuggingFace",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "gpt-4o": {
+      "name": "GPT-4o",
+      "max_context_length": 128000,
+      "provider": "OpenAI",
+      "pricing_model": "gpt-4o"
+    },
+    "gpt-4o-mini": {
+      "name": "GPT-4o Mini",
+      "max_context_length": 128000,
+      "provider": "OpenAI",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "gpt-4": {
+      "name": "GPT-4",
+      "max_context_length": 8192,
+      "provider": "OpenAI",
+      "pricing_model": "gpt-4"
+    },
+    "gpt-4-turbo": {
+      "name": "GPT-4 Turbo",
+      "max_context_length": 128000,
+      "provider": "OpenAI",
+      "pricing_model": "gpt-4-turbo"
+    },
+    "gpt-3.5-turbo": {
+      "name": "GPT-3.5 Turbo",
+      "max_context_length": 16385,
+      "provider": "OpenAI",
+      "pricing_model": "gpt-3.5-turbo"
+    },
+    "claude-opus-4-20250514": {
+      "name": "Claude 4 Opus",
+      "max_context_length": 200000,
+      "provider": "Anthropic",
+      "pricing_model": "claude-opus-4-20250514"
+    },
+    "claude-sonnet-4-20250514": {
+      "name": "Claude 4 Sonnet",
+      "max_context_length": 200000,
+      "provider": "Anthropic",
+      "pricing_model": "claude-sonnet-4-20250514"
+    },
+    "claude-3-5-sonnet-20241022": {
+      "name": "Claude 3.5 Sonnet",
+      "max_context_length": 200000,
+      "provider": "Anthropic",
+      "pricing_model": "claude-3-5-sonnet-20241022"
+    },
+    "claude-3-opus-20240229": {
+      "name": "Claude 3 Opus",
+      "max_context_length": 200000,
+      "provider": "Anthropic",
+      "pricing_model": "claude-3-opus-20240229"
+    },
+    "gemini-2.0-flash-exp": {
+      "name": "Gemini 2.0 Flash",
+      "max_context_length": 1048576,
+      "provider": "Google",
+      "pricing_model": "gemini-2.0-flash-exp"
+    },
+    "gemini-1.5-pro": {
+      "name": "Gemini 1.5 Pro",
+      "max_context_length": 2097152,
+      "provider": "Google",
+      "pricing_model": "gemini-1.5-pro"
+    },
+    "gemini-1.5-flash": {
+      "name": "Gemini 1.5 Flash",
+      "max_context_length": 1048576,
+      "provider": "Google",
+      "pricing_model": "gemini-1.5-flash"
+    },
+    "llama-3.1-405b": {
+      "name": "Llama 3.1 405B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o"
+    },
+    "llama-3.1-70b": {
+      "name": "Llama 3.1 70B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o"
+    },
+    "llama-3.1-8b": {
+      "name": "Llama 3.1 8B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o"
+    },
+    "llama-3.2-90b": {
+      "name": "Llama 3.2 90B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o"
+    },
+    "llama-3.2-11b": {
+      "name": "Llama 3.2 11B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o"
+    },
+    "llama-3.2-3b": {
+      "name": "Llama 3.2 3B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "llama-3.2-1b": {
+      "name": "Llama 3.2 1B",
+      "max_context_length": 131072,
+      "provider": "Meta",
+      "pricing_model": "gpt-4o-mini"
+    },
+    "deepseek-chat": {
+      "name": "DeepSeek Chat",
+      "max_context_length": 65536,
+      "provider": "DeepSeek",
+      "pricing_model": "gpt-4o"
+    },
+    "deepseek-coder": {
+      "name": "DeepSeek Coder",
+      "max_context_length": 65536,
+      "provider": "DeepSeek",
+      "pricing_model": "gpt-4o"
+    }
+  },
+  "default_max_context_length": 8192,
+  "default_pricing_model": "gpt-4o"
+}

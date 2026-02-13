@@ -15,12 +15,14 @@ export interface ChatMessage {
   session_id?: string;
   files?: FileAttachment[];
   system_prompt?: string;
+  model?: string;
 }
 
 export type StreamEventType =
   | 'session'
   | 'sources'
   | 'content'
+  | 'reasoning'
   | 'tool_call'
   | 'tool_result'
   | 'usage'
@@ -61,6 +63,7 @@ export interface StreamHandlers {
   onSession?: (sessionId: string) => void;
   onSources?: (sources: Source[]) => void;
   onContent: (text: string) => void;
+  onReasoning?: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
   onUsage?: (usage: {
@@ -79,6 +82,7 @@ export interface SessionMessage {
   content: string;
   sources: Source[];
   timestamp: number;
+  reasoning?: string;
 }
 
 export interface SessionData {
@@ -107,6 +111,19 @@ export interface SessionListItem {
 export interface SessionListResponse {
   sessions: SessionListItem[];
   total: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  max_context_length: number;
+  provider: string;
+  type?: string;
+  pricing_model?: string;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
 }
 
 /**
@@ -141,7 +158,8 @@ export interface SessionListResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onSession, onSources, onContent, onToolCall, onToolResult, onUsage, onError, onDone, signal } = handlers;
+  const { onSession, onSources, onContent, onReasoning, onToolCall, onToolResult, onUsage, onError, onDone, signal } =
+    handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -201,6 +219,12 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
               case 'content':
                 if (event.text) {
                   onContent(event.text);
+                }
+                break;
+
+              case 'reasoning':
+                if (onReasoning && event.text) {
+                  onReasoning(event.text);
                 }
                 break;
 
@@ -442,6 +466,35 @@ export async function updateSessionTitle(apiUrl: string, sessionId: string, titl
   } catch (error) {
     console.error('Failed to update session title:', error);
     return false;
+  }
+}
+
+/**
+ * Fetch available models from the API
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with list of available models
+ *
+ * @example
+ * ```typescript
+ * const { models } = await fetchModels('');
+ * console.log(`Found ${models.length} models`);
+ * ```
+ */
+export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/models` : '/api/models';
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: ModelsResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch models:', error);
+    return { models: [] };
   }
 }
 

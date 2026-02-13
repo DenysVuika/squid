@@ -19,6 +19,8 @@ pub struct ChatMessage {
     pub content: String,
     pub sources: Vec<Source>,
     pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 /// Represents a source (file attachment) to be displayed with a message
@@ -120,13 +122,14 @@ impl ChatSession {
     }
 
     /// Add a message to the session
-    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>) {
+    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>, reasoning: Option<String>) {
         let now = chrono::Utc::now().timestamp();
         self.messages.push(ChatMessage {
             role,
             content,
             sources,
             timestamp: now,
+            reasoning,
         });
         self.updated_at = now;
     }
@@ -271,8 +274,8 @@ impl SessionManager {
             })
             .collect();
 
-        // Add message to session
-        session.add_message("user".to_string(), content, sources.clone());
+        // Add message to session (users don't have reasoning)
+        session.add_message("user".to_string(), content, sources.clone(), None);
 
         // Auto-generate title from first user message if needed
         session.update_title_if_needed();
@@ -322,13 +325,14 @@ impl SessionManager {
         session_id: &str,
         content: String,
         sources: Vec<Source>,
+        reasoning: Option<String>,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
-        session.add_message("assistant".to_string(), content, sources);
+        session.add_message("assistant".to_string(), content, sources, reasoning);
 
         // Get the last message
         let message = session.messages.last()
@@ -456,7 +460,7 @@ mod tests {
         assert_eq!(sources.len(), 1);
 
         manager
-            .add_assistant_message(&session_id, "Hi there!".to_string(), sources)
+            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None)
             .unwrap();
 
         let session = manager.get_session(&session_id).unwrap();
@@ -494,7 +498,7 @@ mod tests {
 
         // Add assistant response
         manager
-            .add_assistant_message(&session_id, "First answer".to_string(), vec![])
+            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None)
             .unwrap();
 
         // Verify both messages exist
@@ -509,7 +513,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Second answer".to_string(), vec![])
+            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None)
             .unwrap();
 
         // Verify all 4 messages persist
@@ -536,7 +540,7 @@ mod tests {
                 .unwrap();
 
             manager
-                .add_assistant_message(&session_id, format!("Answer {}", i), vec![])
+                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None)
                 .unwrap();
         }
 
@@ -583,7 +587,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Test response".to_string(), vec![])
+            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None)
             .unwrap();
 
         // Update token usage multiple times (simulates streaming updates)

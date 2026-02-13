@@ -12,6 +12,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
 - 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
 - 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
+- 🧠 **Reasoning Mode** - View LLM's thinking process with collapsible reasoning sections (supports `<think>` tags)
 - 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
 - 🔒 Path validation (whitelist/blacklist) and .squidignore support
 - 🛡️ User approval required for all tool executions (read/write files)
@@ -347,11 +348,13 @@ DATABASE_PATH=squid.db
   - OpenAI: `https://api.openai.com/v1`
   - Other: Your provider's base URL
   
-- `API_MODEL`: The model to use
-  - LM Studio: `local-model` (uses whatever model is loaded)
-  - Ollama: `qwen2.5-coder` (recommended) or any pulled model
+- `API_MODEL`: The default model to use (can be overridden in Web UI)
+  - Default: `qwen2.5-coder-7b-instruct` (recommended)
+  - LM Studio: Any model loaded in LM Studio
+  - Ollama: `qwen2.5-coder`, `llama3.1`, or any pulled model
   - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
   - Other: Check your provider's model names
+  - **Note**: The Web UI can fetch and display all available models via the `/api/models` endpoint
   
 - `API_KEY`: Your API key
   - LM Studio: `not-needed` (no authentication required)
@@ -613,7 +616,8 @@ The web server exposes REST API endpoints for programmatic access:
   "message": "Your question here",
   "file_content": "optional file content",
   "file_path": "optional/file/path.rs",
-  "system_prompt": "optional custom system prompt"
+  "system_prompt": "optional custom system prompt",
+  "model": "optional model ID (overrides config default)"
 }
 ```
 
@@ -652,9 +656,40 @@ The web server exposes REST API endpoints for programmatic access:
   "total": 100,
   "page": 1,
   "page_size": 50,
-  "total_pages": 2
+  "total_pages": 655
 }
 ```
+
+**Models Endpoint:** `GET /api/models`
+
+Fetches available models from your LLM provider (LM Studio, Ollama, etc.) and augments them with metadata like context window sizes.
+
+**Response:**
+```json
+{
+  "models": [
+    {
+      "id": "qwen2.5-coder-7b-instruct",
+      "name": "Qwen 2.5 Coder 7B Instruct",
+      "max_context_length": 32768,
+      "provider": "Qwen"
+    },
+    {
+      "id": "llama-3.1-8b",
+      "name": "Llama 3.1 8B",
+      "max_context_length": 131072,
+      "provider": "Meta"
+    }
+  ]
+}
+```
+
+**Features:**
+- Automatically fetches models from your LLM provider's `/models` endpoint
+- Augments response with friendly names and context window sizes from built-in metadata
+- Falls back to sensible defaults (8192 tokens) for unknown models
+- Filters out embedding models
+- Sorts with Qwen models first (preferred for coding)
 
 **Example using curl:**
 ```bash

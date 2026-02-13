@@ -1,7 +1,7 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart, ToolUIPart } from 'ai';
 
-import { loadSession, streamChat } from '@/lib/chat-api';
+import { fetchModels, loadSession, streamChat, type ModelInfo } from '@/lib/chat-api';
 import { SessionList } from '@/components/app/session-list';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -37,8 +37,6 @@ import {
   ModelSelectorInput,
   ModelSelectorItem,
   ModelSelectorList,
-  ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
@@ -84,7 +82,7 @@ interface MessageType {
   }[];
   reasoning?: {
     content: string;
-    duration: number;
+    duration?: number;
   };
   tools?: {
     name: string;
@@ -98,44 +96,6 @@ interface MessageType {
 
 const initialMessages: MessageType[] = [];
 
-const models = [
-  {
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    providers: ['openai', 'azure'],
-  },
-  {
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    providers: ['openai', 'azure'],
-  },
-  {
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    id: 'claude-opus-4-20250514',
-    name: 'Claude 4 Opus',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude 4 Sonnet',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    chef: 'Google',
-    chefSlug: 'google',
-    id: 'gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash',
-    providers: ['google'],
-  },
-];
-
 const suggestions = [
   'What are the latest trends in AI?',
   'How does machine learning work?',
@@ -146,8 +106,6 @@ const suggestions = [
   'What is the difference between SQL and NoSQL?',
   'Explain cloud computing basics',
 ];
-
-const chefs = ['OpenAI', 'Anthropic', 'Google'];
 
 const AttachmentItem = ({
   attachment,
@@ -204,7 +162,7 @@ const ModelItem = ({
   isSelected,
   onSelect,
 }: {
-  m: (typeof models)[0];
+  m: ModelInfo;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }) => {
@@ -214,20 +172,16 @@ const ModelItem = ({
 
   return (
     <ModelSelectorItem onSelect={handleSelect} value={m.id}>
-      <ModelSelectorLogo provider={m.chefSlug} />
       <ModelSelectorName>{m.name}</ModelSelectorName>
-      <ModelSelectorLogoGroup>
-        {m.providers.map((provider) => (
-          <ModelSelectorLogo key={provider} provider={provider} />
-        ))}
-      </ModelSelectorLogoGroup>
       {isSelected ? <CheckIcon className="ml-auto size-4" /> : <div className="ml-auto size-4" />}
     </ModelSelectorItem>
   );
 };
 
 const Example = () => {
-  const [model, setModel] = useState<string>(models[0].id);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelGroups, setModelGroups] = useState<string[]>([]);
+  const [model, setModel] = useState<string>('');
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const [text, setText] = useState<string>('');
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
@@ -237,8 +191,10 @@ const Example = () => {
     // Load session ID from localStorage on mount
     return localStorage.getItem('squid_session_id');
   });
-  const [, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const streamingContentRef = useRef<string>('');
+  const streamingReasoningRef = useRef<string>('');
+  const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -258,104 +214,132 @@ const Example = () => {
   });
   const [sessionModelId, setSessionModelId] = useState<string | null>(null);
 
-  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model]);
+  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model, models]);
 
-  // Map local/unknown models to similar OpenAI models for cost estimation
+  // Get pricing model from backend metadata or fallback to model ID
   const getModelIdForPricing = useMemo(() => {
     const currentModelId = sessionModelId || model;
 
-    // If tokenlens knows this model, use it as-is
-    // Otherwise, map to a similar OpenAI model for cost comparison
-    const modelMappings: Record<string, string> = {
-      // Qwen models -> similar GPT-4 class
-      'qwen2.5-coder': 'gpt-4o',
-      'qwen-coder': 'gpt-4o',
-      qwen: 'gpt-4o',
-
-      // DeepSeek models -> GPT-4o
-      deepseek: 'gpt-4o',
-      'deepseek-coder': 'gpt-4o',
-      devstral: 'gpt-4o',
-
-      // Llama models -> GPT-4o
-      llama: 'gpt-4o',
-      'llama-3': 'gpt-4o',
-      codellama: 'gpt-4o',
-
-      // Mistral models -> GPT-4o
-      mistral: 'gpt-4o',
-      mixtral: 'gpt-4o',
-
-      // Phi models -> GPT-4o-mini (smaller)
-      phi: 'gpt-4o-mini',
-
-      // Gemma models -> GPT-4o-mini
-      gemma: 'gpt-4o-mini',
-
-      // Yi models -> GPT-4o
-      'yi-coder': 'gpt-4o',
-      yi: 'gpt-4o',
-
-      // StarCoder models -> GPT-4o
-      starcoder: 'gpt-4o',
-      wizardcoder: 'gpt-4o',
-    };
-
-    // Check if current model matches any pattern
-    for (const [pattern, fallback] of Object.entries(modelMappings)) {
-      if (currentModelId.toLowerCase().includes(pattern)) {
-        return fallback;
-      }
+    // If model ID is empty, return default
+    if (!currentModelId) {
+      return 'gpt-4o';
     }
 
-    // Default to current model ID if no mapping found
-    return currentModelId;
-  }, [sessionModelId, model]);
+    // Find the model in the models list
+    const modelData = models.find((m) => m.id === currentModelId);
+
+    // Use pricing_model from backend if available, otherwise use the model ID itself
+    return modelData?.pricing_model || currentModelId;
+  }, [sessionModelId, model, models]);
 
   // Load session history on mount if sessionId exists
-  const loadSessionHistory = useCallback(async (targetSessionId: string) => {
-    console.log('[Session] Loading session:', targetSessionId);
-    const session = await loadSession('', targetSessionId);
-    if (!session) {
-      console.log('[Session] Session not found, starting fresh');
-      localStorage.removeItem('squid_session_id');
-      setSessionId(null);
-      return;
-    }
+  const loadSessionHistory = useCallback(
+    async (targetSessionId: string) => {
+      const session = await loadSession('', targetSessionId);
+      if (!session) {
+        localStorage.removeItem('squid_session_id');
+        setSessionId(null);
+        return;
+      }
 
-    console.log(`[Session] Loaded session with ${session.messages.length} messages:`, session.messages);
-
-    // Convert session messages to UI format
-    const uiMessages: MessageType[] = [];
-    for (const msg of session.messages) {
-      uiMessages.push({
-        from: msg.role as 'user' | 'assistant',
-        key: `${msg.role}-${msg.timestamp}`,
-        sources:
-          msg.sources.length > 0
-            ? msg.sources.map((s) => ({
-                href: '#',
-                title: s.title,
-                content: s.content,
-              }))
+      // Convert session messages to UI format
+      const uiMessages: MessageType[] = [];
+      for (const msg of session.messages) {
+        uiMessages.push({
+          from: msg.role as 'user' | 'assistant',
+          key: `${msg.role}-${msg.timestamp}`,
+          sources:
+            msg.sources.length > 0
+              ? msg.sources.map((s) => ({
+                  href: '#',
+                  title: s.title,
+                  content: s.content,
+                }))
+              : undefined,
+          versions: [
+            {
+              id: `${msg.role}-${msg.timestamp}-v1`,
+              content: msg.content,
+            },
+          ],
+          reasoning: msg.reasoning
+            ? {
+                content: msg.reasoning,
+                duration: undefined,
+              }
             : undefined,
-        versions: [
-          {
-            id: `${msg.role}-${msg.timestamp}-v1`,
-            content: msg.content,
-          },
-        ],
-      });
-    }
+        });
+      }
 
-    console.log(`[Session] Loaded ${uiMessages.length} messages`);
-    setMessages(uiMessages);
+      console.log(`[Session] Loaded ${uiMessages.length} messages`);
+      setMessages(uiMessages);
 
-    // Load token usage from session
-    setTokenUsage(session.token_usage);
-    setSessionModelId(session.model_id);
-    console.log('[Session] Token usage:', session.token_usage);
+      // Load token usage from session
+      setTokenUsage(session.token_usage);
+      setSessionModelId(session.model_id);
+
+      // Update model selector if session has a model_id
+      if (session.model_id && models.length > 0) {
+        // Try exact match first
+        let matchedModel = models.find((m) => m.id === session.model_id);
+
+        // If no exact match, try fuzzy matching
+        if (!matchedModel) {
+          const sessionModelLower = session.model_id.toLowerCase();
+          matchedModel = models.find(
+            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
+          );
+        }
+
+        if (matchedModel) {
+          setModel(matchedModel.id);
+        }
+      }
+    },
+    [models]
+  );
+
+  // Fetch available models on mount
+  useEffect(() => {
+    const loadModels = async () => {
+      const { models: fetchedModels } = await fetchModels('');
+
+      if (fetchedModels.length > 0) {
+        setModels(fetchedModels);
+
+        // Extract unique providers and sort them
+        const providers = Array.from(new Set(fetchedModels.map((m) => m.provider))).sort();
+        setModelGroups(providers);
+
+        // Set default model - prefer Qwen Coder 2.5
+        const defaultModel =
+          fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
+          fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
+          fetchedModels.find((m) => m.provider === 'Qwen') ||
+          fetchedModels[0];
+
+        if (defaultModel) {
+          setModel(defaultModel.id);
+          console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
+        }
+      }
+    };
+
+    loadModels();
   }, []);
+
+  // Update context window when model changes
+  useEffect(() => {
+    if (model && models.length > 0) {
+      const selectedModel = models.find((m) => m.id === model);
+      if (selectedModel) {
+        setTokenUsage((prev) => ({
+          ...prev,
+          context_window: selectedModel.max_context_length,
+        }));
+      }
+    }
+  }, [model, models]);
 
   useEffect(() => {
     if (!sessionId || sessionLoadedRef.current) return;
@@ -387,6 +371,8 @@ const Example = () => {
       setStatus('streaming');
       setStreamingMessageId(messageId);
       streamingContentRef.current = ''; // Reset streaming content
+      streamingReasoningRef.current = ''; // Reset streaming reasoning
+      setIsReasoningStreaming(false);
 
       try {
         // Read file contents if files are attached
@@ -426,6 +412,7 @@ const Example = () => {
             message: userMessage,
             session_id: sessionId || undefined,
             files: fileAttachments,
+            model: model || undefined,
           },
           {
             signal: abortControllerRef.current?.signal,
@@ -455,50 +442,74 @@ const Example = () => {
               );
             },
             onContent: (text) => {
-              console.log('[Stream] Received content chunk:', text.substring(0, 50));
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
-              const currentContent = streamingContentRef.current;
-              console.log('[Stream] Looking for messageId:', messageId);
+              const fullContent = streamingContentRef.current;
+
+              // Parse out <think> tags
+              let displayContent = fullContent;
+              let reasoningContent = '';
+              let reasoningComplete = false;
+
+              const thinkStart = fullContent.indexOf('<think>');
+              const thinkEnd = fullContent.indexOf('</think>');
+
+              if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
+                // Extract reasoning between tags
+                reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
+                // Remove the entire <think>...</think> section from display content
+                displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
+                reasoningComplete = true;
+              } else if (thinkStart !== -1) {
+                // Opening tag found but no closing tag yet
+                reasoningContent = fullContent.substring(thinkStart + 7);
+                displayContent = fullContent.substring(0, thinkStart);
+              }
+
+              // Control reasoning streaming state
+              if (reasoningContent && !isReasoningStreaming) {
+                // Start reasoning
+                setIsReasoningStreaming(true);
+              } else if (reasoningComplete && isReasoningStreaming) {
+                // Stop reasoning when closing tag is found
+                setIsReasoningStreaming(false);
+              }
 
               setMessages((prev) => {
-                console.log('[Stream] Current messages:', prev.length);
                 const updated = prev.map((msg) => {
                   const hasVersion = msg.versions.some((v) => v.id === messageId);
-                  console.log('[Stream] Message key:', msg.key, 'has matching version:', hasVersion);
                   if (hasVersion) {
                     return {
                       ...msg,
-                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: currentContent } : v)),
+                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
+                      reasoning: reasoningContent
+                        ? {
+                            content: reasoningContent,
+                          }
+                        : msg.reasoning,
                     };
                   }
                   return msg;
                 });
-                console.log('[Stream] Updated messages:', updated.length);
                 return updated;
               });
             },
             onUsage: (usage) => {
-              console.log('[Token Usage] Received:', usage);
               // Update token usage
-              setTokenUsage((prev) => {
-                const updated = {
-                  total_tokens:
-                    prev.total_tokens +
-                    usage.input_tokens +
-                    usage.output_tokens +
-                    usage.reasoning_tokens +
-                    usage.cache_tokens,
-                  input_tokens: prev.input_tokens + usage.input_tokens,
-                  output_tokens: prev.output_tokens + usage.output_tokens,
-                  reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
-                  cache_tokens: prev.cache_tokens + usage.cache_tokens,
-                  context_window: prev.context_window,
-                  context_utilization: prev.context_utilization,
-                };
-                console.log('[Token Usage] Updated from:', prev, 'to:', updated);
-                return updated;
-              });
+              setTokenUsage((prev) => ({
+                total_tokens:
+                  prev.total_tokens +
+                  usage.input_tokens +
+                  usage.output_tokens +
+                  usage.reasoning_tokens +
+                  usage.cache_tokens,
+                input_tokens: prev.input_tokens + usage.input_tokens,
+                output_tokens: prev.output_tokens + usage.output_tokens,
+                reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
+                cache_tokens: prev.cache_tokens + usage.cache_tokens,
+                context_window: prev.context_window,
+                context_utilization: prev.context_utilization,
+              }));
             },
             onError: (error) => {
               console.error('Stream error:', error);
@@ -511,6 +522,8 @@ const Example = () => {
             },
             onDone: async () => {
               streamingContentRef.current = ''; // Clear ref after streaming
+              streamingReasoningRef.current = ''; // Clear reasoning ref
+              setIsReasoningStreaming(false);
               abortControllerRef.current = null;
               setStatus('ready');
               setStreamingMessageId(null);
@@ -542,7 +555,7 @@ const Example = () => {
         setStreamingMessageId(null);
       }
     },
-    [updateMessageContent, sessionId, loadSessionHistory]
+    [updateMessageContent, sessionId, loadSessionHistory, model]
   );
 
   const addUserMessage = useCallback(
@@ -715,10 +728,16 @@ const Example = () => {
               : undefined,
           versions: [
             {
-              id: `${msg.role}-${msg.timestamp}`,
+              id: `${msg.role}-${msg.timestamp}-v1`,
               content: msg.content,
             },
           ],
+          reasoning: msg.reasoning
+            ? {
+                content: msg.reasoning,
+                duration: undefined,
+              }
+            : undefined,
         });
       }
 
@@ -730,11 +749,27 @@ const Example = () => {
       // Load token usage from session
       setTokenUsage(session.token_usage);
       setSessionModelId(session.model_id);
-      console.log('[Session] Token usage:', session.token_usage);
 
+      // Update model selector if session has a model_id
+      if (session.model_id && models.length > 0) {
+        // Try exact match first
+        let matchedModel = models.find((m) => m.id === session.model_id);
+
+        // If no exact match, try fuzzy matching
+        if (!matchedModel) {
+          const sessionModelLower = session.model_id.toLowerCase();
+          matchedModel = models.find(
+            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
+          );
+        }
+
+        if (matchedModel) {
+          setModel(matchedModel.id);
+        }
+      }
       toast.success('Session loaded');
     },
-    [sessionId]
+    [sessionId, models]
   );
 
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
@@ -904,13 +939,25 @@ const Example = () => {
                           </Sources>
                         )}
                         {message.reasoning && (
-                          <Reasoning duration={message.reasoning.duration}>
+                          <Reasoning
+                            duration={
+                              status === 'streaming' && streamingMessageId === version.id
+                                ? undefined
+                                : message.reasoning.duration
+                            }
+                            isStreaming={
+                              isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
+                            }
+                          >
                             <ReasoningTrigger />
                             <ReasoningContent>{message.reasoning.content}</ReasoningContent>
                           </Reasoning>
                         )}
                         <MessageContent>
-                          {message.from === 'assistant' && !version.content && status === 'streaming' ? (
+                          {message.from === 'assistant' &&
+                          !version.content &&
+                          status === 'streaming' &&
+                          !message.reasoning ? (
                             <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                           ) : (
                             <MessageResponse>{version.content}</MessageResponse>
@@ -973,18 +1020,18 @@ const Example = () => {
                   <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                     <ModelSelectorTrigger asChild>
                       <PromptInputButton>
-                        {selectedModelData?.chefSlug && <ModelSelectorLogo provider={selectedModelData.chefSlug} />}
                         {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                        {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
                       </PromptInputButton>
                     </ModelSelectorTrigger>
                     <ModelSelectorContent>
                       <ModelSelectorInput placeholder="Search models..." />
                       <ModelSelectorList>
                         <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                        {chefs.map((chef) => (
-                          <ModelSelectorGroup heading={chef} key={chef}>
+                        {modelGroups.map((provider) => (
+                          <ModelSelectorGroup heading={provider} key={provider}>
                             {models
-                              .filter((m) => m.chef === chef)
+                              .filter((m) => m.provider === provider)
                               .map((m) => (
                                 <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
                               ))}

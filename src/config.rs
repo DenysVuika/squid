@@ -86,7 +86,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
-            api_model: "local-model".to_string(),
+            api_model: "qwen2.5-coder-7b-instruct".to_string(),
             api_key: None,
             context_window: default_context_window(),
             log_level: default_log_level(),
@@ -367,7 +367,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
-        assert_eq!(config.api_model, "local-model");
+        assert_eq!(config.api_model, "qwen2.5-coder-7b-instruct");
         assert_eq!(config.api_key, None);
         assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");

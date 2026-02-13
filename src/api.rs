@@ -13,6 +13,8 @@ use async_openai::{
 use futures::stream::StreamExt;
 use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{config, envinfo, llm, logger, session, tokens, tools};
@@ -32,6 +34,8 @@ pub struct ChatRequest {
     pub files: Vec<FileAttachment>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -49,6 +53,8 @@ pub enum StreamEvent {
     Sources { sources: Vec<Source> },
     #[serde(rename = "content")]
     Content { text: String },
+    #[serde(rename = "reasoning")]
+    Reasoning { text: String },
     #[serde(rename = "tool_call")]
     ToolCall { name: String, arguments: String },
     #[serde(rename = "tool_result")]
@@ -72,6 +78,8 @@ pub struct SessionMessage {
     pub content: String,
     pub sources: Vec<Source>,
     pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -177,6 +185,7 @@ pub async fn get_session(
                         content: s.content.clone(),
                     }).collect(),
                     timestamp: msg.timestamp,
+                    reasoning: msg.reasoning.clone(),
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
@@ -331,7 +340,8 @@ pub async fn chat_stream(
     let system_prompt_for_stream = system_prompt.clone(); // Clone for use inside stream
     let app_config_clone = app_config.get_ref().clone();
     let session_manager_clone = session_manager.get_ref().clone();
-    let model_id = app_config.api_model.clone();
+    // Use the model from request, or fall back to config default
+    let model_id = body.model.clone().unwrap_or_else(|| app_config.api_model.clone());
 
     // Get or create session
     let session_id = body.session_id.clone().unwrap_or_else(|| {
@@ -387,12 +397,14 @@ pub async fn chat_stream(
             &question,
             &files,
             system_prompt.as_deref(),
+            &model_id,
             &app_config_clone,
             &session_manager_clone,
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
                 let mut accumulated_content = String::new();
+                let mut accumulated_reasoning = String::new();
                 let mut total_input_tokens = 0i64;
                 let mut total_output_tokens = 0i64;
                 let mut total_reasoning_tokens = 0i64;
@@ -407,6 +419,11 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
+                            }
+
+                            // Accumulate reasoning chunks
+                            if let StreamEvent::Reasoning { ref text } = chunk {
+                                accumulated_reasoning.push_str(text);
                             }
 
                             // Accumulate token usage
@@ -437,14 +454,35 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Clone accumulated_content before moving it, as we need it later for token estimation
-                let accumulated_content_clone = accumulated_content.clone();
-                if !accumulated_content.is_empty() {
-                    debug!("Saving assistant message to session {} (length: {} chars)", session_id, accumulated_content.len());
+                // Parse out <think> tags from accumulated content
+                let mut final_content = accumulated_content.clone();
+                let mut reasoning_opt = None;
+
+                // Look for <think>...</think> tags
+                if let Some(think_start) = accumulated_content.find("<think>") {
+                    if let Some(think_end) = accumulated_content.find("</think>") {
+                        if think_end > think_start {
+                            // Extract reasoning between tags
+                            let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
+                            // Remove the entire <think>...</think> section from content
+                            final_content = format!(
+                                "{}{}",
+                                &accumulated_content[..think_start],
+                                &accumulated_content[think_end + 8..]
+                            );
+                            reasoning_opt = Some(reasoning_text);
+                        }
+                    }
+                }
+
+                if !final_content.is_empty() {
+                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {})",
+                        session_id, final_content.len(), reasoning_opt.is_some());
                     match session_manager_clone.add_assistant_message(
                         &session_id,
-                        accumulated_content_clone,
+                        final_content.clone(),
                         sources,
+                        reasoning_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),
@@ -570,6 +608,7 @@ async fn create_chat_stream(
     question: &str,
     files: &[session::FileAttachment],
     system_prompt: Option<&str>,
+    model_id: &str,
     app_config: &config::Config,
     session_manager: &session::SessionManager,
 ) -> Result<
@@ -577,7 +616,7 @@ async fn create_chat_stream(
     Box<dyn std::error::Error + Send + Sync>,
 > {
     debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using API Model: {}", app_config.api_model);
+    debug!("Using API Model: {}", model_id);
 
     let config = OpenAIConfig::new()
         .with_api_base(&app_config.api_url)
@@ -664,7 +703,7 @@ async fn create_chat_stream(
     let output_stream = async_stream::stream! {
         loop {
         let request = CreateChatCompletionRequestArgs::default()
-            .model(&app_config.api_model)
+            .model(model_id)
             .messages(messages.clone())
             .tools(tools::get_tools())
             .stream_options(ChatCompletionStreamOptions {
@@ -800,6 +839,8 @@ async fn create_chat_stream(
                     }
                 }
             }
+
+
         }
 
             // If we had tool calls, the loop continues to make another request
@@ -859,4 +900,151 @@ pub async fn get_logs(
         page_size: query.page_size,
         total_pages,
     }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelMetadata {
+    pub name: String,
+    pub max_context_length: u32,
+    pub provider: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliases: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing_model: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelMetadataFile {
+    models: HashMap<String, ModelMetadata>,
+    default_max_context_length: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    default_pricing_model: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    pub max_context_length: u32,
+    pub provider: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing_model: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelsResponse {
+    pub models: Vec<ModelInfo>,
+}
+
+/// Get available models from the LLM provider and augment with metadata
+pub async fn get_models(
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching available models from API");
+
+    // Load model metadata from JSON file
+    let metadata_json = include_str!("assets/model-metadata.json");
+    let metadata_file: ModelMetadataFile = serde_json::from_str(metadata_json)
+        .map_err(|e| {
+            actix_web::error::ErrorInternalServerError(format!("Failed to parse model metadata: {}", e))
+        })?;
+
+    // Fetch models from the LLM provider
+    let client = reqwest::Client::new();
+    let models_url = format!("{}/models", app_config.api_url);
+
+    let response = client
+        .get(&models_url)
+        .send()
+        .await
+        .map_err(|e| {
+            actix_web::error::ErrorInternalServerError(format!("Failed to fetch models: {}", e))
+        })?;
+
+    if !response.status().is_success() {
+        return Err(actix_web::error::ErrorInternalServerError(
+            format!("API returned error status: {}", response.status())
+        ));
+    }
+
+    let api_response: Value = response.json().await.map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Failed to parse API response: {}", e))
+    })?;
+
+    // Extract model IDs from the API response
+    let mut models = Vec::new();
+
+    if let Some(data) = api_response.get("data").and_then(|d| d.as_array()) {
+        for model in data {
+            if let Some(id) = model.get("id").and_then(|i| i.as_str()) {
+                // Skip embedding models
+                if id.contains("embedding") {
+                    continue;
+                }
+
+                // Try to find metadata for this model
+                let mut metadata = metadata_file.models.get(id).cloned();
+
+                // If not found, try to find by alias or fuzzy match
+                if metadata.is_none() {
+                    for (key, meta) in &metadata_file.models {
+                        if let Some(aliases) = &meta.aliases {
+                            if aliases.contains(&id.to_string()) {
+                                metadata = Some(meta.clone());
+                                break;
+                            }
+                        }
+                        // Also check if the id contains the key (fuzzy match)
+                        if id.contains(key) || key.contains(id) {
+                            metadata = Some(meta.clone());
+                            break;
+                        }
+                    }
+                }
+
+                let model_info = if let Some(meta) = metadata {
+                    ModelInfo {
+                        id: id.to_string(),
+                        name: meta.name,
+                        max_context_length: meta.max_context_length,
+                        provider: meta.provider,
+                        r#type: meta.r#type,
+                        pricing_model: meta.pricing_model,
+                    }
+                } else {
+                    // Use defaults if no metadata found
+                    ModelInfo {
+                        id: id.to_string(),
+                        name: id.to_string(),
+                        max_context_length: metadata_file.default_max_context_length,
+                        provider: "Unknown".to_string(),
+                        r#type: None,
+                        pricing_model: metadata_file.default_pricing_model.clone(),
+                    }
+                };
+
+                models.push(model_info);
+            }
+        }
+    }
+
+    // Sort models: Qwen first, then by provider name
+    models.sort_by(|a, b| {
+        let a_is_qwen = a.provider == "Qwen" || a.id.contains("qwen");
+        let b_is_qwen = b.provider == "Qwen" || b.id.contains("qwen");
+
+        if a_is_qwen && !b_is_qwen {
+            std::cmp::Ordering::Less
+        } else if !a_is_qwen && b_is_qwen {
+            std::cmp::Ordering::Greater
+        } else {
+            a.provider.cmp(&b.provider).then(a.name.cmp(&b.name))
+        }
+    });
+
+    Ok(HttpResponse::Ok().json(ModelsResponse { models }))
 }
