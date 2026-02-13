@@ -6,85 +6,38 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
 import { FileText, MessageSquare } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
-
-interface SessionListItem {
-  session_id: string;
-  message_count: number;
-  created_at: string;
-  updated_at: string;
-  preview?: string;
-  title?: string;
-  model_id?: string;
-  token_usage: {
-    total_tokens: number;
-    input_tokens: number;
-    output_tokens: number;
-    reasoning_tokens: number;
-    cache_tokens: number;
-    context_window: number;
-    context_utilization: number;
-  };
-  cost_usd?: number;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  isActive?: boolean;
-}
+import { useEffect } from 'react';
+import { useSessionStore } from '@/stores/session-store';
+import { useChatStore } from '@/stores/chat-store';
+import { useModelStore } from '@/stores/model-store';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-
-  const loadSessions = useCallback(async () => {
-    try {
-      const response = await fetch('/api/sessions');
-      if (response.ok) {
-        const data: { sessions: SessionListItem[] } = await response.json();
-        const chatSessions: ChatSession[] = (data.sessions || []).map((session) => ({
-          id: session.session_id,
-          title: session.title || session.preview || 'New Chat',
-        }));
-        setSessions(chatSessions);
-      }
-    } catch (error) {
-      console.error('Failed to load sessions:', error);
-    }
-  }, []);
+  
+  // Zustand stores
+  const { sessions, activeSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
+  const { clearMessages } = useChatStore();
+  const { resetTokenUsage } = useModelStore();
 
   useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        const response = await fetch('/api/sessions');
-        if (response.ok) {
-          const data: { sessions: SessionListItem[] } = await response.json();
-          const chatSessions: ChatSession[] = (data.sessions || []).map((session) => ({
-            id: session.session_id,
-            title: session.title || session.preview || 'New Chat',
-          }));
-          setSessions(chatSessions);
-        }
-      } catch (error) {
-        console.error('Failed to load sessions:', error);
-      }
-    };
-    
-    void fetchSessions();
-  }, []);
+    void loadSessions();
+  }, [loadSessions]);
 
   const handleSessionSelect = (sessionId: string) => {
-    setActiveSessionId(sessionId);
-    if (location.pathname !== '/') {
-      navigate('/');
+    // Only load history if switching to a different session
+    if (sessionId !== activeSessionId) {
+      selectSession(sessionId);
+      if (location.pathname !== '/') {
+        navigate('/');
+      }
     }
   };
 
   const handleNewChat = () => {
-    setActiveSessionId(null);
+    startNewChat();
+    clearMessages();
+    resetTokenUsage();
     if (location.pathname !== '/') {
       navigate('/');
     }
@@ -140,18 +93,7 @@ function AppContent() {
         </header>
         <div className="flex flex-1 flex-col overflow-hidden min-h-0 p-4">
           <Routes>
-            <Route
-              path="/"
-              element={
-                <ChatBot
-                  selectedSessionId={activeSessionId}
-                  onSessionChange={(sessionId) => {
-                    setActiveSessionId(sessionId);
-                    loadSessions();
-                  }}
-                />
-              }
-            />
+            <Route path="/" element={<ChatBot />} />
             <Route path="/logs" element={<Logs />} />
           </Routes>
         </div>

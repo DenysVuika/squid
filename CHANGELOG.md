@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **State Management with Zustand**: Improved architecture for better performance and maintainability
+  - Centralized state management eliminates props drilling between components
+  - Organized stores: session management, model selection, and chat operations
+  - Better performance with selective component re-rendering
+  - Simplified 1000+ line chatbot component by extracting state logic
+
 - **Reasoning Mode Support**: View LLM's thinking process in the Web UI
   - Collapsible reasoning sections showing the model's thought process
   - Real-time duration tracking displays "Thinking..." while processing, then "Thought for X seconds"

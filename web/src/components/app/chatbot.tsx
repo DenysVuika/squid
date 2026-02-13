@@ -1,7 +1,6 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import type { FileUIPart, ToolUIPart } from 'ai';
+import type { FileUIPart } from 'ai';
 
-import { fetchModels, loadSession, streamChat, type ModelInfo } from '@/lib/chat-api';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import {
@@ -71,29 +70,11 @@ import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-interface MessageType {
-  key: string;
-  from: 'user' | 'assistant';
-  sources?: { href: string; title: string; content: string }[];
-  versions: {
-    id: string;
-    content: string;
-  }[];
-  reasoning?: {
-    content: string;
-    duration?: number;
-  };
-  tools?: {
-    name: string;
-    description: string;
-    status: ToolUIPart['state'];
-    parameters: Record<string, unknown>;
-    result: string | undefined;
-    error: string | undefined;
-  }[];
-}
-
-const initialMessages: MessageType[] = [];
+// Zustand stores
+import { useSessionStore } from '@/stores/session-store';
+import { useModelStore } from '@/stores/model-store';
+import { useChatStore } from '@/stores/chat-store';
+import type { ModelInfo } from '@/lib/chat-api';
 
 const suggestions = [
   'What are the latest trends in AI?',
@@ -177,474 +158,66 @@ const ModelItem = ({
   );
 };
 
-interface ChatBotProps {
-  selectedSessionId?: string | null;
-  onSessionChange?: (sessionId: string | null) => void;
-}
+const Example = () => {
+  // Zustand stores
+  const { activeSessionId } = useSessionStore();
+  const {
+    models,
+    modelGroups,
+    selectedModel,
+    tokenUsage,
+    modelSelectorOpen,
+    setSelectedModel,
+    setModelSelectorOpen,
+    loadModels,
+    getModelForPricing,
+  } = useModelStore();
+  const {
+    messages,
+    status,
+    streamingMessageId,
+    isReasoningStreaming,
+    useWebSearch,
+    addUserMessage,
+    setStatus,
+    stopStreaming,
+    loadSessionHistory,
+    toggleWebSearch,
+  } = useChatStore();
 
-const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelGroups, setModelGroups] = useState<string[]>([]);
-  const [model, setModel] = useState<string>('');
-  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+  // Local UI state
   const [text, setText] = useState<string>('');
-  const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
-  const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
-  const [messages, setMessages] = useState<MessageType[]>(initialMessages);
-  const [sessionId, setSessionId] = useState<string | null>(selectedSessionId || null);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const streamingContentRef = useRef<string>('');
-  const streamingReasoningRef = useRef<string>('');
-  const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const sessionLoadedRef = useRef<boolean>(false);
-
   const [sourceContentOpen, setSourceContentOpen] = useState(false);
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
-  // Token usage tracking
-  const [tokenUsage, setTokenUsage] = useState({
-    total_tokens: 0,
-    input_tokens: 0,
-    output_tokens: 0,
-    reasoning_tokens: 0,
-    cache_tokens: 0,
-    context_window: 0,
-    context_utilization: 0,
-  });
-  const [sessionModelId, setSessionModelId] = useState<string | null>(null);
-
-  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model, models]);
-
-  // Get pricing model from backend metadata or fallback to model ID
-  const getModelIdForPricing = useMemo(() => {
-    const currentModelId = sessionModelId || model;
-
-    // If model ID is empty, return default
-    if (!currentModelId) {
-      return 'gpt-4o';
-    }
-
-    // Find the model in the models list
-    const modelData = models.find((m) => m.id === currentModelId);
-
-    // Use pricing_model from backend if available, otherwise use the model ID itself
-    return modelData?.pricing_model || currentModelId;
-  }, [sessionModelId, model, models]);
-
-  // Load session history from API
-  const loadSessionHistory = useCallback(
-    async (selectedSessionId: string) => {
-      console.log('[Session] Loading session:', selectedSessionId);
-      const session = await loadSession('', selectedSessionId);
-
-      if (!session) {
-        toast.error('Session not found');
-        return;
-      }
-
-      // Update session ID
-      setSessionId(selectedSessionId);
-
-      // Convert session messages to UI format
-      const uiMessages: MessageType[] = [];
-      for (const msg of session.messages) {
-        uiMessages.push({
-          from: msg.role as 'user' | 'assistant',
-          key: `${msg.role}-${msg.timestamp}`,
-          sources:
-            msg.sources.length > 0
-              ? msg.sources.map((s) => ({
-                  href: '#',
-                  title: s.title,
-                  content: s.content,
-                }))
-              : undefined,
-          versions: [
-            {
-              id: `${msg.role}-${msg.timestamp}-v1`,
-              content: msg.content,
-            },
-          ],
-          reasoning: msg.reasoning
-            ? {
-                content: msg.reasoning,
-                duration: undefined,
-              }
-            : undefined,
-        });
-      }
-
-      console.log(`[Session] Loaded session with ${uiMessages.length} messages`);
-      setMessages(uiMessages);
-      setText('');
-      setStatus('ready');
-
-      // Load token usage from session
-      setTokenUsage(session.token_usage);
-      setSessionModelId(session.model_id);
-
-      // Update model selector if session has a model_id
-      if (session.model_id && models.length > 0) {
-        // Try exact match first
-        let matchedModel = models.find((m) => m.id === session.model_id);
-
-        // If no exact match, try fuzzy matching
-        if (!matchedModel) {
-          const sessionModelLower = session.model_id.toLowerCase();
-          matchedModel = models.find(
-            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
-          );
-        }
-
-        if (matchedModel) {
-          setModel(matchedModel.id);
-        }
-      }
-      toast.success('Session loaded');
-    },
-    [models]
-  );
-
-  // Handle new chat
-  const handleNewChat = useCallback(() => {
-    // Clear session ID from state and localStorage
-    setSessionId(null);
-    localStorage.removeItem('squid_session_id');
-
-    // Reset loaded flag
-    sessionLoadedRef.current = false;
-
-    // Reset messages to empty (clear the chat)
-    setMessages([]);
-
-    // Clear input
-    setText('');
-
-    // Reset status
-    setStatus('ready');
-
-    // Reset token usage
-    setTokenUsage({
-      total_tokens: 0,
-      input_tokens: 0,
-      output_tokens: 0,
-      reasoning_tokens: 0,
-      cache_tokens: 0,
-      context_window: 0,
-      context_utilization: 0,
-    });
-
-    setSessionModelId(null);
-
-    // Notify parent component
-    onSessionChange?.(null);
-
-    toast.success('New chat started');
-  }, [onSessionChange]);
+  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
 
   // Fetch available models on mount
   useEffect(() => {
-    const loadModels = async () => {
-      const { models: fetchedModels } = await fetchModels('');
+    void loadModels();
+  }, [loadModels]);
 
-      if (fetchedModels.length > 0) {
-        setModels(fetchedModels);
+  // Track previous activeSessionId to detect actual changes
+  const prevActiveSessionIdRef = useRef<string | null>(null);
 
-        // Extract unique providers and sort them
-        const providers = Array.from(new Set(fetchedModels.map((m) => m.provider))).sort();
-        setModelGroups(providers);
-
-        // Set default model - prefer Qwen Coder 2.5
-        const defaultModel =
-          fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
-          fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
-          fetchedModels.find((m) => m.provider === 'Qwen') ||
-          fetchedModels[0];
-
-        if (defaultModel) {
-          setModel(defaultModel.id);
-          console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
-        }
-      }
-    };
-
-    loadModels();
-  }, []);
-
-  // Sync with selectedSessionId prop
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Load session when activeSessionId changes to a different value
   useEffect(() => {
-    // Only execute if there's an actual change
-    if (selectedSessionId === undefined || selectedSessionId === sessionId) {
+    const prevId = prevActiveSessionIdRef.current;
+    
+    // Update ref for next comparison
+    prevActiveSessionIdRef.current = activeSessionId;
+    
+    // Don't load if:
+    // 1. No session ID
+    // 2. Same as previous (no actual change)
+    // 3. Currently streaming (new session being created)
+    if (!activeSessionId || activeSessionId === prevId || status === 'streaming' || status === 'submitted') {
       return;
     }
-
-    if (selectedSessionId === null) {
-      // New chat requested from parent
-      handleNewChat();
-    } else {
-      // Load the selected session
-      loadSessionHistory(selectedSessionId);
-    }
-  }, [selectedSessionId, sessionId]);
-
-  // Update context window when model changes
-  useEffect(() => {
-    if (model && models.length > 0) {
-      const selectedModel = models.find((m) => m.id === model);
-      if (selectedModel) {
-        setTokenUsage((prev) => ({
-          ...prev,
-          context_window: selectedModel.max_context_length,
-        }));
-      }
-    }
-  }, [model, models]);
-
-  const updateMessageContent = useCallback((messageId: string, newContent: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => {
-        if (msg.versions.some((v) => v.id === messageId)) {
-          return {
-            ...msg,
-            versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: newContent } : v)),
-          };
-        }
-        return msg;
-      })
-    );
-  }, []);
-
-  const streamResponse = useCallback(
-    async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
-
-      setStatus('streaming');
-      setStreamingMessageId(messageId);
-      streamingContentRef.current = ''; // Reset streaming content
-      streamingReasoningRef.current = ''; // Reset streaming reasoning
-      setIsReasoningStreaming(false);
-
-      try {
-        // Read file contents if files are attached
-        const fileAttachments = [];
-        if (files && files.length > 0) {
-          for (const file of files) {
-            if (file.type === 'file' && file.url) {
-              const fileName = 'filename' in file ? String(file.filename) : 'attachment';
-              try {
-                const response = await fetch(file.url);
-                if (response.ok) {
-                  const content = await response.text();
-                  fileAttachments.push({
-                    filename: fileName,
-                    content,
-                  });
-                } else {
-                  console.error('Failed to fetch file:', response.statusText);
-                  toast.error('Failed to read file', {
-                    description: `Could not read ${fileName}`,
-                  });
-                }
-              } catch (e) {
-                console.error('Failed to read file:', e);
-                toast.error('Failed to read file', {
-                  description: e instanceof Error ? e.message : String(e),
-                });
-              }
-            }
-          }
-        }
-
-        // Use relative path since web UI is served from the same server
-        await streamChat(
-          '',
-          {
-            message: userMessage,
-            session_id: sessionId || undefined,
-            files: fileAttachments,
-            model: model || undefined,
-          },
-          {
-            signal: abortControllerRef.current?.signal,
-            onSession: (newSessionId) => {
-              setSessionId(newSessionId);
-              // Notify parent component
-              onSessionChange?.(newSessionId);
-            },
-            onSources: (sources) => {
-              // Update the assistant message with sources
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  if (msg.versions.some((v) => v.id === messageId)) {
-                    return {
-                      ...msg,
-                      sources: sources.map((s) => ({
-                        href: '#',
-                        title: s.title,
-                        content: s.content,
-                      })),
-                    };
-                  }
-                  return msg;
-                })
-              );
-            },
-            onContent: (text) => {
-              // Accumulate content in ref for better performance
-              streamingContentRef.current += text;
-              const fullContent = streamingContentRef.current;
-
-              // Parse out <think> tags
-              let displayContent = fullContent;
-              let reasoningContent = '';
-              let reasoningComplete = false;
-
-              const thinkStart = fullContent.indexOf('<think>');
-              const thinkEnd = fullContent.indexOf('</think>');
-
-              if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
-                // Extract reasoning between tags
-                reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
-                // Remove the entire <think>...</think> section from display content
-                displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
-                reasoningComplete = true;
-              } else if (thinkStart !== -1) {
-                // Opening tag found but no closing tag yet
-                reasoningContent = fullContent.substring(thinkStart + 7);
-                displayContent = fullContent.substring(0, thinkStart);
-              }
-
-              // Control reasoning streaming state
-              if (reasoningContent && !isReasoningStreaming) {
-                // Start reasoning
-                setIsReasoningStreaming(true);
-              } else if (reasoningComplete && isReasoningStreaming) {
-                // Stop reasoning when closing tag is found
-                setIsReasoningStreaming(false);
-              }
-
-              setMessages((prev) => {
-                const updated = prev.map((msg) => {
-                  const hasVersion = msg.versions.some((v) => v.id === messageId);
-                  if (hasVersion) {
-                    return {
-                      ...msg,
-                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
-                      reasoning: reasoningContent
-                        ? {
-                            content: reasoningContent,
-                          }
-                        : msg.reasoning,
-                    };
-                  }
-                  return msg;
-                });
-                return updated;
-              });
-            },
-            onUsage: (usage) => {
-              // Update token usage
-              setTokenUsage((prev) => ({
-                total_tokens:
-                  prev.total_tokens +
-                  usage.input_tokens +
-                  usage.output_tokens +
-                  usage.reasoning_tokens +
-                  usage.cache_tokens,
-                input_tokens: prev.input_tokens + usage.input_tokens,
-                output_tokens: prev.output_tokens + usage.output_tokens,
-                reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
-                cache_tokens: prev.cache_tokens + usage.cache_tokens,
-                context_window: prev.context_window,
-                context_utilization: prev.context_utilization,
-              }));
-            },
-            onError: (error) => {
-              console.error('Stream error:', error);
-              updateMessageContent(messageId, `Error: ${error}`);
-              toast.error('Failed to get response', {
-                description: error,
-              });
-              setStatus('ready');
-              setStreamingMessageId(null);
-            },
-            onDone: async () => {
-              streamingContentRef.current = ''; // Clear ref after streaming
-              streamingReasoningRef.current = ''; // Clear reasoning ref
-              setIsReasoningStreaming(false);
-              abortControllerRef.current = null;
-              setStatus('ready');
-              setStreamingMessageId(null);
-
-              // Reload session to get updated context_window and token usage from backend
-              if (sessionId) {
-                try {
-                  await loadSessionHistory(sessionId);
-                } catch (error) {
-                  console.error('Failed to reload session after streaming:', error);
-                }
-              }
-            },
-          }
-        );
-      } catch (error) {
-        // Don't show error if it was aborted by user
-        if (error instanceof Error && error.name === 'AbortError') {
-          updateMessageContent(messageId, streamingContentRef.current || 'Response stopped by user.');
-        } else {
-          console.error('Chat error:', error);
-          updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
-          toast.error('Failed to send message', {
-            description: error instanceof Error ? error.message : String(error),
-          });
-        }
-        abortControllerRef.current = null;
-        setStatus('ready');
-        setStreamingMessageId(null);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateMessageContent, sessionId, model, onSessionChange]
-  );
-
-  const addUserMessage = useCallback(
-    (content: string, files?: FileUIPart[]) => {
-      const userMessage: MessageType = {
-        from: 'user',
-        key: `user-${Date.now()}`,
-        versions: [
-          {
-            content,
-            id: `user-${Date.now()}`,
-          },
-        ],
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-
-      setTimeout(() => {
-        const assistantMessageId = `assistant-${Date.now()}`;
-
-        const assistantMessage: MessageType = {
-          from: 'assistant',
-          key: `assistant-${Date.now()}`,
-          versions: [
-            {
-              content: '',
-              id: assistantMessageId,
-            },
-          ],
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        streamResponse(assistantMessageId, content, files);
-      }, 500);
-    },
-    [streamResponse]
-  );
+    
+    // Load session history
+    void loadSessionHistory(activeSessionId);
+  }, [activeSessionId, status, loadSessionHistory]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -666,7 +239,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
       addUserMessage(message.text || 'Sent with attachments', message.files);
       setText('');
     },
-    [addUserMessage]
+    [addUserMessage, setStatus]
   );
 
   const handleSuggestionClick = useCallback(
@@ -674,7 +247,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
       setStatus('submitted');
       addUserMessage(suggestion);
     },
-    [addUserMessage]
+    [addUserMessage, setStatus]
   );
 
   const handleTranscriptionChange = useCallback((transcript: string) => {
@@ -685,23 +258,13 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
     setText(event.target.value);
   }, []);
 
-  const toggleWebSearch = useCallback(() => {
-    setUseWebSearch((prev) => !prev);
-  }, []);
-
   const handleModelSelect = useCallback((modelId: string) => {
-    setModel(modelId);
-    setModelSelectorOpen(false);
-  }, []);
+    setSelectedModel(modelId);
+  }, [setSelectedModel]);
 
   const handleStop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setStatus('ready');
-      setStreamingMessageId(null);
-    }
-  }, []);
+    stopStreaming();
+  }, [stopStreaming]);
 
   const handleFileUploadError = useCallback((error: { code: string; message: string }) => {
     if (error.code === 'max_file_size') {
@@ -777,7 +340,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
       <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
         <Context
           maxTokens={tokenUsage.context_window || 128000}
-          modelId={getModelIdForPricing}
+          modelId={getModelForPricing()}
           usage={{
             inputTokens: tokenUsage.input_tokens,
             outputTokens: tokenUsage.output_tokens,
@@ -945,7 +508,7 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
                           {models
                             .filter((m) => m.provider === provider)
                             .map((m) => (
-                              <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
                             ))}
                         </ModelSelectorGroup>
                       ))}
