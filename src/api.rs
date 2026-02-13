@@ -491,9 +491,6 @@ pub async fn chat_stream(
                     debug!("Skipping empty assistant message for session {}", session_id);
                 }
 
-                // Use final_content for token estimation
-                let accumulated_content_clone = final_content;
-
                 // If provider didn't send usage stats, estimate them client-side
                 if !received_usage {
                     debug!("Provider didn't report token usage, estimating client-side for model: {}", model_id);

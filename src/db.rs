@@ -491,7 +491,7 @@ mod tests {
             content: "test content".to_string(),
         }];
 
-        session.add_message("user".to_string(), "Hello".to_string(), sources.clone());
+        session.add_message("user".to_string(), "Hello".to_string(), sources.clone(), None);
 
         let message = session.messages.last().unwrap();
         db.save_message(&session_id, message).unwrap();
@@ -559,7 +559,7 @@ mod tests {
         db.save_session(&session).unwrap();
 
         // Add first user message
-        session.add_message("user".to_string(), "First message".to_string(), vec![]);
+        session.add_message("user".to_string(), "First message".to_string(), vec![], None);
         let message1 = session.messages.last().unwrap();
         db.save_message(&session_id, message1).unwrap();
 
@@ -574,7 +574,7 @@ mod tests {
         assert_eq!(loaded.messages[0].role, "user");
 
         // Add second assistant message
-        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![], None);
         let message2 = session.messages.last().unwrap();
         db.save_message(&session_id, message2).unwrap();
 
@@ -618,6 +618,7 @@ mod tests {
                 "user".to_string(),
                 format!("User message {}", i),
                 vec![],
+                None,
             );
             let user_msg = session.messages.last().unwrap();
             db.save_message(&session_id, user_msg).unwrap();
@@ -630,6 +631,7 @@ mod tests {
                 "assistant".to_string(),
                 format!("Assistant response {}", i),
                 vec![],
+                None,
             );
             let assistant_msg = session.messages.last().unwrap();
             db.save_message(&session_id, assistant_msg).unwrap();
