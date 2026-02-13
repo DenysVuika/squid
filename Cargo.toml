@@ -10,12 +10,13 @@ keywords = ["ai", "code-review", "command-line", "developer-tools"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 include = [
-    "src/**/*",
-    "static/**/*",
-    "Cargo.toml",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/src",
+    "/static",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 [[bin]]
