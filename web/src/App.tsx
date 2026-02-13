@@ -39,7 +39,6 @@ function AppContent() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -58,8 +57,24 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    loadSessions();
-  }, [refreshTrigger]);
+    const fetchSessions = async () => {
+      try {
+        const response = await fetch('/api/sessions');
+        if (response.ok) {
+          const data: { sessions: SessionListItem[] } = await response.json();
+          const chatSessions: ChatSession[] = (data.sessions || []).map((session) => ({
+            id: session.session_id,
+            title: session.title || session.preview || 'New Chat',
+          }));
+          setSessions(chatSessions);
+        }
+      } catch (error) {
+        console.error('Failed to load sessions:', error);
+      }
+    };
+    
+    void fetchSessions();
+  }, []);
 
   const handleSessionSelect = (sessionId: string) => {
     setActiveSessionId(sessionId);
@@ -132,7 +147,7 @@ function AppContent() {
                   selectedSessionId={activeSessionId}
                   onSessionChange={(sessionId) => {
                     setActiveSessionId(sessionId);
-                    setRefreshTrigger((prev) => prev + 1);
+                    loadSessions();
                   }}
                 />
               }
