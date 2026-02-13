@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { listSessions, type SessionListItem } from '@/lib/chat-api';
+import { listSessions, deleteSession as apiDeleteSession, updateSessionTitle as apiUpdateSessionTitle, type SessionListItem } from '@/lib/chat-api';
 import { toast } from 'sonner';
 
 export interface ChatSession {
@@ -23,6 +23,8 @@ interface SessionStore {
   selectSession: (sessionId: string) => void;
   startNewChat: () => void;
   refreshSessions: () => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<boolean>;
+  updateSessionTitle: (sessionId: string, title: string) => Promise<boolean>;
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -79,5 +81,58 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   // Refresh sessions (alias for loadSessions)
   refreshSessions: async () => {
     await get().loadSessions();
+  },
+
+  // Delete a session
+  deleteSession: async (sessionId: string) => {
+    try {
+      const success = await apiDeleteSession('', sessionId);
+      if (success) {
+        // Remove from local state
+        set((state) => ({
+          sessions: state.sessions.filter((s) => s.id !== sessionId),
+        }));
+        
+        // If deleted session was active, clear active session
+        if (get().activeSessionId === sessionId) {
+          get().startNewChat();
+        }
+        
+        toast.success('Session deleted');
+        return true;
+      } else {
+        toast.error('Failed to delete session');
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      toast.error('Failed to delete session');
+      return false;
+    }
+  },
+
+  // Update session title
+  updateSessionTitle: async (sessionId: string, title: string) => {
+    try {
+      const success = await apiUpdateSessionTitle('', sessionId, title);
+      if (success) {
+        // Update local state
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
+            s.id === sessionId ? { ...s, title } : s
+          ),
+        }));
+        
+        toast.success('Session renamed');
+        return true;
+      } else {
+        toast.error('Failed to rename session');
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to update session title:', error);
+      toast.error('Failed to rename session');
+      return false;
+    }
   },
 }));

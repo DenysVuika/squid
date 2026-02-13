@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ChevronRight, MessageSquare, Plus } from 'lucide-react';
+import { ChevronRight, MessageSquare, Plus, Pencil, Trash2, MoreHorizontal } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
@@ -9,11 +9,28 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useSessionStore } from '@/stores/session-store';
 
 interface ChatSession {
   id: string;
@@ -29,6 +46,42 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, ...props }: AppSidebarProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [sessionToEdit, setSessionToEdit] = React.useState<string | null>(null);
+  const [editTitle, setEditTitle] = React.useState('');
+
+  const { deleteSession, updateSessionTitle } = useSessionStore();
+
+  const handleDeleteClick = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleEditClick = (session: ChatSession) => {
+    setSessionToEdit(session.id);
+    setEditTitle(session.title || 'New Chat');
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!sessionToDelete) return;
+    
+    await deleteSession(sessionToDelete);
+    setDeleteDialogOpen(false);
+    setSessionToDelete(null);
+  };
+
+  const handleEditConfirm = async () => {
+    if (!sessionToEdit || !editTitle.trim()) return;
+    
+    await updateSessionTitle(sessionToEdit, editTitle.trim());
+    setEditDialogOpen(false);
+    setSessionToEdit(null);
+    setEditTitle('');
+  };
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader className="border-b p-4">
@@ -73,6 +126,24 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
                             <span className="truncate">{session.title}</span>
                           </button>
                         </SidebarMenuButton>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <SidebarMenuAction showOnHover>
+                              <MoreHorizontal />
+                              <span className="sr-only">More</span>
+                            </SidebarMenuAction>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent side="right" align="start">
+                            <DropdownMenuItem onClick={() => handleEditClick(session)}>
+                              <Pencil className="h-4 w-4" />
+                              <span>Rename</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={() => handleDeleteClick(session.id)}>
+                              <Trash2 className="h-4 w-4" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </SidebarMenuItem>
                     ))
                   )}
@@ -83,6 +154,54 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
         </Collapsible>
       </SidebarContent>
       <SidebarRail />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Session</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Session Title Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Session</DialogTitle>
+            <DialogDescription>Enter a new name for this conversation.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder="Session title"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleEditConfirm();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditConfirm} disabled={!editTitle.trim()}>
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   );
 }
