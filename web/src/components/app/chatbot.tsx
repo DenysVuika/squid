@@ -195,7 +195,6 @@ const Example = () => {
   const streamingContentRef = useRef<string>('');
   const streamingReasoningRef = useRef<string>('');
   const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
-  const reasoningStartTimeRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionLoadedRef = useRef<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -374,7 +373,6 @@ const Example = () => {
       streamingContentRef.current = ''; // Reset streaming content
       streamingReasoningRef.current = ''; // Reset streaming reasoning
       setIsReasoningStreaming(false);
-      reasoningStartTimeRef.current = null; // Reset reasoning timer
 
       try {
         // Read file contents if files are attached
@@ -451,6 +449,7 @@ const Example = () => {
               // Parse out <think> tags
               let displayContent = fullContent;
               let reasoningContent = '';
+              let reasoningComplete = false;
 
               const thinkStart = fullContent.indexOf('<think>');
               const thinkEnd = fullContent.indexOf('</think>');
@@ -460,18 +459,20 @@ const Example = () => {
                 reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
                 // Remove the entire <think>...</think> section from display content
                 displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
+                reasoningComplete = true;
               } else if (thinkStart !== -1) {
                 // Opening tag found but no closing tag yet
                 reasoningContent = fullContent.substring(thinkStart + 7);
                 displayContent = fullContent.substring(0, thinkStart);
               }
 
-              // Update reasoning if found and start timer
-              if (reasoningContent) {
-                if (!isReasoningStreaming) {
-                  setIsReasoningStreaming(true);
-                  reasoningStartTimeRef.current = Date.now();
-                }
+              // Control reasoning streaming state
+              if (reasoningContent && !isReasoningStreaming) {
+                // Start reasoning
+                setIsReasoningStreaming(true);
+              } else if (reasoningComplete && isReasoningStreaming) {
+                // Stop reasoning when closing tag is found
+                setIsReasoningStreaming(false);
               }
 
               setMessages((prev) => {
@@ -484,7 +485,6 @@ const Example = () => {
                       reasoning: reasoningContent
                         ? {
                             content: reasoningContent,
-                            duration: 0,
                           }
                         : msg.reasoning,
                     };
@@ -521,32 +521,6 @@ const Example = () => {
               setStreamingMessageId(null);
             },
             onDone: async () => {
-              // Calculate reasoning duration if we were tracking it
-              let reasoningDuration = 0;
-              if (reasoningStartTimeRef.current !== null) {
-                reasoningDuration = Math.ceil((Date.now() - reasoningStartTimeRef.current) / 1000);
-                reasoningStartTimeRef.current = null;
-              }
-
-              // Update message with final reasoning duration
-              if (reasoningDuration > 0) {
-                setMessages((prev) =>
-                  prev.map((msg) => {
-                    const hasVersion = msg.versions.some((v) => v.id === messageId);
-                    if (hasVersion && msg.reasoning) {
-                      return {
-                        ...msg,
-                        reasoning: {
-                          ...msg.reasoning,
-                          duration: reasoningDuration,
-                        },
-                      };
-                    }
-                    return msg;
-                  })
-                );
-              }
-
               streamingContentRef.current = ''; // Clear ref after streaming
               streamingReasoningRef.current = ''; // Clear reasoning ref
               setIsReasoningStreaming(false);
@@ -966,7 +940,11 @@ const Example = () => {
                         )}
                         {message.reasoning && (
                           <Reasoning
-                            duration={message.reasoning.duration}
+                            duration={
+                              status === 'streaming' && streamingMessageId === version.id
+                                ? undefined
+                                : message.reasoning.duration
+                            }
                             isStreaming={
                               isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
                             }
