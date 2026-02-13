@@ -773,189 +773,187 @@ const Example = ({ selectedSessionId, onSessionChange }: ChatBotProps) => {
   }, []);
 
   return (
-    <div className="relative flex size-full overflow-hidden">
-      <div className="relative flex size-full flex-col divide-y overflow-hidden">
-        <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950">
-          <Context
-            maxTokens={tokenUsage.context_window || 128000}
-            modelId={getModelIdForPricing}
-            usage={{
-              inputTokens: tokenUsage.input_tokens,
-              outputTokens: tokenUsage.output_tokens,
-              totalTokens: tokenUsage.total_tokens,
-              inputTokenDetails: {
-                noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
-                cacheReadTokens: tokenUsage.cache_tokens,
-                cacheWriteTokens: undefined,
-              },
-              outputTokenDetails: {
-                textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
-                reasoningTokens: tokenUsage.reasoning_tokens,
-              },
-            }}
-            usedTokens={tokenUsage.total_tokens}
-          >
-            <ContextTrigger />
-            <ContextContent>
-              <ContextContentHeader />
-              <ContextContentBody>
-                <div className="space-y-2">
-                  <ContextInputUsage />
-                  <ContextOutputUsage />
-                  <ContextReasoningUsage />
-                  <ContextCacheUsage />
-                </div>
-              </ContextContentBody>
-              <ContextContentFooter />
-            </ContextContent>
-          </Context>
-        </div>
-        <Conversation>
-          <ConversationContent>
-            {messages.map(({ versions, ...message }) => (
-              <MessageBranch defaultBranch={0} key={message.key}>
-                <MessageBranchContent>
-                  {versions.map((version) => (
-                    <Message from={message.from} key={`${message.key}-${version.id}`}>
-                      <div>
-                        {message.from === 'assistant' && message.sources?.length && (
-                          <Sources>
-                            <SourcesTrigger count={message.sources.length} />
-                            <SourcesContent>
-                              {message.sources.map((source) => (
-                                <button
-                                  key={source.href}
-                                  className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
-                                  onClick={() => handleViewSourceContent(source.title, source.content)}
-                                  type="button"
+    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
+        <Context
+          maxTokens={tokenUsage.context_window || 128000}
+          modelId={getModelIdForPricing}
+          usage={{
+            inputTokens: tokenUsage.input_tokens,
+            outputTokens: tokenUsage.output_tokens,
+            totalTokens: tokenUsage.total_tokens,
+            inputTokenDetails: {
+              noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
+              cacheReadTokens: tokenUsage.cache_tokens,
+              cacheWriteTokens: undefined,
+            },
+            outputTokenDetails: {
+              textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
+              reasoningTokens: tokenUsage.reasoning_tokens,
+            },
+          }}
+          usedTokens={tokenUsage.total_tokens}
+        >
+          <ContextTrigger />
+          <ContextContent>
+            <ContextContentHeader />
+            <ContextContentBody>
+              <div className="space-y-2">
+                <ContextInputUsage />
+                <ContextOutputUsage />
+                <ContextReasoningUsage />
+                <ContextCacheUsage />
+              </div>
+            </ContextContentBody>
+            <ContextContentFooter />
+          </ContextContent>
+        </Context>
+      </div>
+      <Conversation>
+        <ConversationContent>
+          {messages.map(({ versions, ...message }) => (
+            <MessageBranch defaultBranch={0} key={message.key}>
+              <MessageBranchContent>
+                {versions.map((version) => (
+                  <Message from={message.from} key={`${message.key}-${version.id}`}>
+                    <div>
+                      {message.from === 'assistant' && message.sources?.length && (
+                        <Sources>
+                          <SourcesTrigger count={message.sources.length} />
+                          <SourcesContent>
+                            {message.sources.map((source) => (
+                              <button
+                                key={source.href}
+                                className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
+                                onClick={() => handleViewSourceContent(source.title, source.content)}
+                                type="button"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  xmlns="http://www.w3.org/2000/svg"
                                 >
-                                  <svg
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                    />
-                                  </svg>
-                                  <span className="block font-medium">{source.title}</span>
-                                </button>
-                              ))}
-                            </SourcesContent>
-                          </Sources>
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                                  />
+                                </svg>
+                                <span className="block font-medium">{source.title}</span>
+                              </button>
+                            ))}
+                          </SourcesContent>
+                        </Sources>
+                      )}
+                      {message.reasoning && (
+                        <Reasoning
+                          duration={
+                            status === 'streaming' && streamingMessageId === version.id
+                              ? undefined
+                              : message.reasoning.duration
+                          }
+                          isStreaming={
+                            isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
+                          }
+                        >
+                          <ReasoningTrigger />
+                          <ReasoningContent>{message.reasoning.content}</ReasoningContent>
+                        </Reasoning>
+                      )}
+                      <MessageContent>
+                        {message.from === 'assistant' &&
+                        !version.content &&
+                        status === 'streaming' &&
+                        !message.reasoning ? (
+                          <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                        ) : (
+                          <MessageResponse>{version.content}</MessageResponse>
                         )}
-                        {message.reasoning && (
-                          <Reasoning
-                            duration={
-                              status === 'streaming' && streamingMessageId === version.id
-                                ? undefined
-                                : message.reasoning.duration
-                            }
-                            isStreaming={
-                              isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
-                            }
-                          >
-                            <ReasoningTrigger />
-                            <ReasoningContent>{message.reasoning.content}</ReasoningContent>
-                          </Reasoning>
-                        )}
-                        <MessageContent>
-                          {message.from === 'assistant' &&
-                          !version.content &&
-                          status === 'streaming' &&
-                          !message.reasoning ? (
-                            <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
-                          ) : (
-                            <MessageResponse>{version.content}</MessageResponse>
-                          )}
-                        </MessageContent>
-                      </div>
-                    </Message>
-                  ))}
-                </MessageBranchContent>
-                {versions.length > 1 && (
-                  <MessageBranchSelector>
-                    <MessageBranchPrevious />
-                    <MessageBranchPage />
-                    <MessageBranchNext />
-                  </MessageBranchSelector>
-                )}
-              </MessageBranch>
-            ))}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
-        <div className="grid shrink-0 gap-4 pt-4">
-          <Suggestions className="px-4">
-            {suggestions.map((suggestion) => (
-              <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
-            ))}
-          </Suggestions>
-          <div className="w-full px-4 pb-4">
-            <PromptInput
-              globalDrop
-              multiple
-              maxFileSize={10 * 1024 * 1024}
-              onError={handleFileUploadError}
-              onSubmit={handleSubmit}
-            >
-              <PromptInputHeader>
-                <PromptInputAttachmentsDisplay />
-              </PromptInputHeader>
-              <PromptInputBody>
-                <PromptInputTextarea onChange={handleTextChange} value={text} />
-              </PromptInputBody>
-              <PromptInputFooter>
-                <PromptInputTools>
-                  <PromptInputActionMenu>
-                    <PromptInputActionMenuTrigger />
-                    <PromptInputActionMenuContent>
-                      <PromptInputActionAddAttachments />
-                    </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
-                  <SpeechInput
-                    className="shrink-0"
-                    onTranscriptionChange={handleTranscriptionChange}
-                    size="icon-sm"
-                    variant="ghost"
-                  />
-                  <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
-                    <GlobeIcon size={16} />
-                    <span>Search</span>
-                  </PromptInputButton>
-                  <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                    <ModelSelectorTrigger asChild>
-                      <PromptInputButton>
-                        {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
-                        {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
-                      </PromptInputButton>
-                    </ModelSelectorTrigger>
-                    <ModelSelectorContent>
-                      <ModelSelectorInput placeholder="Search models..." />
-                      <ModelSelectorList>
-                        <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                        {modelGroups.map((provider) => (
-                          <ModelSelectorGroup heading={provider} key={provider}>
-                            {models
-                              .filter((m) => m.provider === provider)
-                              .map((m) => (
-                                <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
-                              ))}
-                          </ModelSelectorGroup>
-                        ))}
-                      </ModelSelectorList>
-                    </ModelSelectorContent>
-                  </ModelSelector>
-                </PromptInputTools>
-                <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
-              </PromptInputFooter>
-            </PromptInput>
-          </div>
+                      </MessageContent>
+                    </div>
+                  </Message>
+                ))}
+              </MessageBranchContent>
+              {versions.length > 1 && (
+                <MessageBranchSelector>
+                  <MessageBranchPrevious />
+                  <MessageBranchPage />
+                  <MessageBranchNext />
+                </MessageBranchSelector>
+              )}
+            </MessageBranch>
+          ))}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+      <div className="grid shrink-0 gap-4 border-t pt-4">
+        <Suggestions className="px-4">
+          {suggestions.map((suggestion) => (
+            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+          ))}
+        </Suggestions>
+        <div className="w-full px-4 pb-4">
+          <PromptInput
+            globalDrop
+            multiple
+            maxFileSize={10 * 1024 * 1024}
+            onError={handleFileUploadError}
+            onSubmit={handleSubmit}
+          >
+            <PromptInputHeader>
+              <PromptInputAttachmentsDisplay />
+            </PromptInputHeader>
+            <PromptInputBody>
+              <PromptInputTextarea onChange={handleTextChange} value={text} />
+            </PromptInputBody>
+            <PromptInputFooter>
+              <PromptInputTools>
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
+                <SpeechInput
+                  className="shrink-0"
+                  onTranscriptionChange={handleTranscriptionChange}
+                  size="icon-sm"
+                  variant="ghost"
+                />
+                <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
+                  <GlobeIcon size={16} />
+                  <span>Search</span>
+                </PromptInputButton>
+                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
+                    <PromptInputButton>
+                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                    </PromptInputButton>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
+                    <ModelSelectorInput placeholder="Search models..." />
+                    <ModelSelectorList>
+                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                      {modelGroups.map((provider) => (
+                        <ModelSelectorGroup heading={provider} key={provider}>
+                          {models
+                            .filter((m) => m.provider === provider)
+                            .map((m) => (
+                              <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                            ))}
+                        </ModelSelectorGroup>
+                      ))}
+                    </ModelSelectorList>
+                  </ModelSelectorContent>
+                </ModelSelector>
+              </PromptInputTools>
+              <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
+            </PromptInputFooter>
+          </PromptInput>
         </div>
       </div>
 

@@ -87,41 +87,43 @@ function AppContent() {
           activeSessionId={activeSessionId || undefined}
         />
       )}
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
-        <header className="bg-background flex h-14 shrink-0 items-center gap-2 border-b px-4">
-          {!isLogsPage && (
-            <>
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-            </>
-          )}
-          {isLogsPage && (
-            <>
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                <span className="text-2xl">🦑</span>
-                <span className="font-bold text-xl">Squid</span>
-              </button>
-              <Separator orientation="vertical" className="mx-2 h-4" />
-            </>
-          )}
-          <div className="flex gap-2">
-            {isLogsPage ? (
-              <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/')}>
-                <MessageSquare className="h-4 w-4" />
-                Back to Chat
-              </Button>
-            ) : (
-              <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/logs')}>
-                <FileText className="h-4 w-4" />
-                Logs
-              </Button>
+      <SidebarInset className="flex flex-col overflow-hidden">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b">
+          <div className="flex items-center gap-2 px-4">
+            {!isLogsPage && (
+              <>
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+              </>
             )}
+            {isLogsPage && (
+              <>
+                <button
+                  onClick={() => navigate('/')}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <span className="text-2xl">🦑</span>
+                  <span className="font-bold text-xl">Squid</span>
+                </button>
+                <Separator orientation="vertical" className="mx-2 h-4" />
+              </>
+            )}
+            <div className="flex gap-2">
+              {isLogsPage ? (
+                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/')}>
+                  <MessageSquare className="h-4 w-4" />
+                  Back to Chat
+                </Button>
+              ) : (
+                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/logs')}>
+                  <FileText className="h-4 w-4" />
+                  Logs
+                </Button>
+              )}
+            </div>
           </div>
         </header>
-        <div className="flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 flex-col overflow-hidden min-h-0 p-4">
           <Routes>
             <Route
               path="/"

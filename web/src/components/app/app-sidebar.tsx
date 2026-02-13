@@ -1,10 +1,6 @@
-import * as React from "react"
-import { ChevronRight, MessageSquare, Plus } from "lucide-react"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import * as React from 'react';
+import { ChevronRight, MessageSquare, Plus } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
   SidebarContent,
@@ -16,50 +12,37 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
 
 interface ChatSession {
-  id: string
-  title: string
-  isActive?: boolean
+  id: string;
+  title: string;
+  isActive?: boolean;
 }
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  sessions?: ChatSession[]
-  onSessionSelect?: (sessionId: string) => void
-  onNewChat?: () => void
-  activeSessionId?: string
+  sessions?: ChatSession[];
+  onSessionSelect?: (sessionId: string) => void;
+  onNewChat?: () => void;
+  activeSessionId?: string;
 }
 
-export function AppSidebar({
-  sessions = [],
-  onSessionSelect,
-  onNewChat,
-  activeSessionId,
-  ...props
-}: AppSidebarProps) {
+export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, ...props }: AppSidebarProps) {
   return (
-    <Sidebar {...props}>
+    <Sidebar variant="inset" {...props}>
       <SidebarHeader className="border-b p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-2xl">🦑</span>
           <span className="font-bold text-xl">Squid</span>
         </div>
-        <Button
-          onClick={onNewChat}
-          className="w-full justify-start gap-2"
-          variant="outline"
-        >
+        <Button onClick={onNewChat} className="w-full justify-start gap-2" variant="outline">
           <Plus className="h-4 w-4" />
           New Chat
         </Button>
       </SidebarHeader>
       <SidebarContent className="gap-0">
-        <Collapsible
-          defaultOpen
-          className="group/collapsible"
-        >
+        <Collapsible defaultOpen className="group/collapsible">
           <SidebarGroup>
             <SidebarGroupLabel
               asChild
@@ -75,9 +58,7 @@ export function AppSidebar({
                 <SidebarMenu>
                   {sessions.length === 0 ? (
                     <SidebarMenuItem>
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No chat sessions yet
-                      </div>
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No chat sessions yet</div>
                     </SidebarMenuItem>
                   ) : (
                     sessions.map((session) => (
@@ -103,5 +84,5 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
