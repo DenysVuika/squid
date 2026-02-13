@@ -86,7 +86,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
-            api_model: "local-model".to_string(),
+            api_model: "qwen2.5-coder-7b-instruct".to_string(),
             api_key: None,
             context_window: default_context_window(),
             log_level: default_log_level(),

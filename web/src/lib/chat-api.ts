@@ -15,6 +15,7 @@ export interface ChatMessage {
   session_id?: string;
   files?: FileAttachment[];
   system_prompt?: string;
+  model?: string;
 }
 
 export type StreamEventType =

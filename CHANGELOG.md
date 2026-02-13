@@ -9,9 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Model Selection in Web UI**: Dynamic model selector with real-time model discovery
+  - New `/api/models` endpoint fetches available models from LLM provider (LM Studio, Ollama, etc.)
+  - Models augmented with metadata including friendly names, context window sizes, and providers
+  - Model selector defaults to Qwen Coder 2.5 (preferred for coding tasks)
+  - Models grouped by provider for easy navigation
+  - Selected model is passed to API with each request, overriding config default
+  - Built-in model metadata for 30+ popular models (Qwen, Llama, GPT, Claude, Gemini, etc.)
+  - Unknown models handled gracefully with 8192 token default context
+- **Per-Request Model Override**: Chat requests can now specify a model
+  - Optional `model` field in `/api/chat` endpoint
+  - Falls back to `api_model` from config if not specified
+  - Allows Web UI to use different models without changing configuration
+
 ### Fixed
 
+- **Cost Calculation for Liquid Models**: Added support for LFM/Liquid models in pricing estimation
+  - Models like `lfm2.5-1.2b-thinking` and `liquid/lfm2.5-1.2b` now properly mapped to GPT-4o-mini for cost comparison
+- **Model Selector Sync**: Model selector now updates when switching between sessions
+  - Previously, the model selector would not reflect the model used in a loaded session
+  - Now correctly displays and selects the model associated with each session
+  - Includes fuzzy matching to handle model ID changes (e.g., `qwen2.5-coder` → `qwen2.5-coder-7b-instruct-mlx`)
+  - Old sessions with outdated model IDs will automatically select the closest matching current model
+- **Context Window Updates**: Context window size now updates when switching models
+  - Ensures accurate token usage percentage and prevents calculation errors
+  - Automatically uses the selected model's max context length
+
 ### Changed
+
+- **Default Model**: Changed from `local-model` to `qwen2.5-coder-7b-instruct` for better defaults
+  - More specific default that works well with LM Studio and Ollama
+  - Still overridable via config or Web UI model selector
 
 ## [0.8.0] - 2026-02-13
 

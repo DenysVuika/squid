@@ -218,6 +218,14 @@ const Example = () => {
   const getModelIdForPricing = useMemo(() => {
     const currentModelId = sessionModelId || model;
 
+    // If model ID is empty, return default
+    if (!currentModelId) {
+      return 'gpt-4o';
+    }
+
+    // Convert to lowercase once for all comparisons
+    const modelIdLower = currentModelId.toLowerCase();
+
     // If tokenlens knows this model, use it as-is
     // Otherwise, map to a similar OpenAI model for cost comparison
     const modelMappings: Record<string, string> = {
@@ -240,6 +248,10 @@ const Example = () => {
       mistral: 'gpt-4o',
       mixtral: 'gpt-4o',
 
+      // Liquid models -> GPT-4o-mini (smaller)
+      lfm: 'gpt-4o-mini',
+      liquid: 'gpt-4o-mini',
+
       // Phi models -> GPT-4o-mini (smaller)
       phi: 'gpt-4o-mini',
 
@@ -257,7 +269,7 @@ const Example = () => {
 
     // Check if current model matches any pattern
     for (const [pattern, fallback] of Object.entries(modelMappings)) {
-      if (currentModelId.toLowerCase().includes(pattern)) {
+      if (modelIdLower.includes(pattern)) {
         return fallback;
       }
     }
@@ -267,56 +279,70 @@ const Example = () => {
   }, [sessionModelId, model]);
 
   // Load session history on mount if sessionId exists
-  const loadSessionHistory = useCallback(async (targetSessionId: string) => {
-    console.log('[Session] Loading session:', targetSessionId);
-    const session = await loadSession('', targetSessionId);
-    if (!session) {
-      console.log('[Session] Session not found, starting fresh');
-      localStorage.removeItem('squid_session_id');
-      setSessionId(null);
-      return;
-    }
+  const loadSessionHistory = useCallback(
+    async (targetSessionId: string) => {
+      const session = await loadSession('', targetSessionId);
+      if (!session) {
+        localStorage.removeItem('squid_session_id');
+        setSessionId(null);
+        return;
+      }
 
-    console.log(`[Session] Loaded session with ${session.messages.length} messages:`, session.messages);
+      // Convert session messages to UI format
+      const uiMessages: MessageType[] = [];
+      for (const msg of session.messages) {
+        uiMessages.push({
+          from: msg.role as 'user' | 'assistant',
+          key: `${msg.role}-${msg.timestamp}`,
+          sources:
+            msg.sources.length > 0
+              ? msg.sources.map((s) => ({
+                  href: '#',
+                  title: s.title,
+                  content: s.content,
+                }))
+              : undefined,
+          versions: [
+            {
+              id: `${msg.role}-${msg.timestamp}-v1`,
+              content: msg.content,
+            },
+          ],
+        });
+      }
 
-    // Convert session messages to UI format
-    const uiMessages: MessageType[] = [];
-    for (const msg of session.messages) {
-      uiMessages.push({
-        from: msg.role as 'user' | 'assistant',
-        key: `${msg.role}-${msg.timestamp}`,
-        sources:
-          msg.sources.length > 0
-            ? msg.sources.map((s) => ({
-                href: '#',
-                title: s.title,
-                content: s.content,
-              }))
-            : undefined,
-        versions: [
-          {
-            id: `${msg.role}-${msg.timestamp}-v1`,
-            content: msg.content,
-          },
-        ],
-      });
-    }
+      console.log(`[Session] Loaded ${uiMessages.length} messages`);
+      setMessages(uiMessages);
 
-    console.log(`[Session] Loaded ${uiMessages.length} messages`);
-    setMessages(uiMessages);
+      // Load token usage from session
+      setTokenUsage(session.token_usage);
+      setSessionModelId(session.model_id);
 
-    // Load token usage from session
-    setTokenUsage(session.token_usage);
-    setSessionModelId(session.model_id);
-    console.log('[Session] Token usage:', session.token_usage);
-  }, []);
+      // Update model selector if session has a model_id
+      if (session.model_id && models.length > 0) {
+        // Try exact match first
+        let matchedModel = models.find((m) => m.id === session.model_id);
+
+        // If no exact match, try fuzzy matching
+        if (!matchedModel) {
+          const sessionModelLower = session.model_id.toLowerCase();
+          matchedModel = models.find(
+            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
+          );
+        }
+
+        if (matchedModel) {
+          setModel(matchedModel.id);
+        }
+      }
+    },
+    [models]
+  );
 
   // Fetch available models on mount
   useEffect(() => {
     const loadModels = async () => {
-      console.log('[Models] Fetching available models...');
       const { models: fetchedModels } = await fetchModels('');
-      console.log('[Models] Fetched models:', fetchedModels);
 
       if (fetchedModels.length > 0) {
         setModels(fetchedModels);
@@ -334,13 +360,26 @@ const Example = () => {
 
         if (defaultModel) {
           setModel(defaultModel.id);
-          console.log('[Models] Default model set to:', defaultModel.id);
+          console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
         }
       }
     };
 
     loadModels();
   }, []);
+
+  // Update context window when model changes
+  useEffect(() => {
+    if (model && models.length > 0) {
+      const selectedModel = models.find((m) => m.id === model);
+      if (selectedModel) {
+        setTokenUsage((prev) => ({
+          ...prev,
+          context_window: selectedModel.max_context_length,
+        }));
+      }
+    }
+  }, [model, models]);
 
   useEffect(() => {
     if (!sessionId || sessionLoadedRef.current) return;
@@ -411,6 +450,7 @@ const Example = () => {
             message: userMessage,
             session_id: sessionId || undefined,
             files: fileAttachments,
+            model: model || undefined,
           },
           {
             signal: abortControllerRef.current?.signal,
@@ -440,17 +480,13 @@ const Example = () => {
               );
             },
             onContent: (text) => {
-              console.log('[Stream] Received content chunk:', text.substring(0, 50));
               // Accumulate content in ref for better performance
               streamingContentRef.current += text;
               const currentContent = streamingContentRef.current;
-              console.log('[Stream] Looking for messageId:', messageId);
 
               setMessages((prev) => {
-                console.log('[Stream] Current messages:', prev.length);
                 const updated = prev.map((msg) => {
                   const hasVersion = msg.versions.some((v) => v.id === messageId);
-                  console.log('[Stream] Message key:', msg.key, 'has matching version:', hasVersion);
                   if (hasVersion) {
                     return {
                       ...msg,
@@ -459,31 +495,25 @@ const Example = () => {
                   }
                   return msg;
                 });
-                console.log('[Stream] Updated messages:', updated.length);
                 return updated;
               });
             },
             onUsage: (usage) => {
-              console.log('[Token Usage] Received:', usage);
               // Update token usage
-              setTokenUsage((prev) => {
-                const updated = {
-                  total_tokens:
-                    prev.total_tokens +
-                    usage.input_tokens +
-                    usage.output_tokens +
-                    usage.reasoning_tokens +
-                    usage.cache_tokens,
-                  input_tokens: prev.input_tokens + usage.input_tokens,
-                  output_tokens: prev.output_tokens + usage.output_tokens,
-                  reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
-                  cache_tokens: prev.cache_tokens + usage.cache_tokens,
-                  context_window: prev.context_window,
-                  context_utilization: prev.context_utilization,
-                };
-                console.log('[Token Usage] Updated from:', prev, 'to:', updated);
-                return updated;
-              });
+              setTokenUsage((prev) => ({
+                total_tokens:
+                  prev.total_tokens +
+                  usage.input_tokens +
+                  usage.output_tokens +
+                  usage.reasoning_tokens +
+                  usage.cache_tokens,
+                input_tokens: prev.input_tokens + usage.input_tokens,
+                output_tokens: prev.output_tokens + usage.output_tokens,
+                reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
+                cache_tokens: prev.cache_tokens + usage.cache_tokens,
+                context_window: prev.context_window,
+                context_utilization: prev.context_utilization,
+              }));
             },
             onError: (error) => {
               console.error('Stream error:', error);
@@ -527,7 +557,7 @@ const Example = () => {
         setStreamingMessageId(null);
       }
     },
-    [updateMessageContent, sessionId, loadSessionHistory]
+    [updateMessageContent, sessionId, loadSessionHistory, model]
   );
 
   const addUserMessage = useCallback(
@@ -715,11 +745,27 @@ const Example = () => {
       // Load token usage from session
       setTokenUsage(session.token_usage);
       setSessionModelId(session.model_id);
-      console.log('[Session] Token usage:', session.token_usage);
 
+      // Update model selector if session has a model_id
+      if (session.model_id && models.length > 0) {
+        // Try exact match first
+        let matchedModel = models.find((m) => m.id === session.model_id);
+
+        // If no exact match, try fuzzy matching
+        if (!matchedModel) {
+          const sessionModelLower = session.model_id.toLowerCase();
+          matchedModel = models.find(
+            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
+          );
+        }
+
+        if (matchedModel) {
+          setModel(matchedModel.id);
+        }
+      }
       toast.success('Session loaded');
     },
-    [sessionId]
+    [sessionId, models]
   );
 
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);

@@ -34,6 +34,8 @@ pub struct ChatRequest {
     pub files: Vec<FileAttachment>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -333,7 +335,8 @@ pub async fn chat_stream(
     let system_prompt_for_stream = system_prompt.clone(); // Clone for use inside stream
     let app_config_clone = app_config.get_ref().clone();
     let session_manager_clone = session_manager.get_ref().clone();
-    let model_id = app_config.api_model.clone();
+    // Use the model from request, or fall back to config default
+    let model_id = body.model.clone().unwrap_or_else(|| app_config.api_model.clone());
 
     // Get or create session
     let session_id = body.session_id.clone().unwrap_or_else(|| {
@@ -389,6 +392,7 @@ pub async fn chat_stream(
             &question,
             &files,
             system_prompt.as_deref(),
+            &model_id,
             &app_config_clone,
             &session_manager_clone,
         ).await {
@@ -572,6 +576,7 @@ async fn create_chat_stream(
     question: &str,
     files: &[session::FileAttachment],
     system_prompt: Option<&str>,
+    model_id: &str,
     app_config: &config::Config,
     session_manager: &session::SessionManager,
 ) -> Result<
@@ -579,7 +584,7 @@ async fn create_chat_stream(
     Box<dyn std::error::Error + Send + Sync>,
 > {
     debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using API Model: {}", app_config.api_model);
+    debug!("Using API Model: {}", model_id);
 
     let config = OpenAIConfig::new()
         .with_api_base(&app_config.api_url)
@@ -666,7 +671,7 @@ async fn create_chat_stream(
     let output_stream = async_stream::stream! {
         loop {
         let request = CreateChatCompletionRequestArgs::default()
-            .model(&app_config.api_model)
+            .model(model_id)
             .messages(messages.clone())
             .tools(tools::get_tools())
             .stream_options(ChatCompletionStreamOptions {
