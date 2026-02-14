@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Files, Loader2 } from 'lucide-react';
 import {
   FileTree,
@@ -16,10 +16,48 @@ interface FileNode {
 
 export function FilesSidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [files, setFiles] = React.useState<FileNode[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [selectedPath, setSelectedPath] = React.useState<string | undefined>();
+  const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
+  
+  // Extract file path from current route
+  const currentFilePath = React.useMemo(() => {
+    if (location.pathname.startsWith('/workspace/files/')) {
+      return location.pathname.replace('/workspace/files/', '');
+    }
+    return undefined;
+  }, [location.pathname]);
+
+  // Sync selected path and expand parent directories when URL changes
+  React.useEffect(() => {
+    if (currentFilePath) {
+      setSelectedPath(currentFilePath);
+      
+      // Expand all parent directories of the current file
+      const parts = currentFilePath.split('/');
+      let currentPath = '';
+      
+      // Build paths for each parent directory
+      const newExpanded = new Set<string>();
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (i === 0) {
+          currentPath = parts[i];
+        } else {
+          currentPath += '/' + parts[i];
+        }
+        newExpanded.add(currentPath);
+      }
+      
+      setExpandedPaths(prev => {
+        // Merge with existing expanded paths to preserve user's manual expansions
+        const merged = new Set([...prev, ...newExpanded]);
+        return merged;
+      });
+    }
+  }, [currentFilePath]);
   
   // Keep track of all file paths (not directories) for quick lookup
   const filePaths = React.useMemo(() => {
@@ -80,16 +118,9 @@ export function FilesSidebar() {
     });
   };
 
-  // Build initial expanded paths for all directories
-  const buildExpandedPaths = (): Set<string> => {
-    // Don't auto-expand any directories - let users expand them manually
-    return new Set<string>();
-  };
-
-  const defaultExpanded = React.useMemo(
-    () => buildExpandedPaths(),
-    []
-  );
+  const handleExpandedChange = React.useCallback((expanded: Set<string>) => {
+    setExpandedPaths(expanded);
+  }, []);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -117,7 +148,8 @@ export function FilesSidebar() {
         )}
             {!loading && !error && files.length > 0 && (
               <FileTree
-                defaultExpanded={defaultExpanded}
+                expanded={expandedPaths}
+                onExpandedChange={handleExpandedChange}
                 // @ts-expect-error - FileTree has type conflict between HTML onSelect and custom onSelect
                 onSelect={handleFileSelect}
                 selectedPath={selectedPath}
