@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MessageSquare, Trash2, Plus, Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 interface SessionListProps {
@@ -38,7 +38,7 @@ export function SessionList({
   const [sessionToEdit, setSessionToEdit] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
       const data = await listSessions(apiUrl);
@@ -49,11 +49,11 @@ export function SessionList({
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiUrl]);
 
   useEffect(() => {
     loadSessions();
-  }, [apiUrl]);
+  }, [loadSessions]);
 
   // Refresh when trigger changes
   useEffect(() => {

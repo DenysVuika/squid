@@ -95,7 +95,8 @@ export function FilesSidebar() {
             {!loading && !error && files.length > 0 && (
               <FileTree
                 defaultExpanded={defaultExpanded}
-                onSelect={handleFileSelect as any}
+                // @ts-expect-error - FileTree has type conflict between HTML onSelect and custom onSelect
+                onSelect={handleFileSelect}
                 selectedPath={selectedPath}
               >
                 {renderFileTree(files)}
