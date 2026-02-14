@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Loader2, FileIcon, CopyIcon, DownloadIcon } from 'lucide-react';
+import { Loader2, FileIcon, CopyIcon, DownloadIcon, CheckIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import {
@@ -16,17 +16,30 @@ import { CodeBlock } from '@/components/ai-elements/code-block';
 import {
   PromptInput,
   PromptInputBody,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
+import {
+  ModelSelector,
+  ModelSelectorContent,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorInput,
+  ModelSelectorItem,
+  ModelSelectorList,
+  ModelSelectorName,
+  ModelSelectorTrigger,
+} from '@/components/ai-elements/model-selector';
 import { toast } from 'sonner';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useModelStore } from '@/stores/model-store';
+import type { ModelInfo } from '@/lib/chat-api';
 
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
@@ -78,6 +91,28 @@ const getLanguageFromFilename = (filename: string): BundledLanguage => {
   return languageMap[ext] || 'text';
 };
 
+// Model selector item component
+const ModelItem = ({
+  m,
+  isSelected,
+  onSelect,
+}: {
+  m: ModelInfo;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}) => {
+  const handleSelect = useCallback(() => {
+    onSelect(m.id);
+  }, [onSelect, m.id]);
+
+  return (
+    <ModelSelectorItem onSelect={handleSelect} value={m.id}>
+      <ModelSelectorName>{m.name}</ModelSelectorName>
+      {isSelected ? <CheckIcon className="ml-auto size-4" /> : <div className="ml-auto size-4" />}
+    </ModelSelectorItem>
+  );
+};
+
 export function FileViewer() {
   const { '*': filePath } = useParams();
   const navigate = useNavigate();
@@ -89,7 +124,23 @@ export function FileViewer() {
   // Zustand stores
   const { startNewChat } = useSessionStore();
   const { clearMessages, addUserMessage, setStatus } = useChatStore();
-  const { resetTokenUsage } = useModelStore();
+  const {
+    models,
+    modelGroups,
+    selectedModel,
+    modelSelectorOpen,
+    setSelectedModel,
+    setModelSelectorOpen,
+    loadModels,
+    resetTokenUsage,
+  } = useModelStore();
+
+  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
+
+  // Fetch available models on mount
+  useEffect(() => {
+    void loadModels();
+  }, [loadModels]);
 
   useEffect(() => {
     const fetchFileContent = async () => {
@@ -130,6 +181,13 @@ export function FileViewer() {
   const handlePromptChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPromptText(event.target.value);
   }, []);
+
+  const handleModelSelect = useCallback(
+    (modelId: string) => {
+      setSelectedModel(modelId);
+    },
+    [setSelectedModel]
+  );
 
   const handlePromptSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -265,7 +323,31 @@ export function FileViewer() {
               />
             </PromptInputBody>
             <PromptInputFooter>
-              <PromptInputTools />
+              <PromptInputTools>
+                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
+                    <PromptInputButton>
+                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                    </PromptInputButton>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
+                    <ModelSelectorInput placeholder="Search models..." />
+                    <ModelSelectorList>
+                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                      {modelGroups.map((provider) => (
+                        <ModelSelectorGroup heading={provider} key={provider}>
+                          {models
+                            .filter((m) => m.provider === provider)
+                            .map((m) => (
+                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                            ))}
+                        </ModelSelectorGroup>
+                      ))}
+                    </ModelSelectorList>
+                  </ModelSelectorContent>
+                </ModelSelector>
+              </PromptInputTools>
               <PromptInputSubmit disabled={!promptText.trim()} status={undefined} />
             </PromptInputFooter>
           </PromptInput>

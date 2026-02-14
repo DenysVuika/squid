@@ -415,8 +415,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         modelStore.setSelectedModel(matchedModel.id);
       }
     }
-
-    toast.success('Session loaded');
   },
 
   // Clear all messages
