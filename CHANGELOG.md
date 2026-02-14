@@ -9,72 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat with Files**: Ask questions about any workspace file directly from the file viewer
+  - Select a model and type your question to start a conversation about the file
+  - File is automatically attached and opens in the chat interface
+
 - **File Viewer**: View and interact with workspace files directly in the Web UI
   - Click any file in the workspace panel to preview it with syntax highlighting
   - Copy file content or download files with one click
-  - Share or bookmark specific files via URL
-  - Automatic parent folder expansion shows you where the file is located
   - Works with browser back/forward navigation
 
-- **Toast Notifications**: Clear feedback for file operations and errors
-  - Helpful error messages when LM Studio or Ollama is unavailable
-  - Success confirmations for copy and download actions
+- **Workspace Files Panel**: Browse your project's file structure directly in the Web UI
+  - Toggle panel visibility with folder tree icon in the header
+  - Smart filtering shows only code and documentation files
 
-- **Web Development Mode**: Enhanced development workflow for the Web UI
-  - Vite proxy configuration automatically forwards API requests to Rust server during development
-  - CORS support enables seamless development with Vite dev server
-  - Instructions added to README for quick setup
+- **Reasoning Mode Support**: View the model's thinking process before its final response
+  - Collapsible reasoning sections with duration tracking
+  - Thinking process saved and restored when loading previous sessions
+
+- **Model Selection in Web UI**: Choose from available models directly in the interface
+  - Dynamic model selector with real-time discovery of available models
+  - Models grouped by provider with context window information
+  - Defaults to Qwen Coder 2.5 (optimized for coding tasks)
 
 - **Custom Server Options**: New command-line arguments for the `serve` command
   - `--db` option to specify a custom database file path
   - `--dir` option to set a custom working directory for the server
-  - Useful for running multiple instances or working with different project databases
-
-- **Workspace Files Panel**: Browse your project's file structure directly in the Web UI
-  - Collapsible file tree showing workspace files and folders
-  - Toggle panel visibility with folder tree icon in the header
-  - Smart filtering shows only code and documentation files
-  - Excludes build artifacts, dependencies, and system files (node_modules, target, .git, etc.)
-  - Hierarchical view with folders collapsed by default for clean presentation
-  - Folders sorted before files, both alphabetically within their groups
-
-- **State Management with Zustand**: Improved architecture for better performance and maintainability
-  - Centralized state management eliminates props drilling between components
-  - Organized stores: session management, model selection, and chat operations
-  - Better performance with selective component re-rendering
-  - Simplified 1000+ line chatbot component by extracting state logic
-
-- **Reasoning Mode Support**: View LLM's thinking process in the Web UI
-  - Collapsible reasoning sections showing the model's thought process
-  - Real-time duration tracking displays "Thinking..." while processing, then "Thought for X seconds"
-  - Thinking process saved with messages and restored when loading previous sessions
-
-- **Improved Pricing Estimation**: Token pricing now works consistently across all models
-  - All models (Qwen, DeepSeek, Llama, Mistral, etc.) now have accurate pricing estimation
-  - Pricing information provided by backend for consistent display
-
-- **Model Selection in Web UI**: Choose from available models directly in the interface
-  - Dynamic model selector with real-time discovery of available models from your LLM provider
-  - Models display friendly names, context window sizes, and provider information
-  - Models grouped by provider for easy navigation
-  - Defaults to Qwen Coder 2.5 (optimized for coding tasks)
-  - Built-in metadata for 30+ popular models
-  - Switch models per-session without changing configuration
 
 ### Fixed
 
-- **Cost Calculation for Liquid Models**: LFM/Liquid models now properly estimated in pricing calculations
-- **Model Selector Sync**: Model selector now correctly updates when switching between sessions
-  - Displays the model used in each loaded session
-  - Fuzzy matching handles model ID changes (e.g., when model names are updated)
-  - Old sessions automatically select the closest matching current model
-- **Context Window Updates**: Context window size now updates when switching models for accurate token usage display
-
-### Changed
-
-- **Default Model**: Changed from `local-model` to `qwen2.5-coder-7b-instruct`
-  - Better default for coding tasks, works well with LM Studio and Ollama
-  - Can be overridden via config or Web UI model selector
+- **Model Selection**: Selected model now persists when navigating between file viewer and chat
+- **Session Loading**: Removed "Session loaded" toast notification for quieter experience
 
 ## [0.8.0] - 2026-02-13
 
