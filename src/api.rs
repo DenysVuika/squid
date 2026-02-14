@@ -1174,6 +1174,12 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
         .into_iter()
         .filter_entry(|e| {
             let file_name = e.file_name().to_string_lossy();
+            
+            // Skip hidden files/directories (starting with .)
+            if file_name.starts_with('.') {
+                return false;
+            }
+            
             // Skip excluded directories
             if e.file_type().is_dir() {
                 !excluded_dirs.iter().any(|&excluded| file_name == excluded)

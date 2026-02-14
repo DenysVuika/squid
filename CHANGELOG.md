@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Model Selection**: Selected model now persists when navigating between file viewer and chat
 - **Session Loading**: Removed "Session loaded" toast notification for quieter experience
+- **Workspace Files Panel**: Hidden files and folders (starting with `.`) are now filtered out by default
 
 ## [0.8.0] - 2026-02-13
 
