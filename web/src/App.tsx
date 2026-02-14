@@ -7,7 +7,7 @@ import { FilesSidebar } from './components/app/files-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
-import { FileText, MessageSquare, FolderTree } from 'lucide-react';
+import { FileText, MessageSquare, Files } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
@@ -105,7 +105,7 @@ function AppContent() {
                 onClick={() => setShowFilesPanel(!showFilesPanel)}
                 title="Toggle workspace files"
               >
-                <FolderTree className={showFilesPanel ? 'text-primary' : ''} />
+                <Files className={showFilesPanel ? 'text-primary' : ''} />
               </Button>
             </>
           )}
