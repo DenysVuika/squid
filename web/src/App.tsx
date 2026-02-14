@@ -2,11 +2,12 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import ChatBot from './components/app/chatbot';
 import Logs from './components/app/logs';
 import { AppSidebar } from './components/app/app-sidebar';
+import { FilesSidebar } from './components/app/files-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
-import { FileText, MessageSquare } from 'lucide-react';
-import { useEffect } from 'react';
+import { FileText, MessageSquare, FolderTree } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useModelStore } from '@/stores/model-store';
@@ -19,6 +20,9 @@ function AppContent() {
   const { sessions, activeSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
   const { clearMessages } = useChatStore();
   const { resetTokenUsage } = useModelStore();
+
+  // State for right sidebar (files panel)
+  const [showFilesPanel, setShowFilesPanel] = useState(false);
 
   useEffect(() => {
     void loadSessions();
@@ -57,7 +61,7 @@ function AppContent() {
       )}
       <SidebarInset className="flex flex-col overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-          <div className="flex items-center gap-2 px-4">
+          <div className="flex flex-1 items-center gap-2 px-4">
             {!isLogsPage && (
               <>
                 <SidebarTrigger className="-ml-1" />
@@ -90,12 +94,33 @@ function AppContent() {
               )}
             </div>
           </div>
+          {!isLogsPage && (
+            <>
+              <Separator orientation="vertical" className="h-4" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mr-4"
+                onClick={() => setShowFilesPanel(!showFilesPanel)}
+                title="Toggle workspace files"
+              >
+                <FolderTree className={showFilesPanel ? 'text-primary' : ''} />
+              </Button>
+            </>
+          )}
         </header>
-        <div className="flex flex-1 flex-col overflow-hidden min-h-0 p-4">
-          <Routes>
-            <Route path="/" element={<ChatBot />} />
-            <Route path="/logs" element={<Logs />} />
-          </Routes>
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          <div className="flex flex-1 flex-col overflow-hidden p-4">
+            <Routes>
+              <Route path="/" element={<ChatBot />} />
+              <Route path="/logs" element={<Logs />} />
+            </Routes>
+          </div>
+          {!isLogsPage && showFilesPanel && (
+            <div className="border-l w-80 shrink-0">
+              <FilesSidebar />
+            </div>
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>

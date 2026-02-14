@@ -567,6 +567,15 @@ squid serve
 # Specify a custom port
 squid serve --port 3000
 squid serve -p 3000
+
+# Use a custom database file
+squid serve --db=/path/to/custom.db
+
+# Use a custom working directory
+squid serve --dir=/path/to/project
+
+# Combine all options
+squid serve --port 3000 --db=custom.db --dir=/path/to/project
 ```
 
 The web server will:
@@ -575,6 +584,16 @@ The web server will:
 - Expose REST API endpoints for chat, sessions, and logs
 - Display the server URL and API endpoint on startup
 
+**Server Options:**
+- `--port` / `-p`: Port number to run the server (default: `8080`)
+- `--db`: Path to custom database file (default: `squid.db` in current/config directory)
+- `--dir`: Working directory for the server (changes to this directory before starting)
+
+**Use Cases:**
+- Use `--db` to specify a different database file for separate projects or testing
+- Use `--dir` to run the server in a specific project directory without navigating there first
+- The database path is relative to the working directory (after `--dir` is applied)
+
 **Web UI Features:**
 - **Chat Page** - Interactive chat interface with session management sidebar
   - 📊 **Token usage indicator** - Real-time context utilization percentage (e.g., "5.6% • 7.1K / 128K")
@@ -582,8 +601,6 @@ The web server will:
   - 🗂️ **Session sidebar** - Browse and switch between past conversations
   - ✏️ **Auto-generated titles** - Sessions titled from first message, editable inline
   - 📎 **Multi-file attachments** - Add context from multiple files
-  - ⏹️ **Stop generation** - Halt streaming responses mid-generation
-  - 💾 **Auto-save** - All conversations automatically saved to database
 - **Logs Page** - View application logs with pagination
   - 🔍 Filter by log level (error, warn, info, debug, trace)
   - 📄 Adjustable page size (25, 50, 100, 200 entries)
@@ -591,6 +608,22 @@ The web server will:
   - 🔗 Session ID tracking for debugging
 
 The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
+
+**Web UI Development (Hot Reload):**
+
+For development with instant hot reloading:
+
+```bash
+# Terminal 1 - Backend server
+cargo run serve --port 8080
+
+# Terminal 2 - Frontend dev server
+cd web && npm run dev
+```
+
+Then open `http://localhost:5173` in your browser. Changes to frontend code will appear instantly. The Vite dev server proxies API requests to the Rust backend.
+
+To build for production: `cd web && npm run build` (outputs to `static/` directory).
 
 **Database & Persistence:**
 - All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)

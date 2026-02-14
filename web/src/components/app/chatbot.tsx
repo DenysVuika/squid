@@ -55,19 +55,14 @@ import {
 } from '@/components/ai-elements/prompt-input';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
-import {
-  CodeBlock,
-  CodeBlockActions,
-  CodeBlockCopyButton,
-  CodeBlockFilename,
-  CodeBlockHeader,
-  CodeBlockTitle,
-} from '@/components/ai-elements/code-block';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { CheckIcon, FileIcon } from 'lucide-react';
+import { CheckIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+
+// App components
+import { SourceContentSidebar } from './source-content-sidebar';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -157,7 +152,7 @@ const ModelItem = ({
   );
 };
 
-const Example = () => {
+const Chatbot = () => {
   // Zustand stores
   const { activeSessionId } = useSessionStore();
   const {
@@ -517,51 +512,15 @@ const Example = () => {
 
       {/* Source Content Sidebar */}
       {sourceContentOpen && sourceContentData && (
-        <div className="fixed right-0 top-0 h-full w-150 border-l bg-background shadow-lg z-50 flex flex-col">
-          <div className="flex items-center justify-between border-b p-4">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold truncate">{sourceContentData.title}</h3>
-              <p className="text-xs text-muted-foreground">
-                {sourceContentData.content.length.toLocaleString()} characters
-              </p>
-            </div>
-            <button
-              onClick={() => setSourceContentOpen(false)}
-              className="ml-2 rounded-md p-2 hover:bg-accent"
-              type="button"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <CodeBlock
-              code={sourceContentData.content}
-              language={getLanguageFromFilename(sourceContentData.title)}
-              showLineNumbers={true}
-            >
-              <CodeBlockHeader>
-                <CodeBlockTitle>
-                  <FileIcon size={14} />
-                  <CodeBlockFilename>{sourceContentData.title}</CodeBlockFilename>
-                </CodeBlockTitle>
-                <CodeBlockActions>
-                  <CodeBlockCopyButton />
-                </CodeBlockActions>
-              </CodeBlockHeader>
-            </CodeBlock>
-          </div>
-        </div>
+        <SourceContentSidebar
+          title={sourceContentData.title}
+          content={sourceContentData.content}
+          language={getLanguageFromFilename(sourceContentData.title)}
+          onClose={() => setSourceContentOpen(false)}
+        />
       )}
     </div>
   );
 };
 
-export default Example;
+export default Chatbot;

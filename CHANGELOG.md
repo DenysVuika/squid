@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Web Development Mode**: Enhanced development workflow for the Web UI
+  - Vite proxy configuration automatically forwards API requests to Rust server during development
+  - CORS support enables seamless development with Vite dev server
+  - Instructions added to README for quick setup
+
+- **Custom Server Options**: New command-line arguments for the `serve` command
+  - `--db` option to specify a custom database file path
+  - `--dir` option to set a custom working directory for the server
+  - Useful for running multiple instances or working with different project databases
+
+- **Workspace Files Panel**: Browse your project's file structure directly in the Web UI
+  - Collapsible file tree showing workspace files and folders
+  - Toggle panel visibility with folder tree icon in the header
+  - Smart filtering shows only code and documentation files
+  - Excludes build artifacts, dependencies, and system files (node_modules, target, .git, etc.)
+  - Hierarchical view with folders collapsed by default for clean presentation
+  - Folders sorted before files, both alphabetically within their groups
+
 - **State Management with Zustand**: Improved architecture for better performance and maintainability
   - Centralized state management eliminates props drilling between components
   - Organized stores: session management, model selection, and chat operations
