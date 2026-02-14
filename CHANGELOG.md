@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File Viewer**: View and interact with workspace files directly in the Web UI
+  - Click any file in the workspace panel to preview it with syntax highlighting
+  - Copy file content or download files with one click
+  - Share or bookmark specific files via URL
+  - Automatic parent folder expansion shows you where the file is located
+  - Works with browser back/forward navigation
+
+- **Toast Notifications**: Clear feedback for file operations and errors
+  - Helpful error messages when LM Studio or Ollama is unavailable
+  - Success confirmations for copy and download actions
+
 - **Web Development Mode**: Enhanced development workflow for the Web UI
   - Vite proxy configuration automatically forwards API requests to Rust server during development
   - CORS support enables seamless development with Vite dev server

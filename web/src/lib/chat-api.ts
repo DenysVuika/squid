@@ -482,20 +482,15 @@ export async function updateSessionTitle(apiUrl: string, sessionId: string, titl
  * ```
  */
 export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
-  try {
-    const endpoint = apiUrl ? `${apiUrl}/api/models` : '/api/models';
-    const response = await fetch(endpoint);
+  const endpoint = apiUrl ? `${apiUrl}/api/models` : '/api/models';
+  const response = await fetch(endpoint);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data: ModelsResponse = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch models:', error);
-    return { models: [] };
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: HTTP ${response.status}`);
   }
+
+  const data: ModelsResponse = await response.json();
+  return data;
 }
 
 // Re-export React for the hook

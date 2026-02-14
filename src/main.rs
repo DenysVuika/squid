@@ -670,6 +670,7 @@ async fn main() {
                             .route("/logs", web::get().to(api::get_logs))
                             .route("/models", web::get().to(api::get_models))
                             .route("/workspace/files", web::get().to(api::get_workspace_files))
+                            .route("/workspace/files/{path:.*}", web::get().to(api::get_workspace_file))
                     )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))

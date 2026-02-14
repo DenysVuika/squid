@@ -70,11 +70,20 @@ export const useModelStore = create<ModelStore>((set, get) => ({
           console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
         }
       } else {
+        // No models available - show warning
+        console.warn('⚠️ No models available. Make sure LM Studio or Ollama is running.');
+        toast.error('No models available', {
+          description: 'Make sure LM Studio or Ollama is running and accessible.',
+          duration: 5000,
+        });
         set({ isLoading: false });
       }
     } catch (error) {
       console.error('Failed to load models:', error);
-      toast.error('Failed to load models');
+      toast.error('Failed to connect to model provider', {
+        description: 'Could not reach the models API. Check if LM Studio or Ollama is running.',
+        duration: 5000,
+      });
       set({ isLoading: false });
     }
   },
