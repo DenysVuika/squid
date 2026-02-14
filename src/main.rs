@@ -88,6 +88,12 @@ enum Commands {
         /// Port to run the server on
         #[arg(short, long, default_value = "8080")]
         port: u16,
+        /// Custom database path
+        #[arg(long)]
+        db: Option<PathBuf>,
+        /// Custom working directory for the server
+        #[arg(long)]
+        dir: Option<PathBuf>,
     },
     /// View application logs from the database
     Logs {
@@ -590,11 +596,31 @@ async fn main() {
                 }
             }
         }
-        Commands::Serve { port } => {
+        Commands::Serve { port, db, dir } => {
             info!("Starting Squid Web UI on port {}", port);
 
+            // Change working directory if specified
+            if let Some(work_dir) = dir {
+                if let Err(e) = std::env::set_current_dir(work_dir) {
+                    error!("Failed to change to directory {:?}: {}", work_dir, e);
+                    println!("🦑: Failed to change to directory {:?} - {}", work_dir, e);
+                    return;
+                }
+                info!("Changed working directory to: {:?}", work_dir);
+                println!("🦑: Working directory set to: {:?}", work_dir);
+            }
+
             let bind_address = format!("127.0.0.1:{}", port);
-            let app_config = Arc::new(app_config.clone());
+            let mut app_config = app_config.clone();
+            
+            // Override database path if specified via CLI
+            if let Some(db_path) = db {
+                let db_path_str = db_path.to_string_lossy().to_string();
+                info!("Using custom database path: {}", db_path_str);
+                app_config.database_path = db_path_str;
+            }
+            
+            let app_config = Arc::new(app_config);
 
             // Initialize database
             let db_path = &app_config.database_path;

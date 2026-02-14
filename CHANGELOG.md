@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Custom Server Options**: New command-line arguments for the `serve` command
+  - `--db` option to specify a custom database file path
+  - `--dir` option to set a custom working directory for the server
+  - Useful for running multiple instances or working with different project databases
+
 - **Workspace Files Panel**: Browse your project's file structure directly in the Web UI
   - Collapsible file tree showing workspace files and folders
   - Toggle panel visibility with folder tree icon in the header
