@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Loader2, FileIcon, CopyIcon, DownloadIcon, CheckIcon } from 'lucide-react';
+import { Loader2, FileIcon, CopyIcon, DownloadIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import {
@@ -28,18 +28,32 @@ import {
   ModelSelectorEmpty,
   ModelSelectorGroup,
   ModelSelectorInput,
-  ModelSelectorItem,
   ModelSelectorList,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
+import { Suggestions } from '@/components/ai-elements/suggestion';
 import { toast } from 'sonner';
+
+// App components
+import { ModelItem } from './model-item';
+import { SuggestionItem } from './suggestion-item';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useModelStore } from '@/stores/model-store';
-import type { ModelInfo } from '@/lib/chat-api';
+
+const suggestions = [
+  'Review this file for potential bugs',
+  'Explain what this code does',
+  'Suggest improvements for code quality',
+  'Check for security vulnerabilities',
+  'Analyze the code structure',
+  'Find performance optimization opportunities',
+  'Review coding standards compliance',
+  'Identify potential refactoring areas',
+];
 
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
@@ -89,28 +103,6 @@ const getLanguageFromFilename = (filename: string): BundledLanguage => {
     tex: 'latex',
   };
   return languageMap[ext] || 'text';
-};
-
-// Model selector item component
-const ModelItem = ({
-  m,
-  isSelected,
-  onSelect,
-}: {
-  m: ModelInfo;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-}) => {
-  const handleSelect = useCallback(() => {
-    onSelect(m.id);
-  }, [onSelect, m.id]);
-
-  return (
-    <ModelSelectorItem onSelect={handleSelect} value={m.id}>
-      <ModelSelectorName>{m.name}</ModelSelectorName>
-      {isSelected ? <CheckIcon className="ml-auto size-4" /> : <div className="ml-auto size-4" />}
-    </ModelSelectorItem>
-  );
 };
 
 export function FileViewer() {
@@ -228,6 +220,13 @@ export function FileViewer() {
     [filePath, fileName, content, startNewChat, clearMessages, resetTokenUsage, navigate, setStatus, addUserMessage]
   );
 
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      handlePromptSubmit({ text: suggestion, files: [] });
+    },
+    [handlePromptSubmit]
+  );
+
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(content);
@@ -310,7 +309,12 @@ export function FileViewer() {
       </div>
 
       {/* Prompt Input Area */}
-      <div className="grid shrink-0 border-t pt-4">
+      <div className="grid shrink-0 gap-4 border-t pt-4">
+        <Suggestions className="px-4">
+          {suggestions.map((suggestion) => (
+            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+          ))}
+        </Suggestions>
         <div className="w-full px-4 pb-4">
           <PromptInput
             onSubmit={handlePromptSubmit}
