@@ -152,7 +152,7 @@ const ModelItem = ({
   );
 };
 
-const Example = () => {
+const Chatbot = () => {
   // Zustand stores
   const { activeSessionId } = useSessionStore();
   const {
@@ -523,4 +523,4 @@ const Example = () => {
   );
 };
 
-export default Example;
+export default Chatbot;

@@ -634,6 +634,7 @@ async fn main() {
                             .route("/sessions/{session_id}", web::delete().to(api::delete_session))
                             .route("/logs", web::get().to(api::get_logs))
                             .route("/models", web::get().to(api::get_models))
+                            .route("/workspace/files", web::get().to(api::get_workspace_files))
                     )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))
