@@ -1,15 +1,17 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Loader2, FileIcon } from 'lucide-react';
+import { Loader2, FileIcon, CopyIcon, DownloadIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import {
-  CodeBlock,
-  CodeBlockActions,
-  CodeBlockCopyButton,
-  CodeBlockFilename,
-  CodeBlockHeader,
-  CodeBlockTitle,
-} from '@/components/ai-elements/code-block';
+  Artifact,
+  ArtifactAction,
+  ArtifactActions,
+  ArtifactContent,
+  ArtifactDescription,
+  ArtifactHeader,
+  ArtifactTitle,
+} from '@/components/ai-elements/artifact';
+import { CodeBlock } from '@/components/ai-elements/code-block';
 import {
   PromptInput,
   PromptInputBody,
@@ -18,6 +20,7 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
+import { toast } from 'sonner';
 
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
@@ -103,15 +106,6 @@ export function FileViewer() {
     void fetchFileContent();
   }, [filePath]);
 
-  const handlePromptChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPromptText(event.target.value);
-  }, []);
-
-  const handlePromptSubmit = useCallback(() => {
-    // Placeholder for future implementation
-    console.log('Prompt submitted:', promptText);
-  }, [promptText]);
-
   const language = useMemo(() => {
     const result = filePath ? getLanguageFromFilename(filePath) : 'plaintext';
     return result as BundledLanguage;
@@ -121,47 +115,93 @@ export function FileViewer() {
     return filePath ? filePath.split('/').pop() || filePath : 'Unknown';
   }, [filePath]);
 
-  return (
-    <div className="relative flex flex-1 w-full flex-col overflow-hidden rounded-xl border bg-background min-h-0">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-          <h2 className="font-semibold truncate">{filePath || 'File Viewer'}</h2>
-        </div>
-      </div>
+  const handlePromptChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPromptText(event.target.value);
+  }, []);
 
+  const handlePromptSubmit = useCallback(() => {
+    // Placeholder for future implementation
+    console.log('Prompt submitted:', promptText);
+  }, [promptText]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success('Copied to clipboard');
+    } catch {
+      toast.error('Failed to copy to clipboard');
+    }
+  }, [content]);
+
+  const handleDownload = useCallback(() => {
+    try {
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('File downloaded');
+    } catch {
+      toast.error('Failed to download file');
+    }
+  }, [content, fileName]);
+
+  return (
+    <div className="relative flex flex-1 w-full flex-col overflow-hidden min-h-0">
       {/* Content Area with proper scrolling */}
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 p-4 flex flex-col">
         {loading && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center flex-1">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         )}
         {error && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center flex-1">
             <div className="text-sm text-destructive">
               Error: {error}
             </div>
           </div>
         )}
         {!loading && !error && content && (
-          <CodeBlock
-            code={content}
-            language={language}
-            showLineNumbers={true}
-            className="rounded-none border-0"
-          >
-            <CodeBlockHeader>
-              <CodeBlockTitle>
-                <FileIcon size={14} />
-                <CodeBlockFilename>{fileName}</CodeBlockFilename>
-              </CodeBlockTitle>
-              <CodeBlockActions>
-                <CodeBlockCopyButton />
-              </CodeBlockActions>
-            </CodeBlockHeader>
-          </CodeBlock>
+          <Artifact className="flex-1 flex flex-col min-h-0">
+            <ArtifactHeader>
+              <div>
+                <ArtifactTitle>
+                  <div className="flex items-center gap-2">
+                    <FileIcon className="h-4 w-4" />
+                    <span>{fileName}</span>
+                  </div>
+                </ArtifactTitle>
+                <ArtifactDescription>{filePath}</ArtifactDescription>
+              </div>
+              <ArtifactActions>
+                <ArtifactAction
+                  icon={CopyIcon}
+                  label="Copy"
+                  onClick={handleCopy}
+                  tooltip="Copy to clipboard"
+                />
+                <ArtifactAction
+                  icon={DownloadIcon}
+                  label="Download"
+                  onClick={handleDownload}
+                  tooltip="Download file"
+                />
+              </ArtifactActions>
+            </ArtifactHeader>
+            <ArtifactContent className="p-0 flex-1 min-h-0">
+              <CodeBlock
+                className="border-none rounded-none"
+                code={content}
+                language={language}
+                showLineNumbers
+              />
+            </ArtifactContent>
+          </Artifact>
         )}
       </div>
 
