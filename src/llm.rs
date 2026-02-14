@@ -22,6 +22,7 @@ use crate::tools;
 // Prompt constants
 const PERSONA: &str = include_str!("./assets/persona.md");
 const TOOLS: &str = include_str!("./assets/tools.md");
+const ENV_TEMPLATE: &str = include_str!("./assets/env.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
@@ -42,6 +43,47 @@ const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 /// Combines persona, tools, and task-specific prompt into a complete system prompt
 pub fn combine_prompts(task_prompt: &str) -> String {
     format!("{}\n\n{}\n\n{}", PERSONA, TOOLS, task_prompt)
+}
+
+/// Composes the user message by injecting environment context and optional file content
+fn compose_user_message(
+    question: &str,
+    file_content: Option<&str>,
+    file_path: Option<&str>,
+    enable_env_context: bool,
+) -> String {
+    let env_section = if enable_env_context {
+        let env_context = envinfo::get_env_context();
+        ENV_TEMPLATE.replace("{{ENV_CONTEXT}}", &env_context)
+    } else {
+        String::new()
+    };
+    
+    if let Some(content) = file_content {
+        let file_info = if let Some(path) = file_path {
+            format!("the file '{}'", path)
+        } else {
+            "the file".to_string()
+        };
+        
+        if enable_env_context {
+            format!(
+                "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
+                env_section, file_info, content, question
+            )
+        } else {
+            format!(
+                "Here is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
+                file_info, content, question
+            )
+        }
+    } else {
+        if enable_env_context {
+            format!("{}\n\nUser query: {}", env_section, question)
+        } else {
+            format!("User query: {}", question)
+        }
+    }
 }
 
 pub fn get_ask_prompt() -> &'static str {
@@ -102,22 +144,7 @@ pub async fn ask_llm_streaming(
 
     let client = Client::with_config(config);
 
-    // Get environment context
-    let env_context = envinfo::get_env_context();
-
-    let user_message = if let Some(content) = file_content {
-        let file_info = if let Some(path) = file_path {
-            format!("the file '{}'", path)
-        } else {
-            "the file".to_string()
-        };
-        format!(
-            "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
-            env_context, file_info, content, question
-        )
-    } else {
-        format!("{}\n\nUser query: {}", env_context, question)
-    };
+    let user_message = compose_user_message(question, file_content, file_path, app_config.enable_env_context);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
     let system_message = system_prompt.unwrap_or(&default_prompt);
@@ -355,22 +382,7 @@ pub async fn ask_llm(
 
     let client = Client::with_config(config);
 
-    // Get environment context
-    let env_context = envinfo::get_env_context();
-
-    let user_message = if let Some(content) = file_content {
-        let file_info = if let Some(path) = file_path {
-            format!("the file '{}'", path)
-        } else {
-            "the file".to_string()
-        };
-        format!(
-            "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
-            env_context, file_info, content, question
-        )
-    } else {
-        format!("{}\n\nUser query: {}", env_context, question)
-    };
+    let user_message = compose_user_message(question, file_content, file_path, app_config.enable_env_context);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
     let system_message = system_prompt.unwrap_or(&default_prompt);

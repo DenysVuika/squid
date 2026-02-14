@@ -58,8 +58,6 @@ fn is_supported_file(path: &std::path::Path) -> bool {
 
 /// Get content of a single workspace file
 pub async fn get_workspace_file(path: web::Path<String>) -> Result<HttpResponse, Error> {
-    use std::path::Path;
-    
     let file_path = path.into_inner();
     debug!("Fetching workspace file: {}", file_path);
 

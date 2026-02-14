@@ -312,6 +312,7 @@ The configuration is saved to `squid.config.json` in the specified directory (or
   "api_model": "qwen2.5-coder",
   "context_window": 32768,
   "log_level": "error",
+  "enable_env_context": true,
   "permissions": {
     "allow": ["now"],
     "deny": []
@@ -332,6 +333,9 @@ API_MODEL=local-model
 API_KEY=not-needed
 CONTEXT_WINDOW=32768
 DATABASE_PATH=squid.db
+
+# Privacy Settings
+ENABLE_ENV_CONTEXT=true
 ```
 
 **Important Notes:**
@@ -384,6 +388,23 @@ DATABASE_PATH=squid.db
   - **Important**: The server automatically finds the correct database when running from subdirectories
   - Set via `.env` file to override automatic detection
   - Example: `DATABASE_PATH=/Users/you/squid-data/squid.db`
+
+- `enable_env_context`: Include environment context in LLM prompts (optional, default: `true`)
+  - When enabled, the LLM receives system information (OS, platform, timezone, timestamps) to provide more accurate responses
+  - When disabled, no environment information is shared with the LLM (enhanced privacy)
+  - Useful to disable when:
+    - Using cloud-based LLM APIs where privacy is a concern
+    - Working with sensitive projects that restrict system information sharing
+    - Compliance requirements prevent sharing environmental data
+    - Testing/debugging prompts without environmental variables
+  - Set via `squid.config.json`:
+    ```json
+    {
+      "enable_env_context": false
+    }
+    ```
+  - Or via environment variable: `ENABLE_ENV_CONTEXT=false`
+  - **Note**: Even when enabled, hostname and working directory are excluded by default for privacy
 
 - `permissions`: Tool execution permissions (optional)
   - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
