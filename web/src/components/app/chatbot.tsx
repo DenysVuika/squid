@@ -33,7 +33,6 @@ import {
   ModelSelectorEmpty,
   ModelSelectorGroup,
   ModelSelectorInput,
-  ModelSelectorItem,
   ModelSelectorList,
   ModelSelectorName,
   ModelSelectorTrigger,
@@ -55,20 +54,20 @@ import {
 } from '@/components/ai-elements/prompt-input';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { CheckIcon } from 'lucide-react';
+import { Suggestions } from '@/components/ai-elements/suggestion';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
+import { ModelItem } from './model-item';
+import { SuggestionItem } from './suggestion-item';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
 import { useModelStore } from '@/stores/model-store';
 import { useChatStore } from '@/stores/chat-store';
-import type { ModelInfo } from '@/lib/chat-api';
 
 const suggestions = [
   'What are the latest trends in AI?',
@@ -120,35 +119,6 @@ const PromptInputAttachmentsDisplay = () => {
         <AttachmentItem attachment={attachment} key={attachment.id} onRemove={handleRemove} />
       ))}
     </Attachments>
-  );
-};
-
-const SuggestionItem = ({ suggestion, onClick }: { suggestion: string; onClick: (suggestion: string) => void }) => {
-  const handleClick = useCallback(() => {
-    onClick(suggestion);
-  }, [onClick, suggestion]);
-
-  return <Suggestion onClick={handleClick} suggestion={suggestion} />;
-};
-
-const ModelItem = ({
-  m,
-  isSelected,
-  onSelect,
-}: {
-  m: ModelInfo;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-}) => {
-  const handleSelect = useCallback(() => {
-    onSelect(m.id);
-  }, [onSelect, m.id]);
-
-  return (
-    <ModelSelectorItem onSelect={handleSelect} value={m.id}>
-      <ModelSelectorName>{m.name}</ModelSelectorName>
-      {isSelected ? <CheckIcon className="ml-auto size-4" /> : <div className="ml-auto size-4" />}
-    </ModelSelectorItem>
   );
 };
 

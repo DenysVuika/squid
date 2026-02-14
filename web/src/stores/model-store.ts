@@ -44,6 +44,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
 
   // Load available models from API
   loadModels: async () => {
+    const currentSelectedModel = get().selectedModel;
     set({ isLoading: true });
     try {
       const { models: fetchedModels } = await fetchModels('');
@@ -52,22 +53,29 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         // Extract unique providers and sort them
         const providers = Array.from(new Set(fetchedModels.map((m) => m.provider))).sort();
 
-        // Set default model - prefer Qwen Coder 2.5
-        const defaultModel =
-          fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
-          fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
-          fetchedModels.find((m) => m.provider === 'Qwen') ||
-          fetchedModels[0];
+        // Check if current selection is still valid
+        const isCurrentModelValid = currentSelectedModel && fetchedModels.some((m) => m.id === currentSelectedModel);
+
+        // Set default model only if no valid model is selected
+        const modelToSelect = isCurrentModelValid
+          ? currentSelectedModel
+          : (fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
+             fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
+             fetchedModels.find((m) => m.provider === 'Qwen') ||
+             fetchedModels[0])?.id || '';
 
         set({
           models: fetchedModels,
           modelGroups: providers,
-          selectedModel: defaultModel?.id || '',
+          selectedModel: modelToSelect,
           isLoading: false,
         });
 
-        if (defaultModel) {
-          console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
+        if (modelToSelect && !isCurrentModelValid) {
+          const defaultModel = fetchedModels.find((m) => m.id === modelToSelect);
+          if (defaultModel) {
+            console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
+          }
         }
       } else {
         // No models available - show warning

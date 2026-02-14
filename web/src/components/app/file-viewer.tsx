@@ -1,7 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Loader2, FileIcon, CopyIcon, DownloadIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
+import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import {
   Artifact,
   ArtifactAction,
@@ -15,12 +16,44 @@ import { CodeBlock } from '@/components/ai-elements/code-block';
 import {
   PromptInput,
   PromptInputBody,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
+import {
+  ModelSelector,
+  ModelSelectorContent,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorInput,
+  ModelSelectorList,
+  ModelSelectorName,
+  ModelSelectorTrigger,
+} from '@/components/ai-elements/model-selector';
+import { Suggestions } from '@/components/ai-elements/suggestion';
 import { toast } from 'sonner';
+
+// App components
+import { ModelItem } from './model-item';
+import { SuggestionItem } from './suggestion-item';
+
+// Zustand stores
+import { useSessionStore } from '@/stores/session-store';
+import { useChatStore } from '@/stores/chat-store';
+import { useModelStore } from '@/stores/model-store';
+
+const suggestions = [
+  'Review this file for potential bugs',
+  'Explain what this code does',
+  'Suggest improvements for code quality',
+  'Check for security vulnerabilities',
+  'Analyze the code structure',
+  'Find performance optimization opportunities',
+  'Review coding standards compliance',
+  'Identify potential refactoring areas',
+];
 
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
@@ -74,10 +107,32 @@ const getLanguageFromFilename = (filename: string): BundledLanguage => {
 
 export function FileViewer() {
   const { '*': filePath } = useParams();
+  const navigate = useNavigate();
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState('');
+
+  // Zustand stores
+  const { startNewChat } = useSessionStore();
+  const { clearMessages, addUserMessage, setStatus } = useChatStore();
+  const {
+    models,
+    modelGroups,
+    selectedModel,
+    modelSelectorOpen,
+    setSelectedModel,
+    setModelSelectorOpen,
+    loadModels,
+    resetTokenUsage,
+  } = useModelStore();
+
+  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
+
+  // Fetch available models on mount
+  useEffect(() => {
+    void loadModels();
+  }, [loadModels]);
 
   useEffect(() => {
     const fetchFileContent = async () => {
@@ -119,10 +174,58 @@ export function FileViewer() {
     setPromptText(event.target.value);
   }, []);
 
-  const handlePromptSubmit = useCallback(() => {
-    // Placeholder for future implementation
-    console.log('Prompt submitted:', promptText);
-  }, [promptText]);
+  const handleModelSelect = useCallback(
+    (modelId: string) => {
+      setSelectedModel(modelId);
+    },
+    [setSelectedModel]
+  );
+
+  const handlePromptSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      const hasText = Boolean(message.text);
+
+      if (!hasText || !filePath) {
+        return;
+      }
+
+      // Create a file attachment with the current file
+      const fileAttachment = {
+        id: `file-${Date.now()}`,
+        type: 'file' as const,
+        url: `/api/workspace/files/${encodeURIComponent(filePath)}`,
+        filename: fileName,
+        mediaType: 'text/plain',
+        size: content.length,
+      };
+
+      // Start a new chat session
+      startNewChat();
+      clearMessages();
+      resetTokenUsage();
+
+      // Navigate to the chat page
+      navigate('/');
+
+      // Small delay to ensure navigation completes and chat component is mounted
+      setTimeout(() => {
+        // Set status and add the message with file attachment
+        setStatus('submitted');
+        toast.success('File attached', {
+          description: `${fileName} attached to message`,
+        });
+        addUserMessage(message.text, [fileAttachment]);
+      }, 100);
+    },
+    [filePath, fileName, content, startNewChat, clearMessages, resetTokenUsage, navigate, setStatus, addUserMessage]
+  );
+
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      handlePromptSubmit({ text: suggestion, files: [] });
+    },
+    [handlePromptSubmit]
+  );
 
   const handleCopy = useCallback(async () => {
     try {
@@ -205,8 +308,13 @@ export function FileViewer() {
         )}
       </div>
 
-      {/* Prompt Input Area - Placeholder */}
-      <div className="grid shrink-0 border-t pt-4">
+      {/* Prompt Input Area */}
+      <div className="grid shrink-0 gap-4 border-t pt-4">
+        <Suggestions className="px-4">
+          {suggestions.map((suggestion) => (
+            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+          ))}
+        </Suggestions>
         <div className="w-full px-4 pb-4">
           <PromptInput
             onSubmit={handlePromptSubmit}
@@ -215,13 +323,36 @@ export function FileViewer() {
               <PromptInputTextarea
                 onChange={handlePromptChange}
                 value={promptText}
-                placeholder="Ask about this file... (coming soon)"
-                disabled
+                placeholder="Ask about this file..."
               />
             </PromptInputBody>
             <PromptInputFooter>
-              <PromptInputTools />
-              <PromptInputSubmit disabled status={undefined} />
+              <PromptInputTools>
+                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
+                    <PromptInputButton>
+                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                    </PromptInputButton>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
+                    <ModelSelectorInput placeholder="Search models..." />
+                    <ModelSelectorList>
+                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                      {modelGroups.map((provider) => (
+                        <ModelSelectorGroup heading={provider} key={provider}>
+                          {models
+                            .filter((m) => m.provider === provider)
+                            .map((m) => (
+                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                            ))}
+                        </ModelSelectorGroup>
+                      ))}
+                    </ModelSelectorList>
+                  </ModelSelectorContent>
+                </ModelSelector>
+              </PromptInputTools>
+              <PromptInputSubmit disabled={!promptText.trim()} status={undefined} />
             </PromptInputFooter>
           </PromptInput>
         </div>
