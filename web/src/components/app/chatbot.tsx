@@ -63,9 +63,8 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
-import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { CheckIcon, GlobeIcon, FileIcon } from 'lucide-react';
+import { CheckIcon, FileIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -177,12 +176,10 @@ const Example = () => {
     status,
     streamingMessageId,
     isReasoningStreaming,
-    useWebSearch,
     addUserMessage,
     setStatus,
     stopStreaming,
     loadSessionHistory,
-    toggleWebSearch,
   } = useChatStore();
 
   // Local UI state
@@ -249,10 +246,6 @@ const Example = () => {
     },
     [addUserMessage, setStatus]
   );
-
-  const handleTranscriptionChange = useCallback((transcript: string) => {
-    setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  }, []);
 
   const handleTextChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(event.target.value);
@@ -482,16 +475,16 @@ const Example = () => {
                     <PromptInputActionAddAttachments />
                   </PromptInputActionMenuContent>
                 </PromptInputActionMenu>
-                <SpeechInput
+                {/* <SpeechInput
                   className="shrink-0"
                   onTranscriptionChange={handleTranscriptionChange}
                   size="icon-sm"
                   variant="ghost"
-                />
-                <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
+                /> */}
+                {/* <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
                   <GlobeIcon size={16} />
                   <span>Search</span>
-                </PromptInputButton>
+                </PromptInputButton> */}
                 <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>
