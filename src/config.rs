@@ -66,6 +66,8 @@ pub struct Config {
     pub version: Option<String>,
     #[serde(default = "default_database_path")]
     pub database_path: String,
+    #[serde(default = "default_enable_env_context")]
+    pub enable_env_context: bool,
 }
 
 fn default_context_window() -> u32 {
@@ -82,6 +84,10 @@ fn default_database_path() -> String {
     "squid.db".to_string()
 }
 
+fn default_enable_env_context() -> bool {
+    true
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -93,6 +99,7 @@ impl Default for Config {
             permissions: Permissions::default(),
             version: None,
             database_path: default_database_path(),
+            enable_env_context: default_enable_env_context(),
         }
     }
 }
@@ -164,6 +171,10 @@ impl Config {
             permissions: Permissions::default(),
             version: None,
             database_path: db_path,
+            enable_env_context: std::env::var("ENABLE_ENV_CONTEXT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(default_enable_env_context),
         }
     }
 
@@ -375,6 +386,7 @@ mod tests {
         assert_eq!(config.permissions.deny.len(), 0);
         assert_eq!(config.version, None);
         assert_eq!(config.database_path, "squid.db");
+        assert_eq!(config.enable_env_context, true);
     }
 
     #[test]
