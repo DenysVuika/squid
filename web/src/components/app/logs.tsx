@@ -112,11 +112,11 @@ export default function Logs() {
   };
 
   return (
-    <div className="flex h-screen w-screen flex-col p-6 gap-6 bg-gray-50">
+    <div className="flex flex-1 flex-col gap-4 p-4 pt-0 overflow-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Application Logs</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold">Application Logs</h1>
+          <p className="text-muted-foreground text-sm mt-1">
             {total > 0 ? `Showing ${total} log ${total === 1 ? 'entry' : 'entries'}` : 'No logs found'}
           </p>
         </div>
@@ -127,9 +127,7 @@ export default function Logs() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Log Entries</CardTitle>
-              <CardDescription>
-                View and filter application logs with pagination
-              </CardDescription>
+              <CardDescription>View and filter application logs with pagination</CardDescription>
             </div>
             <div className="flex gap-4 items-center">
               <div className="flex items-center gap-2">
@@ -178,9 +176,7 @@ export default function Logs() {
               </Button>
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              No logs found with the current filters
-            </div>
+            <div className="text-center py-12 text-gray-500">No logs found with the current filters</div>
           ) : (
             <>
               <div className="rounded-md border">
@@ -197,17 +193,11 @@ export default function Logs() {
                   <TableBody>
                     {logs.map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="font-mono text-xs">
-                          {formatTimestamp(log.timestamp)}
-                        </TableCell>
+                        <TableCell className="font-mono text-xs">{formatTimestamp(log.timestamp)}</TableCell>
                         <TableCell>
-                          <Badge variant={getLevelBadgeVariant(log.level)}>
-                            {log.level.toUpperCase()}
-                          </Badge>
+                          <Badge variant={getLevelBadgeVariant(log.level)}>{log.level.toUpperCase()}</Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-gray-600">
-                          {log.target}
-                        </TableCell>
+                        <TableCell className="font-mono text-xs text-gray-600">{log.target}</TableCell>
                         <TableCell className="max-w-md truncate" title={log.message}>
                           {log.message}
                         </TableCell>
@@ -231,18 +221,10 @@ export default function Logs() {
                   Page {page} of {totalPages} ({total} total {total === 1 ? 'entry' : 'entries'})
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handlePreviousPage}
-                    disabled={page === 1}
-                  >
+                  <Button variant="outline" onClick={handlePreviousPage} disabled={page === 1}>
                     Previous
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleNextPage}
-                    disabled={page >= totalPages}
-                  >
+                  <Button variant="outline" onClick={handleNextPage} disabled={page >= totalPages}>
                     Next
                   </Button>
                 </div>

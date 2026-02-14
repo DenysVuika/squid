@@ -1,8 +1,6 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import type { FileUIPart, ToolUIPart } from 'ai';
+import type { FileUIPart } from 'ai';
 
-import { fetchModels, loadSession, streamChat, type ModelInfo } from '@/lib/chat-api';
-import { SessionList } from '@/components/app/session-list';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import {
@@ -65,36 +63,17 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
-import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { CheckIcon, GlobeIcon, FileIcon } from 'lucide-react';
+import { CheckIcon, FileIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-interface MessageType {
-  key: string;
-  from: 'user' | 'assistant';
-  sources?: { href: string; title: string; content: string }[];
-  versions: {
-    id: string;
-    content: string;
-  }[];
-  reasoning?: {
-    content: string;
-    duration?: number;
-  };
-  tools?: {
-    name: string;
-    description: string;
-    status: ToolUIPart['state'];
-    parameters: Record<string, unknown>;
-    result: string | undefined;
-    error: string | undefined;
-  }[];
-}
-
-const initialMessages: MessageType[] = [];
+// Zustand stores
+import { useSessionStore } from '@/stores/session-store';
+import { useModelStore } from '@/stores/model-store';
+import { useChatStore } from '@/stores/chat-store';
+import type { ModelInfo } from '@/lib/chat-api';
 
 const suggestions = [
   'What are the latest trends in AI?',
@@ -179,420 +158,63 @@ const ModelItem = ({
 };
 
 const Example = () => {
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelGroups, setModelGroups] = useState<string[]>([]);
-  const [model, setModel] = useState<string>('');
-  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+  // Zustand stores
+  const { activeSessionId } = useSessionStore();
+  const {
+    models,
+    modelGroups,
+    selectedModel,
+    tokenUsage,
+    modelSelectorOpen,
+    setSelectedModel,
+    setModelSelectorOpen,
+    loadModels,
+    getModelForPricing,
+  } = useModelStore();
+  const {
+    messages,
+    status,
+    streamingMessageId,
+    isReasoningStreaming,
+    addUserMessage,
+    setStatus,
+    stopStreaming,
+    loadSessionHistory,
+  } = useChatStore();
+
+  // Local UI state
   const [text, setText] = useState<string>('');
-  const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
-  const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
-  const [messages, setMessages] = useState<MessageType[]>(initialMessages);
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    // Load session ID from localStorage on mount
-    return localStorage.getItem('squid_session_id');
-  });
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const streamingContentRef = useRef<string>('');
-  const streamingReasoningRef = useRef<string>('');
-  const [isReasoningStreaming, setIsReasoningStreaming] = useState<boolean>(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const sessionLoadedRef = useRef<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0);
   const [sourceContentOpen, setSourceContentOpen] = useState(false);
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
-  // Token usage tracking
-  const [tokenUsage, setTokenUsage] = useState({
-    total_tokens: 0,
-    input_tokens: 0,
-    output_tokens: 0,
-    reasoning_tokens: 0,
-    cache_tokens: 0,
-    context_window: 0,
-    context_utilization: 0,
-  });
-  const [sessionModelId, setSessionModelId] = useState<string | null>(null);
-
-  const selectedModelData = useMemo(() => models.find((m) => m.id === model), [model, models]);
-
-  // Get pricing model from backend metadata or fallback to model ID
-  const getModelIdForPricing = useMemo(() => {
-    const currentModelId = sessionModelId || model;
-
-    // If model ID is empty, return default
-    if (!currentModelId) {
-      return 'gpt-4o';
-    }
-
-    // Find the model in the models list
-    const modelData = models.find((m) => m.id === currentModelId);
-
-    // Use pricing_model from backend if available, otherwise use the model ID itself
-    return modelData?.pricing_model || currentModelId;
-  }, [sessionModelId, model, models]);
-
-  // Load session history on mount if sessionId exists
-  const loadSessionHistory = useCallback(
-    async (targetSessionId: string) => {
-      const session = await loadSession('', targetSessionId);
-      if (!session) {
-        localStorage.removeItem('squid_session_id');
-        setSessionId(null);
-        return;
-      }
-
-      // Convert session messages to UI format
-      const uiMessages: MessageType[] = [];
-      for (const msg of session.messages) {
-        uiMessages.push({
-          from: msg.role as 'user' | 'assistant',
-          key: `${msg.role}-${msg.timestamp}`,
-          sources:
-            msg.sources.length > 0
-              ? msg.sources.map((s) => ({
-                  href: '#',
-                  title: s.title,
-                  content: s.content,
-                }))
-              : undefined,
-          versions: [
-            {
-              id: `${msg.role}-${msg.timestamp}-v1`,
-              content: msg.content,
-            },
-          ],
-          reasoning: msg.reasoning
-            ? {
-                content: msg.reasoning,
-                duration: undefined,
-              }
-            : undefined,
-        });
-      }
-
-      console.log(`[Session] Loaded ${uiMessages.length} messages`);
-      setMessages(uiMessages);
-
-      // Load token usage from session
-      setTokenUsage(session.token_usage);
-      setSessionModelId(session.model_id);
-
-      // Update model selector if session has a model_id
-      if (session.model_id && models.length > 0) {
-        // Try exact match first
-        let matchedModel = models.find((m) => m.id === session.model_id);
-
-        // If no exact match, try fuzzy matching
-        if (!matchedModel) {
-          const sessionModelLower = session.model_id.toLowerCase();
-          matchedModel = models.find(
-            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
-          );
-        }
-
-        if (matchedModel) {
-          setModel(matchedModel.id);
-        }
-      }
-    },
-    [models]
-  );
+  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
 
   // Fetch available models on mount
   useEffect(() => {
-    const loadModels = async () => {
-      const { models: fetchedModels } = await fetchModels('');
+    void loadModels();
+  }, [loadModels]);
 
-      if (fetchedModels.length > 0) {
-        setModels(fetchedModels);
+  // Track previous activeSessionId to detect actual changes
+  const prevActiveSessionIdRef = useRef<string | null>(null);
 
-        // Extract unique providers and sort them
-        const providers = Array.from(new Set(fetchedModels.map((m) => m.provider))).sort();
-        setModelGroups(providers);
-
-        // Set default model - prefer Qwen Coder 2.5
-        const defaultModel =
-          fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
-          fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
-          fetchedModels.find((m) => m.provider === 'Qwen') ||
-          fetchedModels[0];
-
-        if (defaultModel) {
-          setModel(defaultModel.id);
-          console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
-        }
-      }
-    };
-
-    loadModels();
-  }, []);
-
-  // Update context window when model changes
+  // Load session when activeSessionId changes to a different value
   useEffect(() => {
-    if (model && models.length > 0) {
-      const selectedModel = models.find((m) => m.id === model);
-      if (selectedModel) {
-        setTokenUsage((prev) => ({
-          ...prev,
-          context_window: selectedModel.max_context_length,
-        }));
-      }
+    const prevId = prevActiveSessionIdRef.current;
+    
+    // Update ref for next comparison
+    prevActiveSessionIdRef.current = activeSessionId;
+    
+    // Don't load if:
+    // 1. No session ID
+    // 2. Same as previous (no actual change)
+    // 3. Currently streaming (new session being created)
+    if (!activeSessionId || activeSessionId === prevId || status === 'streaming' || status === 'submitted') {
+      return;
     }
-  }, [model, models]);
-
-  useEffect(() => {
-    if (!sessionId || sessionLoadedRef.current) return;
-    sessionLoadedRef.current = true;
-
-    loadSessionHistory(sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
-
-  const updateMessageContent = useCallback((messageId: string, newContent: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => {
-        if (msg.versions.some((v) => v.id === messageId)) {
-          return {
-            ...msg,
-            versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: newContent } : v)),
-          };
-        }
-        return msg;
-      })
-    );
-  }, []);
-
-  const streamResponse = useCallback(
-    async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
-
-      setStatus('streaming');
-      setStreamingMessageId(messageId);
-      streamingContentRef.current = ''; // Reset streaming content
-      streamingReasoningRef.current = ''; // Reset streaming reasoning
-      setIsReasoningStreaming(false);
-
-      try {
-        // Read file contents if files are attached
-        const fileAttachments = [];
-        if (files && files.length > 0) {
-          for (const file of files) {
-            if (file.type === 'file' && file.url) {
-              const fileName = 'filename' in file ? String(file.filename) : 'attachment';
-              try {
-                const response = await fetch(file.url);
-                if (response.ok) {
-                  const content = await response.text();
-                  fileAttachments.push({
-                    filename: fileName,
-                    content,
-                  });
-                } else {
-                  console.error('Failed to fetch file:', response.statusText);
-                  toast.error('Failed to read file', {
-                    description: `Could not read ${fileName}`,
-                  });
-                }
-              } catch (e) {
-                console.error('Failed to read file:', e);
-                toast.error('Failed to read file', {
-                  description: e instanceof Error ? e.message : String(e),
-                });
-              }
-            }
-          }
-        }
-
-        // Use relative path since web UI is served from the same server
-        await streamChat(
-          '',
-          {
-            message: userMessage,
-            session_id: sessionId || undefined,
-            files: fileAttachments,
-            model: model || undefined,
-          },
-          {
-            signal: abortControllerRef.current?.signal,
-            onSession: (newSessionId) => {
-              setSessionId(newSessionId);
-              // Persist session ID to localStorage
-              localStorage.setItem('squid_session_id', newSessionId);
-              // Trigger session list refresh
-              setSessionListRefreshTrigger((prev) => prev + 1);
-            },
-            onSources: (sources) => {
-              // Update the assistant message with sources
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  if (msg.versions.some((v) => v.id === messageId)) {
-                    return {
-                      ...msg,
-                      sources: sources.map((s) => ({
-                        href: '#',
-                        title: s.title,
-                        content: s.content,
-                      })),
-                    };
-                  }
-                  return msg;
-                })
-              );
-            },
-            onContent: (text) => {
-              // Accumulate content in ref for better performance
-              streamingContentRef.current += text;
-              const fullContent = streamingContentRef.current;
-
-              // Parse out <think> tags
-              let displayContent = fullContent;
-              let reasoningContent = '';
-              let reasoningComplete = false;
-
-              const thinkStart = fullContent.indexOf('<think>');
-              const thinkEnd = fullContent.indexOf('</think>');
-
-              if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
-                // Extract reasoning between tags
-                reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
-                // Remove the entire <think>...</think> section from display content
-                displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
-                reasoningComplete = true;
-              } else if (thinkStart !== -1) {
-                // Opening tag found but no closing tag yet
-                reasoningContent = fullContent.substring(thinkStart + 7);
-                displayContent = fullContent.substring(0, thinkStart);
-              }
-
-              // Control reasoning streaming state
-              if (reasoningContent && !isReasoningStreaming) {
-                // Start reasoning
-                setIsReasoningStreaming(true);
-              } else if (reasoningComplete && isReasoningStreaming) {
-                // Stop reasoning when closing tag is found
-                setIsReasoningStreaming(false);
-              }
-
-              setMessages((prev) => {
-                const updated = prev.map((msg) => {
-                  const hasVersion = msg.versions.some((v) => v.id === messageId);
-                  if (hasVersion) {
-                    return {
-                      ...msg,
-                      versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
-                      reasoning: reasoningContent
-                        ? {
-                            content: reasoningContent,
-                          }
-                        : msg.reasoning,
-                    };
-                  }
-                  return msg;
-                });
-                return updated;
-              });
-            },
-            onUsage: (usage) => {
-              // Update token usage
-              setTokenUsage((prev) => ({
-                total_tokens:
-                  prev.total_tokens +
-                  usage.input_tokens +
-                  usage.output_tokens +
-                  usage.reasoning_tokens +
-                  usage.cache_tokens,
-                input_tokens: prev.input_tokens + usage.input_tokens,
-                output_tokens: prev.output_tokens + usage.output_tokens,
-                reasoning_tokens: prev.reasoning_tokens + usage.reasoning_tokens,
-                cache_tokens: prev.cache_tokens + usage.cache_tokens,
-                context_window: prev.context_window,
-                context_utilization: prev.context_utilization,
-              }));
-            },
-            onError: (error) => {
-              console.error('Stream error:', error);
-              updateMessageContent(messageId, `Error: ${error}`);
-              toast.error('Failed to get response', {
-                description: error,
-              });
-              setStatus('ready');
-              setStreamingMessageId(null);
-            },
-            onDone: async () => {
-              streamingContentRef.current = ''; // Clear ref after streaming
-              streamingReasoningRef.current = ''; // Clear reasoning ref
-              setIsReasoningStreaming(false);
-              abortControllerRef.current = null;
-              setStatus('ready');
-              setStreamingMessageId(null);
-
-              // Reload session to get updated context_window and token usage from backend
-              if (sessionId) {
-                try {
-                  await loadSessionHistory(sessionId);
-                } catch (error) {
-                  console.error('Failed to reload session after streaming:', error);
-                }
-              }
-            },
-          }
-        );
-      } catch (error) {
-        // Don't show error if it was aborted by user
-        if (error instanceof Error && error.name === 'AbortError') {
-          updateMessageContent(messageId, streamingContentRef.current || 'Response stopped by user.');
-        } else {
-          console.error('Chat error:', error);
-          updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
-          toast.error('Failed to send message', {
-            description: error instanceof Error ? error.message : String(error),
-          });
-        }
-        abortControllerRef.current = null;
-        setStatus('ready');
-        setStreamingMessageId(null);
-      }
-    },
-    [updateMessageContent, sessionId, loadSessionHistory, model]
-  );
-
-  const addUserMessage = useCallback(
-    (content: string, files?: FileUIPart[]) => {
-      const userMessage: MessageType = {
-        from: 'user',
-        key: `user-${Date.now()}`,
-        versions: [
-          {
-            content,
-            id: `user-${Date.now()}`,
-          },
-        ],
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-
-      setTimeout(() => {
-        const assistantMessageId = `assistant-${Date.now()}`;
-
-        const assistantMessage: MessageType = {
-          from: 'assistant',
-          key: `assistant-${Date.now()}`,
-          versions: [
-            {
-              content: '',
-              id: assistantMessageId,
-            },
-          ],
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        streamResponse(assistantMessageId, content, files);
-      }, 500);
-    },
-    [streamResponse]
-  );
+    
+    // Load session history
+    void loadSessionHistory(activeSessionId);
+  }, [activeSessionId, status, loadSessionHistory]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -614,7 +236,7 @@ const Example = () => {
       addUserMessage(message.text || 'Sent with attachments', message.files);
       setText('');
     },
-    [addUserMessage]
+    [addUserMessage, setStatus]
   );
 
   const handleSuggestionClick = useCallback(
@@ -622,34 +244,20 @@ const Example = () => {
       setStatus('submitted');
       addUserMessage(suggestion);
     },
-    [addUserMessage]
+    [addUserMessage, setStatus]
   );
-
-  const handleTranscriptionChange = useCallback((transcript: string) => {
-    setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  }, []);
 
   const handleTextChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(event.target.value);
   }, []);
 
-  const toggleWebSearch = useCallback(() => {
-    setUseWebSearch((prev) => !prev);
-  }, []);
-
   const handleModelSelect = useCallback((modelId: string) => {
-    setModel(modelId);
-    setModelSelectorOpen(false);
-  }, []);
+    setSelectedModel(modelId);
+  }, [setSelectedModel]);
 
   const handleStop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setStatus('ready');
-      setStreamingMessageId(null);
-    }
-  }, []);
+    stopStreaming();
+  }, [stopStreaming]);
 
   const handleFileUploadError = useCallback((error: { code: string; message: string }) => {
     if (error.code === 'max_file_size') {
@@ -662,115 +270,6 @@ const Example = () => {
       });
     }
   }, []);
-
-  const handleNewChat = useCallback(() => {
-    // Clear session ID from state and localStorage
-    setSessionId(null);
-    localStorage.removeItem('squid_session_id');
-
-    // Reset loaded flag
-    sessionLoadedRef.current = false;
-
-    // Reset messages to empty (clear the chat)
-    setMessages([]);
-
-    // Clear input
-    setText('');
-
-    // Reset status
-    setStatus('ready');
-
-    // Reset token usage
-    setTokenUsage({
-      total_tokens: 0,
-      input_tokens: 0,
-      output_tokens: 0,
-      reasoning_tokens: 0,
-      cache_tokens: 0,
-      context_window: 0,
-      context_utilization: 0,
-    });
-    setSessionModelId(null);
-
-    toast.success('New chat started');
-  }, []);
-
-  const handleSessionSelect = useCallback(
-    async (selectedSessionId: string) => {
-      // Don't reload if already on this session
-      if (selectedSessionId === sessionId) return;
-
-      console.log('[Session] Selecting session:', selectedSessionId);
-      const session = await loadSession('', selectedSessionId);
-
-      if (!session) {
-        toast.error('Session not found');
-        return;
-      }
-
-      // Update session ID
-      setSessionId(selectedSessionId);
-      localStorage.setItem('squid_session_id', selectedSessionId);
-
-      // Convert session messages to UI format
-      const uiMessages: MessageType[] = [];
-      for (const msg of session.messages) {
-        uiMessages.push({
-          from: msg.role as 'user' | 'assistant',
-          key: `${msg.role}-${msg.timestamp}`,
-          sources:
-            msg.sources.length > 0
-              ? msg.sources.map((s) => ({
-                  href: '#',
-                  title: s.title,
-                  content: s.content,
-                }))
-              : undefined,
-          versions: [
-            {
-              id: `${msg.role}-${msg.timestamp}-v1`,
-              content: msg.content,
-            },
-          ],
-          reasoning: msg.reasoning
-            ? {
-                content: msg.reasoning,
-                duration: undefined,
-              }
-            : undefined,
-        });
-      }
-
-      console.log(`[Session] Switched to session with ${uiMessages.length} messages`);
-      setMessages(uiMessages);
-      setText('');
-      setStatus('ready');
-
-      // Load token usage from session
-      setTokenUsage(session.token_usage);
-      setSessionModelId(session.model_id);
-
-      // Update model selector if session has a model_id
-      if (session.model_id && models.length > 0) {
-        // Try exact match first
-        let matchedModel = models.find((m) => m.id === session.model_id);
-
-        // If no exact match, try fuzzy matching
-        if (!matchedModel) {
-          const sessionModelLower = session.model_id.toLowerCase();
-          matchedModel = models.find(
-            (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
-          );
-        }
-
-        if (matchedModel) {
-          setModel(matchedModel.id);
-        }
-      }
-      toast.success('Session loaded');
-    },
-    [sessionId, models]
-  );
 
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
 
@@ -830,221 +329,189 @@ const Example = () => {
   }, []);
 
   return (
-    <div className="relative flex size-full overflow-hidden">
-      {sidebarOpen && (
-        <div className="flex h-full w-64 shrink-0">
-          <SessionList
-            currentSessionId={sessionId}
-            onSessionSelect={handleSessionSelect}
-            onNewChat={handleNewChat}
-            refreshTrigger={sessionListRefreshTrigger}
-            apiUrl=""
-          />
-        </div>
-      )}
-      <div className="relative flex size-full flex-col divide-y overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 dark:bg-gray-950">
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              type="button"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h2 className="text-sm font-semibold">Squid Chat</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <Context
-              maxTokens={tokenUsage.context_window || 128000}
-              modelId={getModelIdForPricing}
-              usage={{
-                inputTokens: tokenUsage.input_tokens,
-                outputTokens: tokenUsage.output_tokens,
-                totalTokens: tokenUsage.total_tokens,
-                inputTokenDetails: {
-                  noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
-                  cacheReadTokens: tokenUsage.cache_tokens,
-                  cacheWriteTokens: undefined,
-                },
-                outputTokenDetails: {
-                  textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
-                  reasoningTokens: tokenUsage.reasoning_tokens,
-                },
-              }}
-              usedTokens={tokenUsage.total_tokens}
-            >
-              <ContextTrigger />
-              <ContextContent>
-                <ContextContentHeader />
-                <ContextContentBody>
-                  <div className="space-y-2">
-                    <ContextInputUsage />
-                    <ContextOutputUsage />
-                    <ContextReasoningUsage />
-                    <ContextCacheUsage />
-                  </div>
-                </ContextContentBody>
-                <ContextContentFooter />
-              </ContextContent>
-            </Context>
-            <button
-              className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-              onClick={handleNewChat}
-              type="button"
-            >
-              New Chat
-            </button>
-          </div>
-        </div>
+    <div className="relative flex flex-1 w-full flex-col overflow-hidden rounded-xl border bg-background min-h-0">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
+        <Context
+          maxTokens={tokenUsage.context_window || 128000}
+          modelId={getModelForPricing()}
+          usage={{
+            inputTokens: tokenUsage.input_tokens,
+            outputTokens: tokenUsage.output_tokens,
+            totalTokens: tokenUsage.total_tokens,
+            inputTokenDetails: {
+              noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
+              cacheReadTokens: tokenUsage.cache_tokens,
+              cacheWriteTokens: undefined,
+            },
+            outputTokenDetails: {
+              textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
+              reasoningTokens: tokenUsage.reasoning_tokens,
+            },
+          }}
+          usedTokens={tokenUsage.total_tokens}
+        >
+          <ContextTrigger />
+          <ContextContent>
+            <ContextContentHeader />
+            <ContextContentBody>
+              <div className="space-y-2">
+                <ContextInputUsage />
+                <ContextOutputUsage />
+                <ContextReasoningUsage />
+                <ContextCacheUsage />
+              </div>
+            </ContextContentBody>
+            <ContextContentFooter />
+          </ContextContent>
+        </Context>
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <Conversation>
           <ConversationContent>
-            {messages.map(({ versions, ...message }) => (
-              <MessageBranch defaultBranch={0} key={message.key}>
-                <MessageBranchContent>
-                  {versions.map((version) => (
-                    <Message from={message.from} key={`${message.key}-${version.id}`}>
-                      <div>
-                        {message.from === 'assistant' && message.sources?.length && (
-                          <Sources>
-                            <SourcesTrigger count={message.sources.length} />
-                            <SourcesContent>
-                              {message.sources.map((source) => (
-                                <button
-                                  key={source.href}
-                                  className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
-                                  onClick={() => handleViewSourceContent(source.title, source.content)}
-                                  type="button"
+          {messages.map(({ versions, ...message }) => (
+            <MessageBranch defaultBranch={0} key={message.key}>
+              <MessageBranchContent>
+                {versions.map((version) => (
+                  <Message from={message.from} key={`${message.key}-${version.id}`}>
+                    <div>
+                      {message.from === 'assistant' && message.sources?.length && (
+                        <Sources>
+                          <SourcesTrigger count={message.sources.length} />
+                          <SourcesContent>
+                            {message.sources.map((source) => (
+                              <button
+                                key={source.href}
+                                className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
+                                onClick={() => handleViewSourceContent(source.title, source.content)}
+                                type="button"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  xmlns="http://www.w3.org/2000/svg"
                                 >
-                                  <svg
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                    />
-                                  </svg>
-                                  <span className="block font-medium">{source.title}</span>
-                                </button>
-                              ))}
-                            </SourcesContent>
-                          </Sources>
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                                  />
+                                </svg>
+                                <span className="block font-medium">{source.title}</span>
+                              </button>
+                            ))}
+                          </SourcesContent>
+                        </Sources>
+                      )}
+                      {message.reasoning && (
+                        <Reasoning
+                          duration={
+                            status === 'streaming' && streamingMessageId === version.id
+                              ? undefined
+                              : message.reasoning.duration
+                          }
+                          isStreaming={
+                            isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
+                          }
+                        >
+                          <ReasoningTrigger />
+                          <ReasoningContent>{message.reasoning.content}</ReasoningContent>
+                        </Reasoning>
+                      )}
+                      <MessageContent>
+                        {message.from === 'assistant' &&
+                        !version.content &&
+                        status === 'streaming' &&
+                        !message.reasoning ? (
+                          <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                        ) : (
+                          <MessageResponse>{version.content}</MessageResponse>
                         )}
-                        {message.reasoning && (
-                          <Reasoning
-                            duration={
-                              status === 'streaming' && streamingMessageId === version.id
-                                ? undefined
-                                : message.reasoning.duration
-                            }
-                            isStreaming={
-                              isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
-                            }
-                          >
-                            <ReasoningTrigger />
-                            <ReasoningContent>{message.reasoning.content}</ReasoningContent>
-                          </Reasoning>
-                        )}
-                        <MessageContent>
-                          {message.from === 'assistant' &&
-                          !version.content &&
-                          status === 'streaming' &&
-                          !message.reasoning ? (
-                            <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
-                          ) : (
-                            <MessageResponse>{version.content}</MessageResponse>
-                          )}
-                        </MessageContent>
-                      </div>
-                    </Message>
-                  ))}
-                </MessageBranchContent>
-                {versions.length > 1 && (
-                  <MessageBranchSelector>
-                    <MessageBranchPrevious />
-                    <MessageBranchPage />
-                    <MessageBranchNext />
-                  </MessageBranchSelector>
-                )}
-              </MessageBranch>
-            ))}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
-        <div className="grid shrink-0 gap-4 pt-4">
-          <Suggestions className="px-4">
-            {suggestions.map((suggestion) => (
-              <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
-            ))}
-          </Suggestions>
-          <div className="w-full px-4 pb-4">
-            <PromptInput
-              globalDrop
-              multiple
-              maxFileSize={10 * 1024 * 1024}
-              onError={handleFileUploadError}
-              onSubmit={handleSubmit}
-            >
-              <PromptInputHeader>
-                <PromptInputAttachmentsDisplay />
-              </PromptInputHeader>
-              <PromptInputBody>
-                <PromptInputTextarea onChange={handleTextChange} value={text} />
-              </PromptInputBody>
-              <PromptInputFooter>
-                <PromptInputTools>
-                  <PromptInputActionMenu>
-                    <PromptInputActionMenuTrigger />
-                    <PromptInputActionMenuContent>
-                      <PromptInputActionAddAttachments />
-                    </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
-                  <SpeechInput
-                    className="shrink-0"
-                    onTranscriptionChange={handleTranscriptionChange}
-                    size="icon-sm"
-                    variant="ghost"
-                  />
-                  <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
-                    <GlobeIcon size={16} />
-                    <span>Search</span>
-                  </PromptInputButton>
-                  <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                    <ModelSelectorTrigger asChild>
-                      <PromptInputButton>
-                        {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
-                        {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
-                      </PromptInputButton>
-                    </ModelSelectorTrigger>
-                    <ModelSelectorContent>
-                      <ModelSelectorInput placeholder="Search models..." />
-                      <ModelSelectorList>
-                        <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                        {modelGroups.map((provider) => (
-                          <ModelSelectorGroup heading={provider} key={provider}>
-                            {models
-                              .filter((m) => m.provider === provider)
-                              .map((m) => (
-                                <ModelItem isSelected={model === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
-                              ))}
-                          </ModelSelectorGroup>
-                        ))}
-                      </ModelSelectorList>
-                    </ModelSelectorContent>
-                  </ModelSelector>
-                </PromptInputTools>
-                <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
-              </PromptInputFooter>
-            </PromptInput>
-          </div>
+                      </MessageContent>
+                    </div>
+                  </Message>
+                ))}
+              </MessageBranchContent>
+              {versions.length > 1 && (
+                <MessageBranchSelector>
+                  <MessageBranchPrevious />
+                  <MessageBranchPage />
+                  <MessageBranchNext />
+                </MessageBranchSelector>
+              )}
+            </MessageBranch>
+          ))}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+      </div>
+      <div className="grid shrink-0 gap-4 border-t pt-4">
+        <Suggestions className="px-4">
+          {suggestions.map((suggestion) => (
+            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+          ))}
+        </Suggestions>
+        <div className="w-full px-4 pb-4">
+          <PromptInput
+            globalDrop
+            multiple
+            maxFileSize={10 * 1024 * 1024}
+            onError={handleFileUploadError}
+            onSubmit={handleSubmit}
+          >
+            <PromptInputHeader>
+              <PromptInputAttachmentsDisplay />
+            </PromptInputHeader>
+            <PromptInputBody>
+              <PromptInputTextarea onChange={handleTextChange} value={text} />
+            </PromptInputBody>
+            <PromptInputFooter>
+              <PromptInputTools>
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
+                {/* <SpeechInput
+                  className="shrink-0"
+                  onTranscriptionChange={handleTranscriptionChange}
+                  size="icon-sm"
+                  variant="ghost"
+                /> */}
+                {/* <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
+                  <GlobeIcon size={16} />
+                  <span>Search</span>
+                </PromptInputButton> */}
+                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
+                    <PromptInputButton>
+                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
+                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                    </PromptInputButton>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
+                    <ModelSelectorInput placeholder="Search models..." />
+                    <ModelSelectorList>
+                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                      {modelGroups.map((provider) => (
+                        <ModelSelectorGroup heading={provider} key={provider}>
+                          {models
+                            .filter((m) => m.provider === provider)
+                            .map((m) => (
+                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                            ))}
+                        </ModelSelectorGroup>
+                      ))}
+                    </ModelSelectorList>
+                  </ModelSelectorContent>
+                </ModelSelector>
+              </PromptInputTools>
+              <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
+            </PromptInputFooter>
+          </PromptInput>
         </div>
       </div>
 
