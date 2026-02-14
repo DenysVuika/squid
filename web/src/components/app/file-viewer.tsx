@@ -1,7 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Loader2, FileIcon, CopyIcon, DownloadIcon } from 'lucide-react';
 import type { BundledLanguage } from 'shiki';
+import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import {
   Artifact,
   ArtifactAction,
@@ -21,6 +22,11 @@ import {
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 import { toast } from 'sonner';
+
+// Zustand stores
+import { useSessionStore } from '@/stores/session-store';
+import { useChatStore } from '@/stores/chat-store';
+import { useModelStore } from '@/stores/model-store';
 
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
@@ -74,10 +80,16 @@ const getLanguageFromFilename = (filename: string): BundledLanguage => {
 
 export function FileViewer() {
   const { '*': filePath } = useParams();
+  const navigate = useNavigate();
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState('');
+
+  // Zustand stores
+  const { startNewChat } = useSessionStore();
+  const { clearMessages, addUserMessage, setStatus } = useChatStore();
+  const { resetTokenUsage } = useModelStore();
 
   useEffect(() => {
     const fetchFileContent = async () => {
@@ -119,10 +131,44 @@ export function FileViewer() {
     setPromptText(event.target.value);
   }, []);
 
-  const handlePromptSubmit = useCallback(() => {
-    // Placeholder for future implementation
-    console.log('Prompt submitted:', promptText);
-  }, [promptText]);
+  const handlePromptSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      const hasText = Boolean(message.text);
+
+      if (!hasText || !filePath) {
+        return;
+      }
+
+      // Create a file attachment with the current file
+      const fileAttachment = {
+        id: `file-${Date.now()}`,
+        type: 'file' as const,
+        url: `/api/workspace/files/${encodeURIComponent(filePath)}`,
+        filename: fileName,
+        mediaType: 'text/plain',
+        size: content.length,
+      };
+
+      // Start a new chat session
+      startNewChat();
+      clearMessages();
+      resetTokenUsage();
+
+      // Navigate to the chat page
+      navigate('/');
+
+      // Small delay to ensure navigation completes and chat component is mounted
+      setTimeout(() => {
+        // Set status and add the message with file attachment
+        setStatus('submitted');
+        toast.success('File attached', {
+          description: `${fileName} attached to message`,
+        });
+        addUserMessage(message.text, [fileAttachment]);
+      }, 100);
+    },
+    [filePath, fileName, content, startNewChat, clearMessages, resetTokenUsage, navigate, setStatus, addUserMessage]
+  );
 
   const handleCopy = useCallback(async () => {
     try {
@@ -205,7 +251,7 @@ export function FileViewer() {
         )}
       </div>
 
-      {/* Prompt Input Area - Placeholder */}
+      {/* Prompt Input Area */}
       <div className="grid shrink-0 border-t pt-4">
         <div className="w-full px-4 pb-4">
           <PromptInput
@@ -215,13 +261,12 @@ export function FileViewer() {
               <PromptInputTextarea
                 onChange={handlePromptChange}
                 value={promptText}
-                placeholder="Ask about this file... (coming soon)"
-                disabled
+                placeholder="Ask about this file..."
               />
             </PromptInputBody>
             <PromptInputFooter>
               <PromptInputTools />
-              <PromptInputSubmit disabled status={undefined} />
+              <PromptInputSubmit disabled={!promptText.trim()} status={undefined} />
             </PromptInputFooter>
           </PromptInput>
         </div>
