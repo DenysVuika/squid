@@ -1,5 +1,5 @@
 import type { BundledLanguage } from 'shiki';
-import { FileIcon } from 'lucide-react';
+import { FileIcon, XIcon } from 'lucide-react';
 import {
   CodeBlock,
   CodeBlockActions,
@@ -8,6 +8,7 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
+import { Button } from '@/components/ui/button';
 
 interface SourceContentSidebarProps {
   title: string;
@@ -26,22 +27,15 @@ export const SourceContentSidebar = ({ title, content, language, onClose }: Sour
             {content.length.toLocaleString()} characters
           </p>
         </div>
-        <button
+        <Button
           onClick={onClose}
-          className="ml-2 rounded-md p-2 hover:bg-accent"
-          type="button"
+          variant="ghost"
+          size="icon"
+          className="ml-2"
           aria-label="Close sidebar"
         >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+          <XIcon size={16} />
+        </Button>
       </div>
       <div className="flex-1 overflow-auto">
         <CodeBlock
