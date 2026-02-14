@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ChatBot from './components/app/chatbot';
 import Logs from './components/app/logs';
+import { FileViewer } from './components/app/file-viewer';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -114,6 +115,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<ChatBot />} />
               <Route path="/logs" element={<Logs />} />
+              <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>
           {!isLogsPage && showFilesPanel && (

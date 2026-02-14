@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Files, Loader2 } from 'lucide-react';
 import {
   FileTree,
@@ -14,14 +15,36 @@ interface FileNode {
 }
 
 export function FilesSidebar() {
+  const navigate = useNavigate();
   const [files, setFiles] = React.useState<FileNode[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [selectedPath, setSelectedPath] = React.useState<string | undefined>();
+  
+  // Keep track of all file paths (not directories) for quick lookup
+  const filePaths = React.useMemo(() => {
+    const paths = new Set<string>();
+    const collectFilePaths = (nodes: FileNode[]) => {
+      nodes.forEach(node => {
+        if (!node.is_dir) {
+          paths.add(node.path);
+        }
+        if (node.children) {
+          collectFilePaths(node.children);
+        }
+      });
+    };
+    collectFilePaths(files);
+    return paths;
+  }, [files]);
 
   const handleFileSelect = React.useCallback((path: string) => {
     setSelectedPath(path);
-  }, []);
+    // Only navigate if this is a file, not a directory
+    if (filePaths.has(path)) {
+      navigate(`/workspace/files/${path}`);
+    }
+  }, [navigate, filePaths]);
 
   React.useEffect(() => {
     const fetchFiles = async () => {

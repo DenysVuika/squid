@@ -1080,17 +1080,77 @@ pub async fn get_workspace_files() -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok().json(WorkspaceFilesResponse { files }))
 }
 
-/// Build a hierarchical file tree for a directory
-fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn std::error::Error>> {
-    use walkdir::WalkDir;
-    use std::collections::HashMap;
-
+/// Check if a file is a supported code/text file based on extension
+fn is_supported_file(path: &std::path::Path) -> bool {
     // Extensions to include (code and documentation files)
     let code_extensions = vec![
         "rs", "toml", "lock", "json", "js", "jsx", "ts", "tsx", "css", "scss", "html",
         "md", "txt", "yaml", "yml", "sh", "py", "go", "java", "c", "cpp", "h", "hpp",
         "vue", "svelte", "rb", "php", "swift", "kt", "sql", "graphql", "proto",
     ];
+
+    let file_name = path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    // Check extension
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        code_extensions.contains(&ext)
+    } else {
+        // Files without extension - only include certain names
+        let allowed_no_ext = vec!["Dockerfile", "Makefile", "README", "LICENSE"];
+        allowed_no_ext.iter().any(|&name| file_name.starts_with(name))
+    }
+}
+
+/// Get content of a single workspace file
+pub async fn get_workspace_file(path: web::Path<String>) -> Result<HttpResponse, Error> {
+    use std::path::Path;
+    
+    let file_path = path.into_inner();
+    debug!("Fetching workspace file: {}", file_path);
+
+    // Get current working directory
+    let cwd = std::env::current_dir().map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Failed to get current directory: {}", e))
+    })?;
+
+    // Construct full path
+    let full_path = cwd.join(&file_path);
+
+    // Security check: ensure the resolved path is within the workspace
+    let canonical_path = full_path.canonicalize().map_err(|e| {
+        actix_web::error::ErrorNotFound(format!("File not found: {}", e))
+    })?;
+
+    if !canonical_path.starts_with(&cwd) {
+        return Err(actix_web::error::ErrorForbidden("Access denied: Path is outside workspace"));
+    }
+
+    // Check if path is a file
+    if !canonical_path.is_file() {
+        return Err(actix_web::error::ErrorBadRequest("Path is not a file"));
+    }
+
+    // Check if file type is supported
+    if !is_supported_file(&canonical_path) {
+        return Err(actix_web::error::ErrorBadRequest("File type not supported for viewing"));
+    }
+
+    // Read file content
+    let content = std::fs::read_to_string(&canonical_path).map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Failed to read file: {}", e))
+    })?;
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/plain; charset=utf-8")
+        .body(content))
+}
+
+/// Build a hierarchical file tree for a directory
+fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn std::error::Error>> {
+    use walkdir::WalkDir;
+    use std::collections::HashMap;
 
     // Directories to exclude
     let excluded_dirs = vec![
@@ -1143,17 +1203,9 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
                 continue;
             }
 
-            // Check extension
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if !code_extensions.contains(&ext) {
-                    continue;
-                }
-            } else {
-                // Files without extension - only include certain names
-                let allowed_no_ext = vec!["Dockerfile", "Makefile", "README", "LICENSE"];
-                if !allowed_no_ext.iter().any(|&name| file_name.starts_with(name)) {
-                    continue;
-                }
+            // Check if file is supported
+            if !is_supported_file(path) {
+                continue;
             }
         }
 
