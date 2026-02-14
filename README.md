@@ -609,6 +609,22 @@ The web server will:
 
 The web UI and API are served from the same server, so the chatbot automatically connects to the local API endpoint.
 
+**Web UI Development (Hot Reload):**
+
+For development with instant hot reloading:
+
+```bash
+# Terminal 1 - Backend server
+cargo run serve --port 8080
+
+# Terminal 2 - Frontend dev server
+cd web && npm run dev
+```
+
+Then open `http://localhost:5173` in your browser. Changes to frontend code will appear instantly. The Vite dev server proxies API requests to the Rust backend.
+
+To build for production: `cd web && npm run build` (outputs to `static/` directory).
+
 **Database & Persistence:**
 - All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)
 - Sessions persist across server restarts - your conversation history is always preserved

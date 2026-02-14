@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Web Development Mode**: Enhanced development workflow for the Web UI
+  - Vite proxy configuration automatically forwards API requests to Rust server during development
+  - CORS support enables seamless development with Vite dev server
+  - Instructions added to README for quick setup
+
 - **Custom Server Options**: New command-line arguments for the `serve` command
   - `--db` option to specify a custom database file path
   - `--dir` option to set a custom working directory for the server

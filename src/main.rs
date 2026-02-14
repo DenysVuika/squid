@@ -1,4 +1,5 @@
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_cors::Cors;
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use log::{debug, error, info, warn};
@@ -647,9 +648,17 @@ async fn main() {
             println!("Press Ctrl+C to stop the server\n");
 
             let server = HttpServer::new(move || {
+                // Configure CORS to allow development mode (Vite dev server)
+                let cors = Cors::default()
+                    .allow_any_origin() // Allow all origins (for development)
+                    .allow_any_method()
+                    .allow_any_header()
+                    .max_age(3600);
+
                 App::new()
                     .app_data(web::Data::new(app_config.clone()))
                     .app_data(web::Data::new(session_manager.clone()))
+                    .wrap(cors)
                     .wrap(middleware::Logger::default())
                     .service(
                         web::scope("/api")
