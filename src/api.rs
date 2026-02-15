@@ -1182,6 +1182,15 @@ async fn create_chat_stream(
                                                 "message": format!("Tool '{}' was not executed because you rejected it.", name),
                                                 "skipped": true
                                             });
+                                            
+                                            // Emit tool invocation completed event for rejection to record in thinking steps
+                                            yield Ok(StreamEvent::ToolInvocationCompleted {
+                                                name: name.clone(),
+                                                arguments: args_value.clone(),
+                                                result: None,
+                                                error: Some("Tool execution rejected by user".to_string()),
+                                            });
+                                            
                                             messages.push(
                                                 ChatCompletionRequestToolMessage {
                                                     content: reject_result.to_string().into(),

@@ -517,7 +517,8 @@ const Chatbot = () => {
                                 } else if (step.result || step.error) {
                                   // No approval exists but we have a result (loaded from session)
                                   // Show the tool execution details using Tool component
-                                  const toolState = step.status === 'error' ? 'output-error' : 'output-available';
+                                  const isRejected = step.error?.includes('rejected by user');
+                                  const toolState = isRejected ? 'output-denied' : (step.status === 'error' || step.error ? 'output-error' : 'output-available');
                                   elements.push(
                                     <Tool key={`tool-result-${idx}`} className="mt-4">
                                       <ToolHeader
