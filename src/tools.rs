@@ -404,7 +404,7 @@ pub fn check_tool_permission(
 pub async fn execute_tool_direct(
     name: &str,
     args: &serde_json::Value,
-    config: &Config,
+    _config: &Config,
 ) -> serde_json::Value {
     // Validate paths for file operations
     let ignore_patterns = PathValidator::load_ignore_patterns();

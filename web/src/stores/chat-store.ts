@@ -299,7 +299,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               message_id: messageId,
             });
           },
-          onToolApprovalResponse: (approval_id, approved) => {
+          onToolApprovalResponse: (approval_id) => {
             // Clear the approval from pending
             get().clearApproval(approval_id);
           },

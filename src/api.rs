@@ -643,6 +643,7 @@ pub async fn chat_stream(
         .streaming(Box::pin(stream)))
 }
 
+#[allow(unused_variables)] // approval_map is used inside async_stream::stream! macro
 async fn create_chat_stream(
     session_id: &str,
     question: &str,
