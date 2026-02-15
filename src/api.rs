@@ -1048,3 +1048,25 @@ pub async fn get_models(
 
     Ok(HttpResponse::Ok().json(ModelsResponse { models }))
 }
+
+#[derive(Debug, Serialize)]
+pub struct ConfigResponse {
+    pub api_url: String,
+    pub api_model: String,
+    pub context_window: u32,
+}
+
+/// Get API configuration (default model, etc.)
+pub async fn get_config(
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching API configuration");
+
+    let response = ConfigResponse {
+        api_url: app_config.api_url.clone(),
+        api_model: app_config.api_model.clone(),
+        context_window: app_config.context_window,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}

@@ -493,5 +493,35 @@ export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
   return data;
 }
 
+export interface ConfigResponse {
+  api_url: string;
+  api_model: string;
+  context_window: number;
+}
+
+/**
+ * Fetch API configuration including default model
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with API configuration
+ *
+ * @example
+ * ```typescript
+ * const config = await fetchConfig('');
+ * console.log(`Default model: ${config.api_model}`);
+ * ```
+ */
+export async function fetchConfig(apiUrl: string): Promise<ConfigResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/config` : '/api/config';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch config: HTTP ${response.status}`);
+  }
+
+  const data: ConfigResponse = await response.json();
+  return data;
+}
+
 // Re-export React for the hook
 import React from 'react';

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fetchModels, type ModelInfo, type TokenUsage } from '@/lib/chat-api';
+import { fetchModels, fetchConfig, type ModelInfo, type TokenUsage } from '@/lib/chat-api';
 import { toast } from 'sonner';
 
 interface ModelStore {
@@ -47,7 +47,11 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const currentSelectedModel = get().selectedModel;
     set({ isLoading: true });
     try {
-      const { models: fetchedModels } = await fetchModels('');
+      // Fetch both models and config in parallel
+      const [{ models: fetchedModels }, config] = await Promise.all([
+        fetchModels(''),
+        fetchConfig(''),
+      ]);
 
       if (fetchedModels.length > 0) {
         // Extract unique providers and sort them
@@ -56,13 +60,10 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         // Check if current selection is still valid
         const isCurrentModelValid = currentSelectedModel && fetchedModels.some((m) => m.id === currentSelectedModel);
 
-        // Set default model only if no valid model is selected
+        // Use the backend's default model, or fallback to first available
         const modelToSelect = isCurrentModelValid
           ? currentSelectedModel
-          : (fetchedModels.find((m) => m.id.includes('qwen2.5-coder')) ||
-             fetchedModels.find((m) => m.id.includes('qwen') && m.id.includes('coder')) ||
-             fetchedModels.find((m) => m.provider === 'Qwen') ||
-             fetchedModels[0])?.id || '';
+          : (fetchedModels.find((m) => m.id === config.api_model) || fetchedModels[0])?.id || '';
 
         set({
           models: fetchedModels,
