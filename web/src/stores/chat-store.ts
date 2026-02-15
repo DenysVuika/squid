@@ -19,6 +19,23 @@ export interface ToolApprovalDecision {
   timestamp: number;
 }
 
+export interface ReasoningStep {
+  type: 'reasoning';
+  content: string;
+}
+
+export interface ToolStep {
+  type: 'tool';
+  name: string;
+  description: string;
+  status: string;
+  parameters: Record<string, unknown>;
+  result: string | undefined;
+  error: string | undefined;
+}
+
+export type ThinkingStep = ReasoningStep | ToolStep;
+
 export interface MessageType {
   key: string;
   from: 'user' | 'assistant';
@@ -27,10 +44,13 @@ export interface MessageType {
     id: string;
     content: string;
   }[];
+  // Legacy reasoning field (for backward compatibility with DB)
   reasoning?: {
     content: string;
     duration?: number;
   };
+  // New chain-of-thought steps
+  thinkingSteps?: ThinkingStep[];
   tools?: {
     name: string;
     description: string;
@@ -236,27 +256,80 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             const fullContent = state.streamingContentRef + text;
             set({ streamingContentRef: fullContent });
 
-            // Parse out <think> tags
-            let displayContent = fullContent;
-            let reasoningContent = '';
-            let reasoningComplete = false;
+            // Parse out ALL <think> tags and build thinking steps
+            let displayContent = '';
+            const thinkingSteps: ThinkingStep[] = [];
+            let hasOpenTag = false;
+            let currentPos = 0;
 
-            const thinkStart = fullContent.indexOf('<think>');
-            const thinkEnd = fullContent.indexOf('</think>');
+            // Find all <think> and </think> tags
+            while (currentPos < fullContent.length) {
+              const thinkStart = fullContent.indexOf('<think>', currentPos);
+              
+              if (thinkStart === -1) {
+                // No more <think> tags, add remaining content
+                const remaining = fullContent.substring(currentPos);
+                if (!hasOpenTag) {
+                  displayContent += remaining;
+                }
+                break;
+              }
 
-            if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
-              reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
-              displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
-              reasoningComplete = true;
-            } else if (thinkStart !== -1) {
-              reasoningContent = fullContent.substring(thinkStart + 7);
-              displayContent = fullContent.substring(0, thinkStart);
+              // Add content before <think> to display (only if no open tag)
+              if (!hasOpenTag) {
+                displayContent += fullContent.substring(currentPos, thinkStart);
+              }
+
+              // Look for closing </think>
+              const thinkEnd = fullContent.indexOf('</think>', thinkStart);
+              
+              if (thinkEnd === -1) {
+                // Opening tag without closing - reasoning is streaming
+                const reasoningText = fullContent.substring(thinkStart + 7);
+                if (reasoningText) {
+                  // Merge with previous reasoning step if it exists
+                  const lastStep = thinkingSteps[thinkingSteps.length - 1];
+                  if (lastStep && lastStep.type === 'reasoning') {
+                    lastStep.content += '\n\n' + reasoningText;
+                  } else {
+                    thinkingSteps.push({
+                      type: 'reasoning',
+                      content: reasoningText,
+                    });
+                  }
+                }
+                hasOpenTag = true;
+                break;
+              }
+
+              // Complete <think>...</think> block found
+              const reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
+              if (reasoningText) {
+                // Merge with previous reasoning step if it exists
+                const lastStep = thinkingSteps[thinkingSteps.length - 1];
+                if (lastStep && lastStep.type === 'reasoning') {
+                  lastStep.content += '\n\n' + reasoningText;
+                } else {
+                  thinkingSteps.push({
+                    type: 'reasoning',
+                    content: reasoningText,
+                  });
+                }
+              }
+              
+              // Reset hasOpenTag since we found the closing tag
+              hasOpenTag = false;
+              
+              // Move past the closing tag
+              currentPos = thinkEnd + 8;
             }
 
+            const isReasoningStreamingNow = hasOpenTag;
+
             // Control reasoning streaming state
-            if (reasoningContent && !state.isReasoningStreaming) {
+            if (thinkingSteps.length > 0 && !state.isReasoningStreaming && isReasoningStreamingNow) {
               set({ isReasoningStreaming: true });
-            } else if (reasoningComplete && state.isReasoningStreaming) {
+            } else if (!isReasoningStreamingNow && state.isReasoningStreaming) {
               set({ isReasoningStreaming: false });
             }
 
@@ -264,6 +337,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               messages: state.messages.map((msg) => {
                 const hasVersion = msg.versions.some((v) => v.id === messageId);
                 if (hasVersion) {
+                  // For backward compatibility, keep the old reasoning format too
+                  const reasoningContent = thinkingSteps
+                    .filter(s => s.type === 'reasoning')
+                    .map(s => s.content)
+                    .join('\n\n');
+                  
                   return {
                     ...msg,
                     versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
@@ -272,6 +351,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                           content: reasoningContent,
                         }
                       : msg.reasoning,
+                    thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
                   };
                 }
                 return msg;
@@ -396,6 +476,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // Convert session messages to UI format
     const uiMessages: MessageType[] = [];
     for (const msg of session.messages) {
+      // Build thinking steps from reasoning and tools
+      const thinkingSteps: ThinkingStep[] = [];
+      
+      // Add reasoning as a single step if available
+      if (msg.reasoning) {
+        thinkingSteps.push({
+          type: 'reasoning',
+          content: msg.reasoning,
+        });
+      }
+      
+      // Add tools as steps
+      if (msg.tools) {
+        msg.tools.forEach((t: any) => {
+          thinkingSteps.push({
+            type: 'tool',
+            name: t.name,
+            description: '',
+            status: t.error ? 'error' : 'completed',
+            parameters: typeof t.arguments === 'object' ? t.arguments : {},
+            result: t.result,
+            error: t.error,
+          });
+        });
+      }
+
       uiMessages.push({
         from: msg.role as 'user' | 'assistant',
         key: `${msg.role}-${msg.timestamp}`,
@@ -419,6 +525,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               duration: undefined,
             }
           : undefined,
+        thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
         tools: msg.tools?.map((t: any) => ({
           name: t.name,
           description: '',

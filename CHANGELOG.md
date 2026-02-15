@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Backend: Multiple Reasoning Blocks**: Backend now correctly removes ALL `<think>` tags from content before storing to database (previously only removed the first block)
+- **Chain of Thought Display**: Reasoning and tool calls now display as interactive steps showing the AI's thinking process
+  - Consecutive reasoning blocks are automatically merged into a single step
+  - Steps only separate when the type changes (e.g., reasoning → tool → reasoning)
+  - Provides cleaner, more meaningful visualization of the AI's decision-making process
+- **Multiple Reasoning Blocks**: Fixed issue where reasoning text could escape when multiple think operations occurred
+- **Reasoning Persistence**: Reasoning is now properly stored and displayed when reloading sessions
+- **Content After Tool Execution**: Fixed bug where text after `</think>` tags was hidden instead of displayed
 - **Model Selection**: Selected model now persists when navigating between file viewer and chat
 - **Session Loading**: Removed "Session loaded" toast notification for quieter experience
 - **Workspace Files Panel**: Hidden files and folders (starting with `.`) are now filtered out by default

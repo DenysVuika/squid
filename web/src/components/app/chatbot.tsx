@@ -56,9 +56,16 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-e
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestions } from '@/components/ai-elements/suggestion';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import {
+  ChainOfThought,
+  ChainOfThoughtHeader,
+  ChainOfThoughtContent,
+  ChainOfThoughtStep,
+} from '@/components/ai-elements/chain-of-thought';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { BrainIcon, WrenchIcon } from 'lucide-react';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
@@ -389,7 +396,70 @@ const Chatbot = () => {
                           </SourcesContent>
                         </Sources>
                       )}
-                      {message.reasoning && (
+                      {/* Display chain of thought if available, otherwise fall back to old reasoning */}
+                      {message.thinkingSteps && message.thinkingSteps.length > 0 ? (
+                        <ChainOfThought defaultOpen={status === 'streaming' && streamingMessageId === version.id}>
+                          <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
+                          <ChainOfThoughtContent>
+                            {message.thinkingSteps.map((step, idx) => {
+                              if (step.type === 'reasoning') {
+                                return (
+                                  <ChainOfThoughtStep
+                                    key={`reasoning-${idx}`}
+                                    icon={BrainIcon}
+                                    label="Reasoning"
+                                    status={
+                                      status === 'streaming' &&
+                                      streamingMessageId === version.id &&
+                                      idx === message.thinkingSteps!.length - 1
+                                        ? 'active'
+                                        : 'complete'
+                                    }
+                                  >
+                                    <div className="text-sm whitespace-pre-wrap">{step.content}</div>
+                                  </ChainOfThoughtStep>
+                                );
+                              } else {
+                                return (
+                                  <ChainOfThoughtStep
+                                    key={`tool-${idx}`}
+                                    icon={WrenchIcon}
+                                    label={`Tool: ${step.name}`}
+                                    status="complete"
+                                  >
+                                    <div className="space-y-2">
+                                      {Object.keys(step.parameters).length > 0 && (
+                                        <div className="text-xs">
+                                          <div className="font-medium mb-1">Input:</div>
+                                          <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
+                                            {JSON.stringify(step.parameters, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                      {step.result && (
+                                        <div className="text-xs">
+                                          <div className="font-medium mb-1">Output:</div>
+                                          <div className="bg-muted p-2 rounded text-xs whitespace-pre-wrap">
+                                            {step.result}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {step.error && (
+                                        <div className="text-xs text-red-600 dark:text-red-400">
+                                          <div className="font-medium mb-1">Error:</div>
+                                          <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
+                                            {step.error}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </ChainOfThoughtStep>
+                                );
+                              }
+                            })}
+                          </ChainOfThoughtContent>
+                        </ChainOfThought>
+                      ) : message.reasoning ? (
                         <Reasoning
                           duration={
                             status === 'streaming' && streamingMessageId === version.id
@@ -403,7 +473,7 @@ const Chatbot = () => {
                           <ReasoningTrigger />
                           <ReasoningContent>{message.reasoning.content}</ReasoningContent>
                         </Reasoning>
-                      )}
+                      ) : null}
                       {message.from === 'assistant' && message.toolApprovals?.map((approval) => {
                         const decision = toolApprovalDecisions.get(approval.approval_id);
                         return (
@@ -421,7 +491,8 @@ const Chatbot = () => {
                           />
                         );
                       })}
-                      {message.from === 'assistant' && message.tools && message.tools.length > 0 && (
+                      {/* Only show tools if NOT using chain of thought */}
+                      {!message.thinkingSteps && message.from === 'assistant' && message.tools && message.tools.length > 0 && (
                         message.tools.map((tool, idx) => (
                           <Tool key={`${message.key}-tool-${idx}`} defaultOpen={false}>
                             <ToolHeader 

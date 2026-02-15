@@ -515,26 +515,40 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Parse out <think> tags from accumulated content
+                // Parse out ALL <think> tags from accumulated content
                 let mut final_content = accumulated_content.clone();
-                let mut reasoning_opt = None;
+                let mut reasoning_parts = Vec::new();
 
-                // Look for <think>...</think> tags
-                if let Some(think_start) = accumulated_content.find("<think>") {
-                    if let Some(think_end) = accumulated_content.find("</think>") {
+                // Remove all <think>...</think> tags
+                while let Some(think_start) = final_content.find("<think>") {
+                    if let Some(think_end) = final_content.find("</think>") {
                         if think_end > think_start {
                             // Extract reasoning between tags
-                            let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
-                            // Remove the entire <think>...</think> section from content
+                            let reasoning_text = final_content[think_start + 7..think_end].to_string();
+                            if !reasoning_text.trim().is_empty() {
+                                reasoning_parts.push(reasoning_text);
+                            }
+                            // Remove this <think>...</think> section from content
                             final_content = format!(
                                 "{}{}",
-                                &accumulated_content[..think_start],
-                                &accumulated_content[think_end + 8..]
+                                &final_content[..think_start],
+                                &final_content[think_end + 8..]
                             );
-                            reasoning_opt = Some(reasoning_text);
+                        } else {
+                            // Malformed tags, stop processing
+                            break;
                         }
+                    } else {
+                        // No closing tag, stop processing
+                        break;
                     }
                 }
+
+                let reasoning_opt = if reasoning_parts.is_empty() {
+                    None
+                } else {
+                    Some(reasoning_parts.join("\n\n"))
+                };
 
                 if !final_content.is_empty() {
                     debug!("Saving assistant message to session {} (length: {} chars, reasoning: {}, tools: {})",
