@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chain of Thought Storage**: Thinking steps (reasoning and tool calls) now preserve their exact execution order
+  - New `thinking_steps` table stores reasoning blocks and tool invocations with proper ordering
+  - Reasoning and tool steps are interleaved as they occur during LLM streaming
+  - Backward compatible with existing sessions (old messages continue to work)
+  - Frontend displays the true flow of AI's thinking process in the chain of thought component
+
+- **Tool Approval in Web UI**: Interactive approval dialogs for tool execution requests
+  - See approval requests in real-time with tool name, description, and arguments
+  - Choose "Approve" to execute once, "Reject" to skip, or use "Always..." for permanent decisions
+  - "Always Approve" adds the tool to your allow list for automatic execution
+  - "Always Reject" adds the tool to your deny list to block future requests
+  - Your approval decisions are saved to `squid.config.json` automatically
+  - The LLM responds naturally to your approval choices
+
 - **Chat with Files**: Ask questions about any workspace file directly from the file viewer
   - Select a model and type your question to start a conversation about the file
   - File is automatically attached and opens in the chat interface
@@ -37,6 +51,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chain of Thought Display**: Complete overhaul of reasoning and tool visualization
+  - Tools now appear as steps in the chain of thought (Reasoning → Tools → Answer)
+  - Tool approval dialogs disappear after approval when chain of thought is active
+  - Tools are automatically loaded and added to chain when stream completes
+  - Consistent display whether streaming live or loading from database
+  - Intelligent step ordering: reasoning first, then tools
+- **Backend: Multiple Reasoning Blocks**: Backend now correctly removes ALL `<think>` tags from content before storing to database (previously only removed the first block)
+- **Chain of Thought Step Merging**: Consecutive reasoning blocks are automatically merged into a single step for cleaner display
+- **Multiple Reasoning Blocks**: Fixed issue where reasoning text could escape when multiple think operations occurred
+- **Reasoning Persistence**: Reasoning is now properly stored and displayed when reloading sessions
+- **Content After Tool Execution**: Fixed bug where text after `</think>` tags was hidden instead of displayed
 - **Model Selection**: Selected model now persists when navigating between file viewer and chat
 - **Session Loading**: Removed "Session loaded" toast notification for quieter experience
 - **Workspace Files Panel**: Hidden files and folders (starting with `.`) are now filtered out by default

@@ -114,6 +114,15 @@ impl Database {
         // Migration 007: Reasoning column
         run_migration(7, "Reasoning column", include_str!("../migrations/007_reasoning_column.sql"))?;
 
+        // Migration 008: Tool invocations
+        run_migration(8, "Tool invocations", include_str!("../migrations/008_tool_invocations.sql"))?;
+
+        // Migration 009: Thinking steps
+        run_migration(9, "Thinking steps", include_str!("../migrations/009_thinking_steps.sql"))?;
+
+        // Migration 010: Content split markers
+        run_migration(10, "Content split markers", include_str!("../migrations/010_content_split_markers.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -206,7 +215,7 @@ impl Database {
 
         // Load messages
         let mut msg_stmt = conn.prepare(
-            "SELECT id, role, content, timestamp, reasoning FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
+            "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
         let messages = msg_stmt.query_map(params![session_id], |row| {
@@ -215,13 +224,14 @@ impl Database {
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, i64>(3)?,
-                row.get::<_, Option<String>>(4)?
             ))
         })?
-        .collect::<SqliteResult<Vec<(i64, String, String, i64, Option<String>)>>>()?;
+        .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
 
         // Convert to ChatMessages and load sources for each
-        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning)| {
+        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
+            debug!("Processing message_id {} for session {}", message_id, session_id);
+            
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -260,12 +270,47 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<Source>>>()?;
 
+            // Load thinking steps for this message
+            let mut steps_stmt = conn.prepare(
+                "SELECT step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool
+                 FROM thinking_steps
+                 WHERE message_id = ?1
+                 ORDER BY step_order ASC"
+            )?;
+
+            debug!("Loading thinking steps for message_id: {}", message_id);
+            
+            let thinking_steps = steps_stmt.query_map(params![message_id], |row| {
+                let tool_args_json: Option<String> = row.get(4)?;
+                let tool_arguments = tool_args_json.and_then(|json| serde_json::from_str(&json).ok());
+                
+                Ok(crate::session::ThinkingStep {
+                    step_order: row.get(0)?,
+                    step_type: row.get(1)?,
+                    content: row.get(2)?,
+                    tool_name: row.get(3)?,
+                    tool_arguments,
+                    tool_result: row.get(5)?,
+                    tool_error: row.get(6)?,
+                    content_before_tool: row.get(7)?,
+                })
+            })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
+
+            debug!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
+            
+            let thinking_steps = if thinking_steps.is_empty() {
+                None
+            } else {
+                debug!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
+                Some(thinking_steps)
+            };
+
             Ok(ChatMessage {
                 role,
                 content,
                 sources,
                 timestamp,
-                reasoning,
+                thinking_steps,
             })
         }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
 
@@ -282,8 +327,8 @@ impl Database {
 
         // Insert message
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp, reasoning) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![session_id, message.role, message.content, message.timestamp, message.reasoning.as_ref()],
+            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
+            params![session_id, message.role, message.content, message.timestamp],
         )?;
 
         let message_id = conn.last_insert_rowid();
@@ -353,6 +398,32 @@ impl Database {
             "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
             params![message.timestamp, session_id],
         )?;
+
+        // Save thinking steps if present
+        if let Some(thinking_steps) = &message.thinking_steps {
+            for step in thinking_steps {
+                let tool_args_json = step.tool_arguments.as_ref()
+                    .map(|args| serde_json::to_string(args).unwrap_or_default());
+                
+                conn.execute(
+                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool, created_at) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        message_id,
+                        step.step_order,
+                        step.step_type,
+                        step.content,
+                        step.tool_name,
+                        tool_args_json,
+                        step.tool_result,
+                        step.tool_error,
+                        step.content_before_tool,
+                        chrono::Utc::now().timestamp(),
+                    ],
+                )?;
+            }
+            debug!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
+        }
 
         Ok(message_id)
     }
@@ -491,7 +562,7 @@ mod tests {
             content: "test content".to_string(),
         }];
 
-        session.add_message("user".to_string(), "Hello".to_string(), sources.clone(), None);
+        session.add_message("user".to_string(), "Hello".to_string(), sources.clone());
 
         let message = session.messages.last().unwrap();
         db.save_message(&session_id, message).unwrap();
@@ -559,7 +630,7 @@ mod tests {
         db.save_session(&session).unwrap();
 
         // Add first user message
-        session.add_message("user".to_string(), "First message".to_string(), vec![], None);
+        session.add_message("user".to_string(), "First message".to_string(), vec![]);
         let message1 = session.messages.last().unwrap();
         db.save_message(&session_id, message1).unwrap();
 
@@ -574,7 +645,7 @@ mod tests {
         assert_eq!(loaded.messages[0].role, "user");
 
         // Add second assistant message
-        session.add_message("assistant".to_string(), "Response".to_string(), vec![], None);
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
         let message2 = session.messages.last().unwrap();
         db.save_message(&session_id, message2).unwrap();
 
@@ -618,7 +689,6 @@ mod tests {
                 "user".to_string(),
                 format!("User message {}", i),
                 vec![],
-                None,
             );
             let user_msg = session.messages.last().unwrap();
             db.save_message(&session_id, user_msg).unwrap();
@@ -631,7 +701,6 @@ mod tests {
                 "assistant".to_string(),
                 format!("Assistant response {}", i),
                 vec![],
-                None,
             );
             let assistant_msg = session.messages.last().unwrap();
             db.save_message(&session_id, assistant_msg).unwrap();
@@ -665,5 +734,94 @@ mod tests {
 
         // Verify final token count
         assert_eq!(loaded.token_usage.total_tokens, 30);
+    }
+
+    #[test]
+    fn test_tool_invocations_persist() {
+        use serde_json::json;
+        
+        // Test that tool invocations are correctly saved and loaded
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        // Save initial session
+        db.save_session(&session).unwrap();
+
+        // Add user message
+        session.add_message(
+            "user".to_string(),
+            "Execute demo tool".to_string(),
+            vec![],
+        );
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with thinking steps (tool invocations)
+        let thinking_steps = vec![
+            crate::session::ThinkingStep {
+                step_type: "tool".to_string(),
+                step_order: 1,
+                content: None,
+                tool_name: Some("demo_tool".to_string()),
+                tool_arguments: Some(json!({"message": "Hello World"})),
+                tool_result: Some(r#"{"success": true, "echo": "Hello World"}"#.to_string()),
+                tool_error: None,
+                content_before_tool: None,
+            },
+            crate::session::ThinkingStep {
+                step_type: "tool".to_string(),
+                step_order: 2,
+                content: None,
+                tool_name: Some("read_file".to_string()),
+                tool_arguments: Some(json!({"path": "/tmp/test.txt"})),
+                tool_result: None,
+                tool_error: Some("File not found".to_string()),
+                content_before_tool: None,
+            },
+        ];
+
+        session.add_message(
+            "assistant".to_string(),
+            "Tools executed".to_string(),
+            vec![],
+        );
+        
+        // Set thinking steps on the message
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps.clone());
+        }
+        
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session and verify thinking steps were persisted
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 2);
+
+        // Verify user message has no thinking steps
+        assert_eq!(loaded.messages[0].role, "user");
+        assert!(loaded.messages[0].thinking_steps.is_none());
+
+        // Verify assistant message has thinking steps
+        assert_eq!(loaded.messages[1].role, "assistant");
+        let loaded_steps = loaded.messages[1].thinking_steps.as_ref().unwrap();
+        assert_eq!(loaded_steps.len(), 2);
+
+        // Verify first tool step (successful execution)
+        assert_eq!(loaded_steps[0].step_type, "tool");
+        assert_eq!(loaded_steps[0].tool_name.as_ref().unwrap(), "demo_tool");
+        assert_eq!(loaded_steps[0].tool_arguments.as_ref().unwrap()["message"], "Hello World");
+        assert!(loaded_steps[0].tool_result.is_some());
+        assert!(loaded_steps[0].tool_error.is_none());
+        assert!(loaded_steps[0].tool_result.as_ref().unwrap().contains("Hello World"));
+
+        // Verify second tool step (error case)
+        assert_eq!(loaded_steps[1].step_type, "tool");
+        assert_eq!(loaded_steps[1].tool_name.as_ref().unwrap(), "read_file");
+        assert_eq!(loaded_steps[1].tool_arguments.as_ref().unwrap()["path"], "/tmp/test.txt");
+        assert!(loaded_steps[1].tool_result.is_none());
+        assert!(loaded_steps[1].tool_error.is_some());
+        assert_eq!(loaded_steps[1].tool_error.as_ref().unwrap(), "File not found");
     }
 }

@@ -1,9 +1,42 @@
 import { create } from 'zustand';
 import type { FileUIPart } from 'ai';
-import { streamChat, loadSession, type Source } from '@/lib/chat-api';
+import { streamChat, loadSession, sendToolApproval, type Source } from '@/lib/chat-api';
 import { toast } from 'sonner';
 import { useSessionStore } from './session-store';
 import { useModelStore } from './model-store';
+
+export interface ToolApproval {
+  approval_id: string;
+  tool_name: string;
+  tool_args: Record<string, unknown>;
+  tool_description: string;
+  message_id: string; // Associated message ID
+  contentBeforeApproval?: string; // Content before the approval request
+}
+
+export interface ToolApprovalDecision {
+  approval_id: string;
+  approved: boolean;
+  timestamp: number;
+}
+
+export interface ReasoningStep {
+  type: 'reasoning';
+  content: string;
+}
+
+export interface ToolStep {
+  type: 'tool';
+  name: string;
+  description: string;
+  status: string;
+  parameters: Record<string, unknown>;
+  result: string | undefined;
+  error: string | undefined;
+  contentBeforeTool?: string;
+}
+
+export type ThinkingStep = ReasoningStep | ToolStep;
 
 export interface MessageType {
   key: string;
@@ -13,18 +46,9 @@ export interface MessageType {
     id: string;
     content: string;
   }[];
-  reasoning?: {
-    content: string;
-    duration?: number;
-  };
-  tools?: {
-    name: string;
-    description: string;
-    status: string;
-    parameters: Record<string, unknown>;
-    result: string | undefined;
-    error: string | undefined;
-  }[];
+  // Chain-of-thought steps
+  thinkingSteps?: ThinkingStep[];
+  toolApprovals?: ToolApproval[];
 }
 
 interface ChatStore {
@@ -37,6 +61,8 @@ interface ChatStore {
   isReasoningStreaming: boolean;
   abortController: AbortController | null;
   useWebSearch: boolean;
+  pendingApprovals: Map<string, ToolApproval>;
+  toolApprovalDecisions: Map<string, ToolApprovalDecision>;
 
   // Actions
   addUserMessage: (content: string, files?: FileUIPart[]) => void;
@@ -50,6 +76,9 @@ interface ChatStore {
   toggleWebSearch: () => void;
   updateStreamingContent: (content: string) => void;
   setIsReasoningStreaming: (isStreaming: boolean) => void;
+  addPendingApproval: (approval: ToolApproval) => void;
+  respondToApproval: (approval_id: string, approved: boolean, save_decision: boolean, scope?: string) => Promise<void>;
+  clearApproval: (approval_id: string) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -62,6 +91,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isReasoningStreaming: false,
   abortController: null,
   useWebSearch: false,
+  pendingApprovals: new Map(),
+  toolApprovalDecisions: new Map(),
 
   // Add user message and trigger streaming
   addUserMessage: (content: string, files?: FileUIPart[]) => {
@@ -214,27 +245,99 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             const fullContent = state.streamingContentRef + text;
             set({ streamingContentRef: fullContent });
 
-            // Parse out <think> tags
-            let displayContent = fullContent;
-            let reasoningContent = '';
-            let reasoningComplete = false;
+            // Parse out ALL <think> tags and build thinking steps
+            // Keep each <think> block as a SEPARATE step (don't merge)
+            let displayContent = '';
+            const thinkingSteps: ThinkingStep[] = [];
+            let hasOpenTag = false;
+            let currentPos = 0;
 
-            const thinkStart = fullContent.indexOf('<think>');
-            const thinkEnd = fullContent.indexOf('</think>');
+            // Find all <think> and </think> tags
+            while (currentPos < fullContent.length) {
+              const thinkStart = fullContent.indexOf('<think>', currentPos);
+              
+              if (thinkStart === -1) {
+                // No more <think> tags, add remaining content
+                const remaining = fullContent.substring(currentPos);
+                if (!hasOpenTag) {
+                  displayContent += remaining;
+                }
+                break;
+              }
 
-            if (thinkStart !== -1 && thinkEnd !== -1 && thinkEnd > thinkStart) {
-              reasoningContent = fullContent.substring(thinkStart + 7, thinkEnd);
-              displayContent = fullContent.substring(0, thinkStart) + fullContent.substring(thinkEnd + 8);
-              reasoningComplete = true;
-            } else if (thinkStart !== -1) {
-              reasoningContent = fullContent.substring(thinkStart + 7);
-              displayContent = fullContent.substring(0, thinkStart);
+              // Add content before <think> to display (only if no open tag)
+              if (!hasOpenTag) {
+                displayContent += fullContent.substring(currentPos, thinkStart);
+              }
+
+              // Look for closing </think>
+              const thinkEnd = fullContent.indexOf('</think>', thinkStart);
+              
+              if (thinkEnd === -1) {
+                // Opening tag without closing - reasoning is streaming
+                let reasoningText = fullContent.substring(thinkStart + 7);
+                
+                // Remove any <tool_call>...</tool_call> tags from streaming reasoning
+                while (reasoningText.includes('<tool_call>')) {
+                  const toolStart = reasoningText.indexOf('<tool_call>');
+                  const toolEnd = reasoningText.indexOf('</tool_call>');
+                  if (toolEnd > toolStart) {
+                    reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                  } else {
+                    // Incomplete tool_call tag, remove from start
+                    reasoningText = reasoningText.substring(0, toolStart);
+                    break;
+                  }
+                }
+                
+                if (reasoningText.trim()) {
+                  // Add as a new reasoning step (don't merge)
+                  thinkingSteps.push({
+                    type: 'reasoning',
+                    content: reasoningText.trim(),
+                  });
+                }
+                hasOpenTag = true;
+                break;
+              }
+
+              // Complete <think>...</think> block found
+              let reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
+              
+              // Remove any <tool_call>...</tool_call> tags from reasoning
+              while (reasoningText.includes('<tool_call>')) {
+                const toolStart = reasoningText.indexOf('<tool_call>');
+                const toolEnd = reasoningText.indexOf('</tool_call>');
+                if (toolEnd > toolStart) {
+                  reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                } else {
+                  // Incomplete tool_call tag, remove from start
+                  reasoningText = reasoningText.substring(0, toolStart);
+                  break;
+                }
+              }
+              
+              if (reasoningText.trim()) {
+                // Add each closed <think> block as a SEPARATE reasoning step
+                thinkingSteps.push({
+                  type: 'reasoning',
+                  content: reasoningText.trim(),
+                });
+              }
+              
+              // Reset hasOpenTag since we found the closing tag
+              hasOpenTag = false;
+              
+              // Move past the closing tag
+              currentPos = thinkEnd + 8;
             }
 
+            const isReasoningStreamingNow = hasOpenTag;
+
             // Control reasoning streaming state
-            if (reasoningContent && !state.isReasoningStreaming) {
+            if (thinkingSteps.length > 0 && !state.isReasoningStreaming && isReasoningStreamingNow) {
               set({ isReasoningStreaming: true });
-            } else if (reasoningComplete && state.isReasoningStreaming) {
+            } else if (!isReasoningStreamingNow && state.isReasoningStreaming) {
               set({ isReasoningStreaming: false });
             }
 
@@ -242,14 +345,40 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               messages: state.messages.map((msg) => {
                 const hasVersion = msg.versions.some((v) => v.id === messageId);
                 if (hasVersion) {
+                  // Build final thinking steps by intelligently merging:
+                  // 1. Keep existing steps that are already there (both reasoning and tools)
+                  // 2. Update reasoning steps with new content from current parse
+                  // 3. Preserve tool step positions
+                  
+                  const currentSteps = msg.thinkingSteps || [];
+                  const finalSteps: ThinkingStep[] = [];
+                  
+                  // Strategy: Replace reasoning steps, keep tool steps in their positions
+                  let reasoningIdx = 0;
+                  
+                  for (const step of currentSteps) {
+                    if (step.type === 'reasoning') {
+                      // Replace with new reasoning content if available
+                      if (reasoningIdx < thinkingSteps.length) {
+                        finalSteps.push(thinkingSteps[reasoningIdx]);
+                        reasoningIdx++;
+                      }
+                    } else {
+                      // Keep tool steps in their original positions
+                      finalSteps.push(step);
+                    }
+                  }
+                  
+                  // Add any remaining new reasoning steps
+                  while (reasoningIdx < thinkingSteps.length) {
+                    finalSteps.push(thinkingSteps[reasoningIdx]);
+                    reasoningIdx++;
+                  }
+                  
                   return {
                     ...msg,
                     versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
-                    reasoning: reasoningContent
-                      ? {
-                          content: reasoningContent,
-                        }
-                      : msg.reasoning,
+                    thinkingSteps: finalSteps.length > 0 ? finalSteps : undefined,
                   };
                 }
                 return msg;
@@ -269,6 +398,46 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               reasoning_tokens: modelStore.tokenUsage.reasoning_tokens + usage.reasoning_tokens,
               cache_tokens: modelStore.tokenUsage.cache_tokens + usage.cache_tokens,
             });
+          },
+          onToolInvocationCompleted: (tool) => {
+            // Add tool step to thinking steps immediately when it completes
+            set((state) => ({
+              messages: state.messages.map((msg) => {
+                if (msg.versions.some((v) => v.id === messageId)) {
+                  const currentSteps = msg.thinkingSteps || [];
+                  const newToolStep: ThinkingStep = {
+                    type: 'tool',
+                    name: tool.name,
+                    description: '',
+                    status: tool.error ? 'error' : 'completed',
+                    parameters: tool.arguments,
+                    result: tool.result,
+                    error: tool.error,
+                  };
+                  
+                  return {
+                    ...msg,
+                    thinkingSteps: [...currentSteps, newToolStep],
+                  };
+                }
+                return msg;
+              }),
+            }));
+          },
+          onToolApprovalRequest: (approval) => {
+            // Capture the current content at the time of approval request
+            const currentContent = get().streamingContentRef;
+            
+            // Add pending approval with content snapshot
+            get().addPendingApproval({
+              ...approval,
+              message_id: messageId,
+              contentBeforeApproval: currentContent,
+            });
+          },
+          onToolApprovalResponse: (approval_id) => {
+            // Clear the approval from pending
+            get().clearApproval(approval_id);
           },
           onError: (error) => {
             console.error('Stream error:', error);
@@ -295,7 +464,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             // Refresh sessions list (to update sidebar)
             sessionStore.refreshSessions();
             
-            // Reload token usage without replacing messages
+            // Reload the session to get updated token usage
             if (sessionStore.activeSessionId) {
               try {
                 const session = await loadSession('', sessionStore.activeSessionId);
@@ -303,7 +472,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   modelStore.updateTokenUsage(session.token_usage);
                 }
               } catch (error) {
-                console.error('Failed to reload session token usage:', error);
+                console.error('Failed to reload session:', error);
               }
             }
           },
@@ -363,6 +532,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // Convert session messages to UI format
     const uiMessages: MessageType[] = [];
     for (const msg of session.messages) {
+      // Build thinking steps from the message
+      const thinkingSteps: ThinkingStep[] = [];
+      
+      msg.thinking_steps?.forEach((step) => {
+        if (step.step_type === 'reasoning') {
+          thinkingSteps.push({
+            type: 'reasoning',
+            content: step.content || '',
+          });
+        } else if (step.step_type === 'tool') {
+          thinkingSteps.push({
+            type: 'tool',
+            name: step.tool_name || '',
+            description: '',
+            status: step.tool_error ? 'error' : 'completed',
+            parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
+            result: step.tool_result,
+            error: step.tool_error,
+            contentBeforeTool: step.content_before_tool,
+          });
+        }
+      });
+
       uiMessages.push({
         from: msg.role as 'user' | 'assistant',
         key: `${msg.role}-${msg.timestamp}`,
@@ -380,12 +572,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             content: msg.content,
           },
         ],
-        reasoning: msg.reasoning
-          ? {
-              content: msg.reasoning,
-              duration: undefined,
-            }
-          : undefined,
+        thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
       });
     }
 
@@ -432,5 +619,93 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Toggle web search
   toggleWebSearch: () => {
     set((state) => ({ useWebSearch: !state.useWebSearch }));
+  },
+
+  // Add pending tool approval
+  addPendingApproval: (approval: ToolApproval) => {
+    set((state) => {
+      const newPendingApprovals = new Map(state.pendingApprovals);
+      newPendingApprovals.set(approval.approval_id, approval);
+
+      // Add approval to the associated message
+      const messages = state.messages.map((msg) => {
+        if (msg.versions.some((v) => v.id === approval.message_id)) {
+          return {
+            ...msg,
+            toolApprovals: [...(msg.toolApprovals || []), approval],
+          };
+        }
+        return msg;
+      });
+
+      return {
+        pendingApprovals: newPendingApprovals,
+        messages,
+      };
+    });
+  },
+
+  // Respond to tool approval
+  respondToApproval: async (
+    approval_id: string,
+    approved: boolean,
+    save_decision: boolean,
+    scope?: string
+  ) => {
+    const state = get();
+    const approval = state.pendingApprovals.get(approval_id);
+
+    if (!approval) {
+      console.error('Approval not found:', approval_id);
+      return;
+    }
+
+    // Send approval to backend
+    const success = await sendToolApproval('', approval_id, approved, save_decision, scope || '');
+
+    if (success) {
+      // Record the decision
+      const decision: ToolApprovalDecision = {
+        approval_id,
+        approved,
+        timestamp: Date.now(),
+      };
+
+      set((state) => {
+        const newDecisions = new Map(state.toolApprovalDecisions);
+        newDecisions.set(approval_id, decision);
+
+        return {
+          toolApprovalDecisions: newDecisions,
+        };
+      });
+
+      // Show toast
+      if (approved) {
+        toast.success('Tool execution approved', {
+          description: `${approval.tool_name} can now execute`,
+        });
+      } else {
+        toast.info('Tool execution rejected', {
+          description: `${approval.tool_name} was not executed`,
+        });
+      }
+    } else {
+      toast.error('Failed to send approval', {
+        description: 'Could not communicate with the server',
+      });
+    }
+  },
+
+  // Clear approval
+  clearApproval: (approval_id: string) => {
+    set((state) => {
+      const newPendingApprovals = new Map(state.pendingApprovals);
+      newPendingApprovals.delete(approval_id);
+
+      return {
+        pendingApprovals: newPendingApprovals,
+      };
+    });
   },
 }));

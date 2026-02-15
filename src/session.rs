@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -12,6 +13,36 @@ pub struct FileAttachment {
     pub content: String,
 }
 
+/// Represents a tool invocation (execution) result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolInvocation {
+    pub name: String,
+    pub arguments: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Represents a single step in the thinking process
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThinkingStep {
+    pub step_type: String, // "reasoning" or "tool"
+    pub step_order: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>, // for reasoning steps
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_arguments: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_before_tool: Option<String>, // Content accumulated before this tool
+}
+
 /// Represents a message in the chat history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -20,7 +51,7 @@ pub struct ChatMessage {
     pub sources: Vec<Source>,
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>,
+    pub thinking_steps: Option<Vec<ThinkingStep>>, // Ordered chain of thought
 }
 
 /// Represents a source (file attachment) to be displayed with a message
@@ -122,14 +153,14 @@ impl ChatSession {
     }
 
     /// Add a message to the session
-    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>, reasoning: Option<String>) {
+    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>) {
         let now = chrono::Utc::now().timestamp();
         self.messages.push(ChatMessage {
             role,
             content,
             sources,
             timestamp: now,
-            reasoning,
+            thinking_steps: None, // Will be set separately when available
         });
         self.updated_at = now;
     }
@@ -274,8 +305,8 @@ impl SessionManager {
             })
             .collect();
 
-        // Add message to session (users don't have reasoning)
-        session.add_message("user".to_string(), content, sources.clone(), None);
+        // Add message to session (users don't have thinking steps)
+        session.add_message("user".to_string(), content, sources.clone());
 
         // Auto-generate title from first user message if needed
         session.update_title_if_needed();
@@ -325,16 +356,20 @@ impl SessionManager {
         session_id: &str,
         content: String,
         sources: Vec<Source>,
-        reasoning: Option<String>,
+        thinking_steps: Option<Vec<ThinkingStep>>,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
-        session.add_message("assistant".to_string(), content, sources, reasoning);
+        session.add_message("assistant".to_string(), content, sources);
 
-        // Get the last message
+        // Get the last message and set thinking steps
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = thinking_steps;
+        }
+
         let message = session.messages.last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 

@@ -11,13 +11,39 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::debug;
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::{Mutex, oneshot};
+use std::time::Instant;
 
 use crate::{config, envinfo, llm, logger, session, tokens, tools};
+
+// Tool approval state management
+#[derive(Debug)]
+pub struct ApprovalState {
+    pub tool_name: String,
+    pub tool_args: Value,
+    pub tool_call_id: String,
+    pub sender: oneshot::Sender<bool>,
+    pub created_at: Instant,
+}
+
+pub type ApprovalStateMap = Arc<Mutex<HashMap<String, ApprovalState>>>;
+
+/// Get a human-readable description for a tool
+fn get_tool_description(tool_name: &str) -> String {
+    match tool_name {
+        "read_file" => "Read the contents of a file from the filesystem".to_string(),
+        "write_file" => "Write content to a file on the filesystem".to_string(),
+        "grep" => "Search for a pattern in files using regex".to_string(),
+        "bash" => "Execute a bash command (safe, read-only commands only)".to_string(),
+        "demo_tool" => "A demo tool for testing the approval workflow (safe, read-only)".to_string(),
+        _ => format!("Execute tool: {}", tool_name),
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct FileAttachment {
@@ -66,6 +92,25 @@ pub enum StreamEvent {
         reasoning_tokens: i64,
         cache_tokens: i64,
     },
+    #[serde(rename = "tool_approval_request")]
+    ToolApprovalRequest {
+        approval_id: String,
+        tool_name: String,
+        tool_args: Value,
+        tool_description: String,
+    },
+    #[serde(rename = "tool_approval_response")]
+    ToolApprovalResponse {
+        approval_id: String,
+        approved: bool,
+    },
+    #[serde(rename = "tool_invocation_completed")]
+    ToolInvocationCompleted {
+        name: String,
+        arguments: Value,
+        result: Option<String>,
+        error: Option<String>,
+    },
     #[serde(rename = "error")]
     Error { message: String },
     #[serde(rename = "done")]
@@ -79,7 +124,7 @@ pub struct SessionMessage {
     pub sources: Vec<Source>,
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>,
+    pub thinking_steps: Option<Vec<session::ThinkingStep>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -177,15 +222,18 @@ pub async fn get_session(
         Some(session) => {
             let response = SessionResponse {
                 session_id: session.id,
-                messages: session.messages.iter().map(|msg| SessionMessage {
-                    role: msg.role.clone(),
-                    content: msg.content.clone(),
-                    sources: msg.sources.iter().map(|s| Source {
-                        title: s.title.clone(),
-                        content: s.content.clone(),
-                    }).collect(),
-                    timestamp: msg.timestamp,
-                    reasoning: msg.reasoning.clone(),
+                messages: session.messages.iter().map(|msg| {
+                    debug!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
+                    SessionMessage {
+                        role: msg.role.clone(),
+                        content: msg.content.clone(),
+                        sources: msg.sources.iter().map(|s| Source {
+                            title: s.title.clone(),
+                            content: s.content.clone(),
+                        }).collect(),
+                        timestamp: msg.timestamp,
+                        thinking_steps: msg.thinking_steps.clone(),
+                    }
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
@@ -316,6 +364,7 @@ pub async fn chat_stream(
     body: web::Json<ChatRequest>,
     app_config: web::Data<Arc<config::Config>>,
     session_manager: web::Data<Arc<session::SessionManager>>,
+    approval_map: web::Data<ApprovalStateMap>,
 ) -> Result<HttpResponse, Error> {
     debug!("Received chat request: {:?}", body);
 
@@ -400,6 +449,7 @@ pub async fn chat_stream(
             &model_id,
             &app_config_clone,
             &session_manager_clone,
+            approval_map.get_ref(),
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
@@ -410,6 +460,12 @@ pub async fn chat_stream(
                 let mut total_reasoning_tokens = 0i64;
                 let mut total_cache_tokens = 0i64;
                 let mut received_usage = false; // Track if provider sent usage
+                // Track thinking steps in order as they occur during streaming
+                let mut thinking_steps_ordered: Vec<session::ThinkingStep> = Vec::new();
+                let mut step_order = 0i32;
+                
+                // Track reasoning blocks separately - don't merge them
+                let mut last_closed_think_pos = 0;
 
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
@@ -419,6 +475,38 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
+                                
+                                // Check if we completed any <think>...</think> blocks
+                                // Process each closed block as a separate reasoning step
+                                loop {
+                                    let search_start = last_closed_think_pos;
+                                    if let Some(relative_start) = accumulated_content[search_start..].find("<think>") {
+                                        let absolute_start = search_start + relative_start;
+                                        if let Some(relative_end) = accumulated_content[absolute_start..].find("</think>") {
+                                            let absolute_end = absolute_start + relative_end;
+                                            let reasoning_text = accumulated_content[absolute_start + 7..absolute_end].to_string();
+                                            if !reasoning_text.trim().is_empty() {
+                                                // Add reasoning step immediately as a SEPARATE step (don't merge)
+                                                thinking_steps_ordered.push(session::ThinkingStep {
+                                                    step_type: "reasoning".to_string(),
+                                                    step_order,
+                                                    content: Some(reasoning_text),
+                                                    tool_name: None,
+                                                    tool_arguments: None,
+                                                    tool_result: None,
+                                                    tool_error: None,
+                                                    content_before_tool: None,
+                                                });
+                                                step_order += 1;
+                                            }
+                                            last_closed_think_pos = absolute_end + 8;
+                                        } else {
+                                            break; // Incomplete block, wait for more content
+                                        }
+                                    } else {
+                                        break; // No more think blocks
+                                    }
+                                }
                             }
 
                             // Accumulate reasoning chunks
@@ -433,6 +521,30 @@ pub async fn chat_stream(
                                 total_reasoning_tokens += reasoning_tokens;
                                 total_cache_tokens += cache_tokens;
                                 received_usage = true;
+                            }
+
+                            // Add tool invocation to thinking steps immediately
+                            // This preserves the order: when a tool completes, it gets added right after the last reasoning step
+                            if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
+                                // Capture content accumulated before this tool
+                                let content_snapshot = accumulated_content.trim().to_string();
+                                
+                                // Add tool as thinking step immediately (preserves order)
+                                thinking_steps_ordered.push(session::ThinkingStep {
+                                    step_type: "tool".to_string(),
+                                    step_order,
+                                    content: None,
+                                    tool_name: Some(name.clone()),
+                                    tool_arguments: Some(arguments.clone()),
+                                    tool_result: result.clone(),
+                                    tool_error: error.clone(),
+                                    content_before_tool: if content_snapshot.is_empty() {
+                                        None
+                                    } else {
+                                        Some(content_snapshot)
+                                    },
+                                });
+                                step_order += 1;
                             }
 
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
@@ -454,35 +566,71 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Parse out <think> tags from accumulated content
+                // Parse out ALL <think> tags from accumulated content for final display
                 let mut final_content = accumulated_content.clone();
-                let mut reasoning_opt = None;
-
-                // Look for <think>...</think> tags
-                if let Some(think_start) = accumulated_content.find("<think>") {
-                    if let Some(think_end) = accumulated_content.find("</think>") {
+                let mut reasoning_parts = Vec::new();
+                
+                // Remove all <think>...</think> tags
+                while let Some(think_start) = final_content.find("<think>") {
+                    if let Some(think_end) = final_content.find("</think>") {
                         if think_end > think_start {
-                            // Extract reasoning between tags
-                            let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
-                            // Remove the entire <think>...</think> section from content
+                            // Extract reasoning between tags for backward compatibility
+                            let reasoning_text = final_content[think_start + 7..think_end].to_string();
+                            if !reasoning_text.trim().is_empty() {
+                                reasoning_parts.push(reasoning_text);
+                            }
+                            // Remove this <think>...</think> section from content
                             final_content = format!(
                                 "{}{}",
-                                &accumulated_content[..think_start],
-                                &accumulated_content[think_end + 8..]
+                                &final_content[..think_start],
+                                &final_content[think_end + 8..]
                             );
-                            reasoning_opt = Some(reasoning_text);
+                        } else {
+                            break;
                         }
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Remove all <tool_call>...</tool_call> tags (model's way of indicating tool calls)
+                while let Some(tool_start) = final_content.find("<tool_call>") {
+                    if let Some(tool_end) = final_content.find("</tool_call>") {
+                        if tool_end > tool_start {
+                            // Remove this <tool_call>...</tool_call> section from content
+                            final_content = format!(
+                                "{}{}",
+                                &final_content[..tool_start],
+                                &final_content[tool_end + 12..]
+                            );
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
                     }
                 }
 
-                if !final_content.is_empty() {
-                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {})",
-                        session_id, final_content.len(), reasoning_opt.is_some());
+                // Use the thinking steps we built during streaming
+                let thinking_steps_opt = if thinking_steps_ordered.is_empty() {
+                    None
+                } else {
+                    Some(thinking_steps_ordered)
+                };
+
+                // Trim whitespace and check if we have actual content
+                let final_content_trimmed = final_content.trim();
+
+                if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
+                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {})",
+                        session_id, final_content_trimmed.len(),
+                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0));
+                    
                     match session_manager_clone.add_assistant_message(
                         &session_id,
-                        final_content.clone(),
+                        final_content_trimmed.to_string(),
                         sources,
-                        reasoning_opt,
+                        thinking_steps_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),
@@ -603,6 +751,7 @@ pub async fn chat_stream(
         .streaming(Box::pin(stream)))
 }
 
+#[allow(unused_variables)] // approval_map is used inside async_stream::stream! macro
 async fn create_chat_stream(
     session_id: &str,
     question: &str,
@@ -611,6 +760,7 @@ async fn create_chat_stream(
     model_id: &str,
     app_config: &config::Config,
     session_manager: &session::SessionManager,
+    approval_map: &ApprovalStateMap,
 ) -> Result<
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
@@ -679,13 +829,80 @@ async fn create_chat_stream(
                 .into(),
             );
         } else if msg.role == "assistant" {
-            messages.push(
-                ChatCompletionRequestAssistantMessage {
-                    content: Some(msg.content.clone().into()),
-                    ..Default::default()
+            // Check if this message has tool invocations in thinking steps
+            if let Some(thinking_steps) = &msg.thinking_steps {
+                let tool_steps: Vec<_> = thinking_steps.iter()
+                    .filter(|s| s.step_type == "tool")
+                    .collect();
+                
+                if !tool_steps.is_empty() {
+                    // Reconstruct tool calls from thinking steps
+                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps.iter()
+                        .enumerate()
+                        .map(|(idx, step)| {
+                            let mut tool_call = ChatCompletionMessageToolCall {
+                                id: format!("call_{}", idx), // Generate synthetic ID
+                                function: Default::default(),
+                            };
+                            tool_call.function.name = step.tool_name.clone().unwrap_or_default();
+                            tool_call.function.arguments = serde_json::to_string(&step.tool_arguments).unwrap_or_default();
+                            ChatCompletionMessageToolCalls::Function(tool_call)
+                        })
+                        .collect();
+
+                    // Add assistant message with tool calls
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: if msg.content.is_empty() { 
+                                None 
+                            } else { 
+                                Some(msg.content.clone().into()) 
+                            },
+                            tool_calls: Some(assistant_tool_calls),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
+
+                    // Add tool result messages
+                    for (idx, step) in tool_steps.iter().enumerate() {
+                        let result_content = if let Some(error) = &step.tool_error {
+                            json!({"error": error}).to_string()
+                        } else if let Some(result) = &step.tool_result {
+                            result.clone()
+                        } else {
+                            json!({"message": "Tool executed"}).to_string()
+                        };
+
+                        messages.push(
+                            ChatCompletionRequestToolMessage {
+                                content: result_content.into(),
+                                tool_call_id: format!("call_{}", idx),
+                                ..Default::default()
+                            }
+                            .into(),
+                        );
+                    }
+                } else {
+                    // No tools, just add normal assistant message
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: Some(msg.content.clone().into()),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
                 }
-                .into(),
-            );
+            } else {
+                // No thinking steps, just add normal assistant message
+                messages.push(
+                    ChatCompletionRequestAssistantMessage {
+                        content: Some(msg.content.clone().into()),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
         }
     }
 
@@ -812,21 +1029,178 @@ async fn create_chat_stream(
                                 .into(),
                             );
 
-                            // Execute tools
+                            // Execute tools with approval handling
                             for tool_call in tool_calls.iter() {
-                                let name = tool_call.function.name.clone();
-                                let args = tool_call.function.arguments.clone();
-                                let tool_call_id = tool_call.id.clone();
+                                let name = &tool_call.function.name;
+                                let args_str = &tool_call.function.arguments;
+                                let tool_call_id = &tool_call.id;
 
-                                let result = tools::call_tool(&name, &args, app_config).await;
-
-                                messages.push(
-                                    ChatCompletionRequestToolMessage {
-                                        content: result.to_string().into(),
-                                        tool_call_id,
+                                // Parse arguments
+                                let args_value: Value = match args_str.parse() {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        let error_result = json!({
+                                            "error": format!("Failed to parse tool arguments: {}", e)
+                                        });
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: error_result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                        continue;
                                     }
-                                    .into(),
-                                );
+                                };
+
+                                // Check permission status
+                                let permission_status = tools::check_tool_permission(name, &args_value, app_config);
+                                
+                                debug!("Tool '{}' permission status: {:?}", name, permission_status);
+
+                                match permission_status {
+                                    tools::ToolPermissionStatus::Denied { reason } => {
+                                        // Tool is denied, don't execute
+                                        let deny_result = json!({
+                                            "error": reason,
+                                            "skipped": true
+                                        });
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: deny_result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                    }
+                                    tools::ToolPermissionStatus::Allowed => {
+                                        // Tool is auto-allowed, execute directly
+                                        let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                        
+                                        // Emit tool invocation completed event
+                                        yield Ok(StreamEvent::ToolInvocationCompleted {
+                                            name: name.clone(),
+                                            arguments: args_value.clone(),
+                                            result: Some(result.to_string()),
+                                            error: None,
+                                        });
+                                        
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                    }
+                                    tools::ToolPermissionStatus::NeedsApproval => {
+                                        use uuid::Uuid;
+                                        use std::time::Duration;
+                                        
+                                        // Generate unique approval ID
+                                        let approval_id = Uuid::new_v4().to_string();
+                                        
+                                        info!("Tool '{}' needs approval, generated approval_id: {}", name, approval_id);
+                                        
+                                        // Create oneshot channel for approval response
+                                        let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
+                                        
+                                        // Store approval state in map
+                                        {
+                                            let mut approvals = approval_map.lock().await;
+                                            approvals.insert(approval_id.clone(), ApprovalState {
+                                                tool_name: name.clone(),
+                                                tool_args: args_value.clone(),
+                                                tool_call_id: tool_call_id.clone(),
+                                                sender,
+                                                created_at: Instant::now(),
+                                            });
+                                        }
+                                        
+                                        // Yield approval request event
+                                        yield Ok(StreamEvent::ToolApprovalRequest {
+                                            approval_id: approval_id.clone(),
+                                            tool_name: name.clone(),
+                                            tool_args: args_value.clone(),
+                                            tool_description: get_tool_description(name),
+                                        });
+                                        
+                                        info!("Emitted ToolApprovalRequest event for approval_id: {}", approval_id);
+                                        
+                                        // Wait for approval with 5 minute timeout
+                                        let approved = match tokio::time::timeout(
+                                            Duration::from_secs(300),
+                                            receiver
+                                        ).await {
+                                            Ok(Ok(decision)) => {
+                                                info!("Tool '{}' approval received: {}", name, decision);
+                                                decision
+                                            }
+                                            Ok(Err(_)) => {
+                                                warn!("Tool '{}' approval channel closed without response", name);
+                                                false
+                                            }
+                                            Err(_) => {
+                                                warn!("Tool '{}' approval timed out after 5 minutes", name);
+                                                false
+                                            }
+                                        };
+                                        
+                                        // Clean up from map
+                                        {
+                                            let mut approvals = approval_map.lock().await;
+                                            approvals.remove(&approval_id);
+                                        }
+                                        
+                                        // Yield approval response event
+                                        yield Ok(StreamEvent::ToolApprovalResponse {
+                                            approval_id: approval_id.clone(),
+                                            approved,
+                                        });
+                                        
+                                        // Execute based on approval
+                                        if approved {
+                                            let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                            
+                                            // Emit tool invocation completed event
+                                            yield Ok(StreamEvent::ToolInvocationCompleted {
+                                                name: name.clone(),
+                                                arguments: args_value.clone(),
+                                                result: Some(result.to_string()),
+                                                error: None,
+                                            });
+                                            
+                                            messages.push(
+                                                ChatCompletionRequestToolMessage {
+                                                    content: result.to_string().into(),
+                                                    tool_call_id: tool_call_id.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                        } else {
+                                            let reject_result = json!({
+                                                "message": format!("Tool '{}' was not executed because you rejected it.", name),
+                                                "skipped": true
+                                            });
+                                            
+                                            // Emit tool invocation completed event for rejection to record in thinking steps
+                                            yield Ok(StreamEvent::ToolInvocationCompleted {
+                                                name: name.clone(),
+                                                arguments: args_value.clone(),
+                                                result: None,
+                                                error: Some("Tool execution rejected by user".to_string()),
+                                            });
+                                            
+                                            messages.push(
+                                                ChatCompletionRequestToolMessage {
+                                                    content: reject_result.to_string().into(),
+                                                    tool_call_id: tool_call_id.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                        }
+                                    }
+                                }
                             }
 
                             // Continue the loop to make another request with tool results
@@ -1047,4 +1421,97 @@ pub async fn get_models(
     });
 
     Ok(HttpResponse::Ok().json(ModelsResponse { models }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigResponse {
+    pub api_url: String,
+    pub api_model: String,
+    pub context_window: u32,
+}
+
+/// Get API configuration (default model, etc.)
+pub async fn get_config(
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching API configuration");
+
+    let response = ConfigResponse {
+        api_url: app_config.api_url.clone(),
+        api_model: app_config.api_model.clone(),
+        context_window: app_config.context_window,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToolApprovalRequest {
+    pub approval_id: String,
+    pub approved: bool,
+    #[serde(default)]
+    pub save_decision: bool,
+    #[serde(default)]
+    pub scope: String, // "tool" or "tool:specific" (e.g., "bash:ls")
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolApprovalResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Handle tool approval requests from the web UI
+pub async fn handle_tool_approval(
+    body: web::Json<ToolApprovalRequest>,
+    approval_map: web::Data<ApprovalStateMap>,
+) -> Result<HttpResponse, Error> {
+    debug!("Received tool approval: {:?}", body);
+
+    // Find the pending approval
+    let mut approvals = approval_map.lock().await;
+    
+    if let Some(approval_state) = approvals.remove(&body.approval_id) {
+        // Send the approval decision through the channel
+        if approval_state.sender.send(body.approved).is_err() {
+            return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                success: false,
+                message: "Failed to send approval response".to_string(),
+            }));
+        }
+
+        // If save_decision is true, update the config file
+        if body.save_decision {
+            let tool_name = &approval_state.tool_name;
+            let scope = if body.scope.is_empty() {
+                tool_name.clone()
+            } else {
+                body.scope.clone()
+            };
+
+            let mut config = config::Config::load();
+            let result = if body.approved {
+                config.allow_tool(&scope)
+            } else {
+                config.deny_tool(&scope)
+            };
+
+            if let Err(e) = result {
+                return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                    success: false,
+                    message: format!("Approval processed but failed to save to config: {}", e),
+                }));
+            }
+        }
+
+        Ok(HttpResponse::Ok().json(ToolApprovalResponse {
+            success: true,
+            message: "Approval processed successfully".to_string(),
+        }))
+    } else {
+        Ok(HttpResponse::NotFound().json(ToolApprovalResponse {
+            success: false,
+            message: "Approval request not found or expired".to_string(),
+        }))
+    }
 }

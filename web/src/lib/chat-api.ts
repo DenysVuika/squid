@@ -25,6 +25,9 @@ export type StreamEventType =
   | 'reasoning'
   | 'tool_call'
   | 'tool_result'
+  | 'tool_approval_request'
+  | 'tool_approval_response'
+  | 'tool_invocation_completed'
   | 'usage'
   | 'error'
   | 'done';
@@ -52,6 +55,12 @@ export interface StreamEvent {
   name?: string;
   arguments?: string;
   result?: string;
+  error?: string;
+  approval_id?: string;
+  tool_name?: string;
+  tool_args?: Record<string, unknown>;
+  tool_description?: string;
+  approved?: boolean;
   input_tokens?: number;
   output_tokens?: number;
   reasoning_tokens?: number;
@@ -66,6 +75,19 @@ export interface StreamHandlers {
   onReasoning?: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
+  onToolInvocationCompleted?: (tool: {
+    name: string;
+    arguments: Record<string, unknown>;
+    result?: string;
+    error?: string;
+  }) => void;
+  onToolApprovalRequest?: (approval: {
+    approval_id: string;
+    tool_name: string;
+    tool_args: Record<string, unknown>;
+    tool_description: string;
+  }) => void;
+  onToolApprovalResponse?: (approval_id: string, approved: boolean) => void;
   onUsage?: (usage: {
     input_tokens: number;
     output_tokens: number;
@@ -82,7 +104,16 @@ export interface SessionMessage {
   content: string;
   sources: Source[];
   timestamp: number;
-  reasoning?: string;
+  thinking_steps?: Array<{
+    step_type: string;
+    step_order: number;
+    content?: string;
+    tool_name?: string;
+    tool_arguments?: Record<string, unknown>;
+    tool_result?: string;
+    tool_error?: string;
+    content_before_tool?: string;
+  }>;
 }
 
 export interface SessionData {
@@ -158,8 +189,19 @@ export interface ModelsResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onSession, onSources, onContent, onReasoning, onToolCall, onToolResult, onUsage, onError, onDone, signal } =
-    handlers;
+  const { 
+    onSession, 
+    onSources, 
+    onContent, 
+    onReasoning, 
+    onToolCall, 
+    onToolResult, 
+    onToolInvocationCompleted,
+    onUsage, 
+    onError, 
+    onDone, 
+    signal 
+  } = handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -237,6 +279,54 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
               case 'tool_result':
                 if (onToolResult && event.name && event.result) {
                   onToolResult(event.name, event.result);
+                }
+                break;
+
+              case 'tool_invocation_completed':
+                if (onToolInvocationCompleted && event.name && event.arguments) {
+                  // Parse arguments if it's a string
+                  let parsedArgs: Record<string, unknown>;
+                  try {
+                    parsedArgs = typeof event.arguments === 'string' 
+                      ? JSON.parse(event.arguments) 
+                      : event.arguments;
+                  } catch {
+                    parsedArgs = {};
+                  }
+                  
+                  onToolInvocationCompleted({
+                    name: event.name,
+                    arguments: parsedArgs,
+                    result: event.result,
+                    error: event.error,
+                  });
+                }
+                break;
+
+              case 'tool_approval_request':
+                if (
+                  handlers.onToolApprovalRequest &&
+                  event.approval_id &&
+                  event.tool_name &&
+                  event.tool_args &&
+                  event.tool_description
+                ) {
+                  handlers.onToolApprovalRequest({
+                    approval_id: event.approval_id,
+                    tool_name: event.tool_name,
+                    tool_args: event.tool_args,
+                    tool_description: event.tool_description,
+                  });
+                }
+                break;
+
+              case 'tool_approval_response':
+                if (
+                  handlers.onToolApprovalResponse &&
+                  event.approval_id &&
+                  event.approved !== undefined
+                ) {
+                  handlers.onToolApprovalResponse(event.approval_id, event.approved);
                 }
                 break;
 
@@ -491,6 +581,89 @@ export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
 
   const data: ModelsResponse = await response.json();
   return data;
+}
+
+export interface ConfigResponse {
+  api_url: string;
+  api_model: string;
+  context_window: number;
+}
+
+/**
+ * Fetch API configuration including default model
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with API configuration
+ *
+ * @example
+ * ```typescript
+ * const config = await fetchConfig('');
+ * console.log(`Default model: ${config.api_model}`);
+ * ```
+ */
+export async function fetchConfig(apiUrl: string): Promise<ConfigResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/config` : '/api/config';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch config: HTTP ${response.status}`);
+  }
+
+  const data: ConfigResponse = await response.json();
+  return data;
+}
+
+/**
+ * Send tool approval response to the backend
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param approval_id - The approval ID from the tool_approval_request event
+ * @param approved - Whether the tool execution was approved
+ * @param save_decision - Whether to save this decision to config (for "Always"/"Never")
+ * @param scope - The scope for saving (e.g., "bash:ls" or just the tool name)
+ * @returns Promise with boolean indicating success
+ *
+ * @example
+ * ```typescript
+ * const success = await sendToolApproval('', 'approval-123', true, false, '');
+ * if (success) {
+ *   console.log('Approval sent');
+ * }
+ * ```
+ */
+export async function sendToolApproval(
+  apiUrl: string,
+  approval_id: string,
+  approved: boolean,
+  save_decision: boolean = false,
+  scope: string = ''
+): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/tool-approval` : '/api/tool-approval';
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        approval_id,
+        approved,
+        save_decision,
+        scope,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to send tool approval: HTTP ${response.status}`);
+      return false;
+    }
+
+    const data = await response.json();
+    return data.success === true;
+  } catch (error) {
+    console.error('Failed to send tool approval:', error);
+    return false;
+  }
 }
 
 // Re-export React for the hook
