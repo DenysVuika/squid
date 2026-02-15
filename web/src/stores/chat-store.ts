@@ -343,6 +343,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                     .map(s => s.content)
                     .join('\n\n');
                   
+                  // Get existing tool steps (added by onToolCall/onToolResult)
+                  const existingToolSteps = (msg.thinkingSteps || []).filter(s => s.type === 'tool');
+                  
+                  // Combine reasoning steps with tool steps
+                  // Simple approach: reasoning first, then tools
+                  const combinedSteps: ThinkingStep[] = [];
+                  
+                  // Add reasoning steps
+                  if (thinkingSteps.length > 0) {
+                    combinedSteps.push(...thinkingSteps);
+                  }
+                  
+                  // Add tool steps
+                  if (existingToolSteps.length > 0) {
+                    combinedSteps.push(...existingToolSteps);
+                  }
+                  
                   return {
                     ...msg,
                     versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
@@ -351,7 +368,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                           content: reasoningContent,
                         }
                       : msg.reasoning,
-                    thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
+                    thinkingSteps: combinedSteps.length > 0 ? combinedSteps : undefined,
                   };
                 }
                 return msg;
@@ -408,15 +425,68 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             // Refresh sessions list (to update sidebar)
             sessionStore.refreshSessions();
             
-            // Reload token usage without replacing messages
+            // Reload the full session to get the complete message with tools
             if (sessionStore.activeSessionId) {
               try {
                 const session = await loadSession('', sessionStore.activeSessionId);
                 if (session) {
                   modelStore.updateTokenUsage(session.token_usage);
+                  
+                  // Find the assistant message we just created and update it with tools
+                  const lastMessage = session.messages[session.messages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant' && lastMessage.tools) {
+                    console.log('[Chain] Loading tools from session:', lastMessage.tools);
+                    
+                    // Update the message with thinking steps that include tools
+                    set((state) => ({
+                      messages: state.messages.map((msg) => {
+                        if (msg.versions.some((v) => v.id === messageId)) {
+                          const thinkingSteps: ThinkingStep[] = [];
+                          
+                          // Add existing reasoning steps
+                          const existingReasoningSteps = (msg.thinkingSteps || []).filter(s => s.type === 'reasoning');
+                          thinkingSteps.push(...existingReasoningSteps);
+                          
+                          // Add tool steps from the session
+                          if (lastMessage.tools) {
+                            lastMessage.tools.forEach((t) => {
+                              thinkingSteps.push({
+                                type: 'tool',
+                                name: t.name,
+                                description: '',
+                                status: t.error ? 'error' : 'completed',
+                                parameters: typeof t.arguments === 'object' ? t.arguments : {},
+                                result: t.result,
+                                error: t.error,
+                              });
+                            });
+                          }
+                          
+                          console.log('[Chain] Final thinking steps:', thinkingSteps);
+                          
+                          // Convert tools to proper format (we already checked lastMessage.tools exists)
+                          const convertedTools = lastMessage.tools!.map((t) => ({
+                            name: t.name,
+                            description: '',
+                            status: t.error ? 'error' : 'completed',
+                            parameters: typeof t.arguments === 'object' ? t.arguments : {},
+                            result: t.result,
+                            error: t.error,
+                          }));
+                          
+                          return {
+                            ...msg,
+                            thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
+                            tools: convertedTools,
+                          };
+                        }
+                        return msg;
+                      }),
+                    }));
+                  }
                 }
               } catch (error) {
-                console.error('Failed to reload session token usage:', error);
+                console.error('Failed to reload session:', error);
               }
             }
           },
@@ -479,17 +549,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // Build thinking steps from reasoning and tools
       const thinkingSteps: ThinkingStep[] = [];
       
-      // Add reasoning as a single step if available
-      if (msg.reasoning) {
+      // If we have both reasoning and tools, interleave them intelligently
+      // Common pattern: reasoning → tools → (optional more reasoning)
+      if (msg.reasoning && msg.tools) {
+        // Add reasoning step
         thinkingSteps.push({
           type: 'reasoning',
           content: msg.reasoning,
         });
-      }
-      
-      // Add tools as steps
-      if (msg.tools) {
-        msg.tools.forEach((t: any) => {
+        
+        // Add tool steps after reasoning
+        msg.tools.forEach((t) => {
+          thinkingSteps.push({
+            type: 'tool',
+            name: t.name,
+            description: '',
+            status: t.error ? 'error' : 'completed',
+            parameters: typeof t.arguments === 'object' ? t.arguments : {},
+            result: t.result,
+            error: t.error,
+          });
+        });
+      } else if (msg.reasoning) {
+        // Only reasoning, no tools
+        thinkingSteps.push({
+          type: 'reasoning',
+          content: msg.reasoning,
+        });
+      } else if (msg.tools) {
+        // Only tools, no reasoning
+        msg.tools.forEach((t) => {
           thinkingSteps.push({
             type: 'tool',
             name: t.name,
@@ -526,7 +615,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             }
           : undefined,
         thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
-        tools: msg.tools?.map((t: any) => ({
+        tools: msg.tools?.map((t) => ({
           name: t.name,
           description: '',
           status: t.error ? 'error' : 'completed',

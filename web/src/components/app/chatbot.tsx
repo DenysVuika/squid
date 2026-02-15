@@ -396,8 +396,8 @@ const Chatbot = () => {
                           </SourcesContent>
                         </Sources>
                       )}
-                      {/* Display chain of thought if available, otherwise fall back to old reasoning */}
-                      {message.thinkingSteps && message.thinkingSteps.length > 0 ? (
+                      {/* Display chain of thought only if there are multiple steps (reasoning + tools) */}
+                      {message.thinkingSteps && message.thinkingSteps.length > 1 && message.thinkingSteps.some(s => s.type === 'reasoning') ? (
                         <ChainOfThought defaultOpen={status === 'streaming' && streamingMessageId === version.id}>
                           <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
                           <ChainOfThoughtContent>
@@ -425,10 +425,10 @@ const Chatbot = () => {
                                     key={`tool-${idx}`}
                                     icon={WrenchIcon}
                                     label={`Tool: ${step.name}`}
-                                    status="complete"
+                                    status={step.status === 'pending' ? 'active' : 'complete'}
                                   >
                                     <div className="space-y-2">
-                                      {Object.keys(step.parameters).length > 0 && (
+                                      {step.parameters && Object.keys(step.parameters).length > 0 && (
                                         <div className="text-xs">
                                           <div className="font-medium mb-1">Input:</div>
                                           <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
@@ -450,6 +450,11 @@ const Chatbot = () => {
                                           <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
                                             {step.error}
                                           </div>
+                                        </div>
+                                      )}
+                                      {!step.result && !step.error && step.status === 'pending' && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Waiting for tool execution...
                                         </div>
                                       )}
                                     </div>
@@ -474,8 +479,14 @@ const Chatbot = () => {
                           <ReasoningContent>{message.reasoning.content}</ReasoningContent>
                         </Reasoning>
                       ) : null}
+                      {/* Show tool approvals (always visible when pending) */}
                       {message.from === 'assistant' && message.toolApprovals?.map((approval) => {
                         const decision = toolApprovalDecisions.get(approval.approval_id);
+                        const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
+                        // Hide approved/rejected approvals when chain of thought is active (has reasoning)
+                        if (hasReasoning && decision) {
+                          return null;
+                        }
                         return (
                           <ToolApprovalComponent
                             key={approval.approval_id}
@@ -491,8 +502,8 @@ const Chatbot = () => {
                           />
                         );
                       })}
-                      {/* Only show tools if NOT using chain of thought */}
-                      {!message.thinkingSteps && message.from === 'assistant' && message.tools && message.tools.length > 0 && (
+                      {/* Only show tools if NOT using chain of thought OR if no reasoning */}
+                      {(!message.thinkingSteps || !message.thinkingSteps.some(s => s.type === 'reasoning')) && message.from === 'assistant' && message.tools && message.tools.length > 0 && (
                         message.tools.map((tool, idx) => (
                           <Tool key={`${message.key}-tool-${idx}`} defaultOpen={false}>
                             <ToolHeader 

@@ -45,11 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chain of Thought Display**: Complete overhaul of reasoning and tool visualization
+  - Tools now appear as steps in the chain of thought (Reasoning → Tools → Answer)
+  - Tool approval dialogs disappear after approval when chain of thought is active
+  - Tools are automatically loaded and added to chain when stream completes
+  - Consistent display whether streaming live or loading from database
+  - Intelligent step ordering: reasoning first, then tools
 - **Backend: Multiple Reasoning Blocks**: Backend now correctly removes ALL `<think>` tags from content before storing to database (previously only removed the first block)
-- **Chain of Thought Display**: Reasoning and tool calls now display as interactive steps showing the AI's thinking process
-  - Consecutive reasoning blocks are automatically merged into a single step
-  - Steps only separate when the type changes (e.g., reasoning → tool → reasoning)
-  - Provides cleaner, more meaningful visualization of the AI's decision-making process
+- **Chain of Thought Step Merging**: Consecutive reasoning blocks are automatically merged into a single step for cleaner display
 - **Multiple Reasoning Blocks**: Fixed issue where reasoning text could escape when multiple think operations occurred
 - **Reasoning Persistence**: Reasoning is now properly stored and displayed when reloading sessions
 - **Content After Tool Execution**: Fixed bug where text after `</think>` tags was hidden instead of displayed

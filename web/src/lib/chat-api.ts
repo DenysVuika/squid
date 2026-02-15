@@ -100,7 +100,7 @@ export interface SessionMessage {
   reasoning?: string;
   tools?: Array<{
     name: string;
-    arguments: any;
+    arguments: Record<string, unknown>;
     result?: string;
     error?: string;
   }>;
