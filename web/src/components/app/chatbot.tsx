@@ -474,7 +474,7 @@ const Chatbot = () => {
                       {message.from === 'assistant' && 
                        !message.thinkingSteps?.some(s => s.type === 'reasoning') && 
                        message.thinkingSteps && 
-                       message.thinkingSteps.some(s => s.type === 'tool' && s.contentBeforeTool !== undefined) ? (
+                       message.thinkingSteps.some(s => s.type === 'tool' && (s.contentBeforeTool !== undefined || s.result || s.error)) ? (
                         <>
                           {(() => {
                             let contentPosition = 0;
@@ -482,21 +482,24 @@ const Chatbot = () => {
 
                             message.thinkingSteps!.forEach((step, idx) => {
                               if (step.type === 'tool') {
-                                // Show content before this tool
-                                if (step.contentBeforeTool) {
-                                  elements.push(
-                                    <MessageContent key={`content-before-${idx}`}>
-                                      <MessageResponse>{step.contentBeforeTool}</MessageResponse>
-                                    </MessageContent>
-                                  );
-                                  contentPosition += step.contentBeforeTool.length;
-                                }
-
                                 // Find corresponding tool approval if exists
                                 const approval = message.toolApprovals?.find(
                                   a => a.tool_name === step.name
                                 );
                                 const decision = approval ? toolApprovalDecisions.get(approval.approval_id) : null;
+
+                                // Show content before this tool
+                                // During streaming, use approval.contentBeforeApproval
+                                // After loading, use step.contentBeforeTool
+                                const contentBefore = approval?.contentBeforeApproval ?? step.contentBeforeTool;
+                                if (contentBefore) {
+                                  elements.push(
+                                    <MessageContent key={`content-before-${idx}`}>
+                                      <MessageResponse>{contentBefore}</MessageResponse>
+                                    </MessageContent>
+                                  );
+                                  contentPosition += contentBefore.length;
+                                }
 
                                 // Show tool approval or result
                                 if (approval) {
