@@ -117,6 +117,9 @@ impl Database {
         // Migration 008: Tool invocations
         run_migration(8, "Tool invocations", include_str!("../migrations/008_tool_invocations.sql"))?;
 
+        // Migration 009: Thinking steps
+        run_migration(9, "Thinking steps", include_str!("../migrations/009_thinking_steps.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -226,6 +229,8 @@ impl Database {
 
         // Convert to ChatMessages and load sources for each
         let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning, tools_json)| {
+            debug!("Processing message_id {} for session {}", message_id, session_id);
+            
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -269,6 +274,40 @@ impl Database {
                 serde_json::from_str(&json).ok()
             });
 
+            // Load thinking steps for this message
+            let mut steps_stmt = conn.prepare(
+                "SELECT step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error
+                 FROM thinking_steps
+                 WHERE message_id = ?1
+                 ORDER BY step_order ASC"
+            )?;
+
+            debug!("Loading thinking steps for message_id: {}", message_id);
+            
+            let thinking_steps = steps_stmt.query_map(params![message_id], |row| {
+                let tool_args_json: Option<String> = row.get(4)?;
+                let tool_arguments = tool_args_json.and_then(|json| serde_json::from_str(&json).ok());
+                
+                Ok(crate::session::ThinkingStep {
+                    step_order: row.get(0)?,
+                    step_type: row.get(1)?,
+                    content: row.get(2)?,
+                    tool_name: row.get(3)?,
+                    tool_arguments,
+                    tool_result: row.get(5)?,
+                    tool_error: row.get(6)?,
+                })
+            })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
+
+            debug!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
+            
+            let thinking_steps = if thinking_steps.is_empty() {
+                None
+            } else {
+                debug!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
+                Some(thinking_steps)
+            };
+
             Ok(ChatMessage {
                 role,
                 content,
@@ -276,6 +315,7 @@ impl Database {
                 timestamp,
                 reasoning,
                 tools,
+                thinking_steps,
             })
         }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
 
@@ -366,6 +406,31 @@ impl Database {
             "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
             params![message.timestamp, session_id],
         )?;
+
+        // Save thinking steps if present
+        if let Some(thinking_steps) = &message.thinking_steps {
+            for step in thinking_steps {
+                let tool_args_json = step.tool_arguments.as_ref()
+                    .map(|args| serde_json::to_string(args).unwrap_or_default());
+                
+                conn.execute(
+                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, created_at) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        message_id,
+                        step.step_order,
+                        step.step_type,
+                        step.content,
+                        step.tool_name,
+                        tool_args_json,
+                        step.tool_result,
+                        step.tool_error,
+                        chrono::Utc::now().timestamp(),
+                    ],
+                )?;
+            }
+            debug!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
+        }
 
         Ok(message_id)
     }

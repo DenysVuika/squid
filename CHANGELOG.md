@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chain of Thought Storage**: Thinking steps (reasoning and tool calls) now preserve their exact execution order
+  - New `thinking_steps` table stores reasoning blocks and tool invocations with proper ordering
+  - Reasoning and tool steps are interleaved as they occur during LLM streaming
+  - Backward compatible with existing sessions (old messages continue to work)
+  - Frontend displays the true flow of AI's thinking process in the chain of thought component
+
 - **Tool Approval in Web UI**: Interactive approval dialogs for tool execution requests
   - See approval requests in real-time with tool name, description, and arguments
   - Choose "Approve" to execute once, "Reject" to skip, or use "Always..." for permanent decisions

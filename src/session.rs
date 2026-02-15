@@ -24,6 +24,23 @@ pub struct ToolInvocation {
     pub error: Option<String>,
 }
 
+/// Represents a single step in the thinking process
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThinkingStep {
+    pub step_type: String, // "reasoning" or "tool"
+    pub step_order: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>, // for reasoning steps
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_arguments: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_error: Option<String>,
+}
+
 /// Represents a message in the chat history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -32,9 +49,11 @@ pub struct ChatMessage {
     pub sources: Vec<Source>,
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>,
+    pub reasoning: Option<String>, // Keep for backward compatibility
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<ToolInvocation>>,
+    pub tools: Option<Vec<ToolInvocation>>, // Keep for backward compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_steps: Option<Vec<ThinkingStep>>, // NEW: ordered chain of thought
 }
 
 /// Represents a source (file attachment) to be displayed with a message
@@ -145,6 +164,7 @@ impl ChatSession {
             timestamp: now,
             reasoning,
             tools,
+            thinking_steps: None, // Will be set separately when available
         });
         self.updated_at = now;
     }
@@ -342,6 +362,7 @@ impl SessionManager {
         sources: Vec<Source>,
         reasoning: Option<String>,
         tools: Option<Vec<ToolInvocation>>,
+        thinking_steps: Option<Vec<ThinkingStep>>,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self.get_session(session_id)
@@ -350,7 +371,11 @@ impl SessionManager {
         // Add message to session
         session.add_message("assistant".to_string(), content, sources, reasoning, tools);
 
-        // Get the last message
+        // Get the last message and set thinking steps
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = thinking_steps;
+        }
+
         let message = session.messages.last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 
@@ -476,7 +501,7 @@ mod tests {
         assert_eq!(sources.len(), 1);
 
         manager
-            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None, None)
+            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None, None, None)
             .unwrap();
 
         let session = manager.get_session(&session_id).unwrap();
@@ -514,7 +539,7 @@ mod tests {
 
         // Add assistant response
         manager
-            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None, None)
+            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None, None, None)
             .unwrap();
 
         // Verify both messages exist
@@ -529,7 +554,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None, None)
+            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None, None, None)
             .unwrap();
 
         // Verify all 4 messages persist
@@ -556,7 +581,7 @@ mod tests {
                 .unwrap();
 
             manager
-                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None, None)
+                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None, None, None)
                 .unwrap();
         }
 
@@ -603,7 +628,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None, None)
+            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None, None, None)
             .unwrap();
 
         // Update token usage multiple times (simulates streaming updates)

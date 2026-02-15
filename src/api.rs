@@ -127,6 +127,8 @@ pub struct SessionMessage {
     pub reasoning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<session::ToolInvocation>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_steps: Option<Vec<session::ThinkingStep>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -224,16 +226,20 @@ pub async fn get_session(
         Some(session) => {
             let response = SessionResponse {
                 session_id: session.id,
-                messages: session.messages.iter().map(|msg| SessionMessage {
-                    role: msg.role.clone(),
-                    content: msg.content.clone(),
-                    sources: msg.sources.iter().map(|s| Source {
-                        title: s.title.clone(),
-                        content: s.content.clone(),
-                    }).collect(),
-                    timestamp: msg.timestamp,
-                    reasoning: msg.reasoning.clone(),
-                    tools: msg.tools.clone(),
+                messages: session.messages.iter().map(|msg| {
+                    debug!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
+                    SessionMessage {
+                        role: msg.role.clone(),
+                        content: msg.content.clone(),
+                        sources: msg.sources.iter().map(|s| Source {
+                            title: s.title.clone(),
+                            content: s.content.clone(),
+                        }).collect(),
+                        timestamp: msg.timestamp,
+                        reasoning: msg.reasoning.clone(),
+                        tools: msg.tools.clone(),
+                        thinking_steps: msg.thinking_steps.clone(),
+                    }
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
@@ -461,6 +467,12 @@ pub async fn chat_stream(
                 let mut total_cache_tokens = 0i64;
                 let mut received_usage = false; // Track if provider sent usage
                 let mut collected_tool_invocations: Vec<session::ToolInvocation> = Vec::new();
+                // Track thinking steps in order as they occur during streaming
+                let mut thinking_steps_ordered: Vec<session::ThinkingStep> = Vec::new();
+                let mut step_order = 0i32;
+                
+                // Track reasoning blocks separately - don't merge them
+                let mut last_closed_think_pos = 0;
 
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
@@ -470,6 +482,37 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
+                                
+                                // Check if we completed any <think>...</think> blocks
+                                // Process each closed block as a separate reasoning step
+                                loop {
+                                    let search_start = last_closed_think_pos;
+                                    if let Some(relative_start) = accumulated_content[search_start..].find("<think>") {
+                                        let absolute_start = search_start + relative_start;
+                                        if let Some(relative_end) = accumulated_content[absolute_start..].find("</think>") {
+                                            let absolute_end = absolute_start + relative_end;
+                                            let reasoning_text = accumulated_content[absolute_start + 7..absolute_end].to_string();
+                                            if !reasoning_text.trim().is_empty() {
+                                                // Add reasoning step immediately as a SEPARATE step (don't merge)
+                                                thinking_steps_ordered.push(session::ThinkingStep {
+                                                    step_type: "reasoning".to_string(),
+                                                    step_order,
+                                                    content: Some(reasoning_text),
+                                                    tool_name: None,
+                                                    tool_arguments: None,
+                                                    tool_result: None,
+                                                    tool_error: None,
+                                                });
+                                                step_order += 1;
+                                            }
+                                            last_closed_think_pos = absolute_end + 8;
+                                        } else {
+                                            break; // Incomplete block, wait for more content
+                                        }
+                                    } else {
+                                        break; // No more think blocks
+                                    }
+                                }
                             }
 
                             // Accumulate reasoning chunks
@@ -486,7 +529,8 @@ pub async fn chat_stream(
                                 received_usage = true;
                             }
 
-                            // Collect tool invocations
+                            // Collect tool invocations AND add to thinking steps immediately
+                            // This preserves the order: when a tool completes, it gets added right after the last reasoning step
                             if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
                                 collected_tool_invocations.push(session::ToolInvocation {
                                     name: name.clone(),
@@ -494,6 +538,18 @@ pub async fn chat_stream(
                                     result: result.clone(),
                                     error: error.clone(),
                                 });
+                                
+                                // Add tool as thinking step immediately (preserves order)
+                                thinking_steps_ordered.push(session::ThinkingStep {
+                                    step_type: "tool".to_string(),
+                                    step_order,
+                                    content: None,
+                                    tool_name: Some(name.clone()),
+                                    tool_arguments: Some(arguments.clone()),
+                                    tool_result: result.clone(),
+                                    tool_error: error.clone(),
+                                });
+                                step_order += 1;
                             }
 
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
@@ -515,15 +571,15 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Parse out ALL <think> tags from accumulated content
+                // Parse out ALL <think> tags from accumulated content for final display
                 let mut final_content = accumulated_content.clone();
                 let mut reasoning_parts = Vec::new();
-
+                
                 // Remove all <think>...</think> tags
                 while let Some(think_start) = final_content.find("<think>") {
                     if let Some(think_end) = final_content.find("</think>") {
                         if think_end > think_start {
-                            // Extract reasoning between tags
+                            // Extract reasoning between tags for backward compatibility
                             let reasoning_text = final_content[think_start + 7..think_end].to_string();
                             if !reasoning_text.trim().is_empty() {
                                 reasoning_parts.push(reasoning_text);
@@ -535,24 +591,52 @@ pub async fn chat_stream(
                                 &final_content[think_end + 8..]
                             );
                         } else {
-                            // Malformed tags, stop processing
                             break;
                         }
                     } else {
-                        // No closing tag, stop processing
+                        break;
+                    }
+                }
+                
+                // Remove all <tool_call>...</tool_call> tags (model's way of indicating tool calls)
+                while let Some(tool_start) = final_content.find("<tool_call>") {
+                    if let Some(tool_end) = final_content.find("</tool_call>") {
+                        if tool_end > tool_start {
+                            // Remove this <tool_call>...</tool_call> section from content
+                            final_content = format!(
+                                "{}{}",
+                                &final_content[..tool_start],
+                                &final_content[tool_end + 12..]
+                            );
+                        } else {
+                            break;
+                        }
+                    } else {
                         break;
                     }
                 }
 
+                // Build reasoning_opt for backward compatibility
                 let reasoning_opt = if reasoning_parts.is_empty() {
                     None
                 } else {
                     Some(reasoning_parts.join("\n\n"))
                 };
 
-                if !final_content.is_empty() {
-                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {}, tools: {})",
-                        session_id, final_content.len(), reasoning_opt.is_some(), collected_tool_invocations.len());
+                // Use the thinking steps we built during streaming
+                let thinking_steps_opt = if thinking_steps_ordered.is_empty() {
+                    None
+                } else {
+                    Some(thinking_steps_ordered)
+                };
+
+                // Trim whitespace and check if we have actual content
+                let final_content_trimmed = final_content.trim();
+
+                if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() || !collected_tool_invocations.is_empty() {
+                    debug!("Saving assistant message to session {} (content length: {} chars, reasoning: {}, tools: {}, thinking_steps: {})",
+                        session_id, final_content_trimmed.len(), reasoning_opt.is_some(), collected_tool_invocations.len(),
+                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0));
                     
                     // Pass tools if any were collected
                     let tools_opt = if collected_tool_invocations.is_empty() {
@@ -563,10 +647,11 @@ pub async fn chat_stream(
                     
                     match session_manager_clone.add_assistant_message(
                         &session_id,
-                        final_content.clone(),
+                        final_content_trimmed.to_string(),
                         sources,
                         reasoning_opt,
                         tools_opt,
+                        thinking_steps_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),

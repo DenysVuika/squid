@@ -74,6 +74,12 @@ export interface StreamHandlers {
   onReasoning?: (text: string) => void;
   onToolCall?: (name: string, args: string) => void;
   onToolResult?: (name: string, result: string) => void;
+  onToolInvocationCompleted?: (tool: {
+    name: string;
+    arguments: Record<string, unknown>;
+    result?: string;
+    error?: string;
+  }) => void;
   onToolApprovalRequest?: (approval: {
     approval_id: string;
     tool_name: string;
@@ -103,6 +109,15 @@ export interface SessionMessage {
     arguments: Record<string, unknown>;
     result?: string;
     error?: string;
+  }>;
+  thinking_steps?: Array<{
+    step_type: string;
+    step_order: number;
+    content?: string;
+    tool_name?: string;
+    tool_arguments?: Record<string, unknown>;
+    tool_result?: string;
+    tool_error?: string;
   }>;
 }
 
@@ -179,8 +194,19 @@ export interface ModelsResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { onSession, onSources, onContent, onReasoning, onToolCall, onToolResult, onUsage, onError, onDone, signal } =
-    handlers;
+  const { 
+    onSession, 
+    onSources, 
+    onContent, 
+    onReasoning, 
+    onToolCall, 
+    onToolResult, 
+    onToolInvocationCompleted,
+    onUsage, 
+    onError, 
+    onDone, 
+    signal 
+  } = handlers;
 
   try {
     // If apiUrl is empty, use relative path (same origin)
@@ -258,6 +284,17 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
               case 'tool_result':
                 if (onToolResult && event.name && event.result) {
                   onToolResult(event.name, event.result);
+                }
+                break;
+
+              case 'tool_invocation_completed':
+                if (onToolInvocationCompleted && event.name && event.arguments) {
+                  onToolInvocationCompleted({
+                    name: event.name,
+                    arguments: event.arguments,
+                    result: event.result,
+                    error: event.error,
+                  });
                 }
                 break;
 
