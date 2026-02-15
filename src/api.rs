@@ -829,13 +829,80 @@ async fn create_chat_stream(
                 .into(),
             );
         } else if msg.role == "assistant" {
-            messages.push(
-                ChatCompletionRequestAssistantMessage {
-                    content: Some(msg.content.clone().into()),
-                    ..Default::default()
+            // Check if this message has tool invocations in thinking steps
+            if let Some(thinking_steps) = &msg.thinking_steps {
+                let tool_steps: Vec<_> = thinking_steps.iter()
+                    .filter(|s| s.step_type == "tool")
+                    .collect();
+                
+                if !tool_steps.is_empty() {
+                    // Reconstruct tool calls from thinking steps
+                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps.iter()
+                        .enumerate()
+                        .map(|(idx, step)| {
+                            let mut tool_call = ChatCompletionMessageToolCall {
+                                id: format!("call_{}", idx), // Generate synthetic ID
+                                function: Default::default(),
+                            };
+                            tool_call.function.name = step.tool_name.clone().unwrap_or_default();
+                            tool_call.function.arguments = serde_json::to_string(&step.tool_arguments).unwrap_or_default();
+                            ChatCompletionMessageToolCalls::Function(tool_call)
+                        })
+                        .collect();
+
+                    // Add assistant message with tool calls
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: if msg.content.is_empty() { 
+                                None 
+                            } else { 
+                                Some(msg.content.clone().into()) 
+                            },
+                            tool_calls: Some(assistant_tool_calls),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
+
+                    // Add tool result messages
+                    for (idx, step) in tool_steps.iter().enumerate() {
+                        let result_content = if let Some(error) = &step.tool_error {
+                            json!({"error": error}).to_string()
+                        } else if let Some(result) = &step.tool_result {
+                            result.clone()
+                        } else {
+                            json!({"message": "Tool executed"}).to_string()
+                        };
+
+                        messages.push(
+                            ChatCompletionRequestToolMessage {
+                                content: result_content.into(),
+                                tool_call_id: format!("call_{}", idx),
+                                ..Default::default()
+                            }
+                            .into(),
+                        );
+                    }
+                } else {
+                    // No tools, just add normal assistant message
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: Some(msg.content.clone().into()),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
                 }
-                .into(),
-            );
+            } else {
+                // No thinking steps, just add normal assistant message
+                messages.push(
+                    ChatCompletionRequestAssistantMessage {
+                        content: Some(msg.content.clone().into()),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
         }
     }
 
