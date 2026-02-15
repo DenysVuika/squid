@@ -504,7 +504,7 @@ mod tests {
             content: "test content".to_string(),
         }];
 
-        session.add_message("user".to_string(), "Hello".to_string(), sources.clone(), None);
+        session.add_message("user".to_string(), "Hello".to_string(), sources.clone(), None, None);
 
         let message = session.messages.last().unwrap();
         db.save_message(&session_id, message).unwrap();
@@ -572,7 +572,7 @@ mod tests {
         db.save_session(&session).unwrap();
 
         // Add first user message
-        session.add_message("user".to_string(), "First message".to_string(), vec![], None);
+        session.add_message("user".to_string(), "First message".to_string(), vec![], None, None);
         let message1 = session.messages.last().unwrap();
         db.save_message(&session_id, message1).unwrap();
 
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(loaded.messages[0].role, "user");
 
         // Add second assistant message
-        session.add_message("assistant".to_string(), "Response".to_string(), vec![], None);
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![], None, None);
         let message2 = session.messages.last().unwrap();
         db.save_message(&session_id, message2).unwrap();
 
@@ -632,6 +632,7 @@ mod tests {
                 format!("User message {}", i),
                 vec![],
                 None,
+                None,
             );
             let user_msg = session.messages.last().unwrap();
             db.save_message(&session_id, user_msg).unwrap();
@@ -644,6 +645,7 @@ mod tests {
                 "assistant".to_string(),
                 format!("Assistant response {}", i),
                 vec![],
+                None,
                 None,
             );
             let assistant_msg = session.messages.last().unwrap();
@@ -678,5 +680,82 @@ mod tests {
 
         // Verify final token count
         assert_eq!(loaded.token_usage.total_tokens, 30);
+    }
+
+    #[test]
+    fn test_tool_invocations_persist() {
+        use serde_json::json;
+        
+        // Test that tool invocations are correctly saved and loaded
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        // Save initial session
+        db.save_session(&session).unwrap();
+
+        // Add user message
+        session.add_message(
+            "user".to_string(),
+            "Execute demo tool".to_string(),
+            vec![],
+            None,
+            None,
+        );
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with tool invocations
+        let tool_invocations = vec![
+            crate::session::ToolInvocation {
+                name: "demo_tool".to_string(),
+                arguments: json!({"message": "Hello World"}),
+                result: Some(r#"{"success": true, "echo": "Hello World"}"#.to_string()),
+                error: None,
+            },
+            crate::session::ToolInvocation {
+                name: "read_file".to_string(),
+                arguments: json!({"path": "/tmp/test.txt"}),
+                result: None,
+                error: Some("File not found".to_string()),
+            },
+        ];
+
+        session.add_message(
+            "assistant".to_string(),
+            "Tools executed".to_string(),
+            vec![],
+            None,
+            Some(tool_invocations.clone()),
+        );
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session and verify tools were persisted
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 2);
+
+        // Verify user message has no tools
+        assert_eq!(loaded.messages[0].role, "user");
+        assert!(loaded.messages[0].tools.is_none());
+
+        // Verify assistant message has tools
+        assert_eq!(loaded.messages[1].role, "assistant");
+        let loaded_tools = loaded.messages[1].tools.as_ref().unwrap();
+        assert_eq!(loaded_tools.len(), 2);
+
+        // Verify first tool (successful execution)
+        assert_eq!(loaded_tools[0].name, "demo_tool");
+        assert_eq!(loaded_tools[0].arguments["message"], "Hello World");
+        assert!(loaded_tools[0].result.is_some());
+        assert!(loaded_tools[0].error.is_none());
+        assert!(loaded_tools[0].result.as_ref().unwrap().contains("Hello World"));
+
+        // Verify second tool (error case)
+        assert_eq!(loaded_tools[1].name, "read_file");
+        assert_eq!(loaded_tools[1].arguments["path"], "/tmp/test.txt");
+        assert!(loaded_tools[1].result.is_none());
+        assert!(loaded_tools[1].error.is_some());
+        assert_eq!(loaded_tools[1].error.as_ref().unwrap(), "File not found");
     }
 }
