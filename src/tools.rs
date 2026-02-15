@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::time::timeout;
 use walkdir::WalkDir;
+use chrono::Utc;
 
 use crate::config::Config;
 use crate::validate::PathValidator;
@@ -105,6 +106,29 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 }))
                 .build()
                 .expect("Failed to build bash function"),
+        }),
+        ChatCompletionTools::Function(ChatCompletionTool {
+            function: FunctionObjectArgs::default()
+                .name("demo_tool")
+                .description("A demo tool for testing the approval workflow. Returns a simple message with the provided input. This tool is safe and only used for testing - it doesn't modify anything.")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "A message to echo back"
+                        },
+                        "delay_seconds": {
+                            "type": "integer",
+                            "description": "Optional delay in seconds before returning (default: 0, max: 5)",
+                            "minimum": 0,
+                            "maximum": 5
+                        }
+                    },
+                    "required": ["message"]
+                }))
+                .build()
+                .expect("Failed to build demo_tool function"),
         }),
     ]
 }
@@ -302,18 +326,21 @@ impl std::fmt::Display for PermissionChoice {
     }
 }
 
-pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::Value {
-    info!("Tool call: {} with args: {}", name, args);
+/// Tool permission status
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolPermissionStatus {
+    Allowed,
+    Denied { reason: String },
+    NeedsApproval,
+}
 
-    // Parse arguments first to get command for bash tool
-    let args: serde_json::Value = match args.parse() {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Failed to parse tool arguments: {}", e);
-            return json!({"error": format!("Invalid arguments: {}", e)});
-        }
-    };
-
+/// Check tool permission status based on config and security rules
+/// This function performs mandatory security checks and consults allow/deny lists
+pub fn check_tool_permission(
+    name: &str,
+    args: &serde_json::Value,
+    config: &Config,
+) -> ToolPermissionStatus {
     // MANDATORY SECURITY CHECK: Block dangerous bash commands BEFORE any permission checks
     // This cannot be bypassed by configuration or user approval
     if name == "bash" {
@@ -327,13 +354,12 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
         for pattern in &dangerous_patterns {
             if command.contains(pattern) {
                 warn!("Blocked dangerous bash command: {}", command);
-                return json!({
-                    "error": format!(
+                return ToolPermissionStatus::Denied {
+                    reason: format!(
                         "Command blocked for security reasons. The command contains a dangerous pattern: '{}'. Commands like rm, sudo, chmod, dd, curl, wget, and kill operations are not allowed.",
                         pattern
                     ),
-                    "skipped": true
-                });
+                };
             }
         }
     }
@@ -346,11 +372,211 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                 "Bash command '{}' is in the deny list, blocking execution",
                 command
             );
-            return json!({"error": format!("Bash command '{}' is denied by configuration", command), "skipped": true});
+            return ToolPermissionStatus::Denied {
+                reason: format!("Bash command '{}' is denied by configuration", command),
+            };
         }
     } else if config.is_tool_denied(name) {
         warn!("Tool '{}' is in the deny list, blocking execution", name);
-        return json!({"error": format!("Tool '{}' is denied by configuration", name), "skipped": true});
+        return ToolPermissionStatus::Denied {
+            reason: format!("Tool '{}' is denied by configuration", name),
+        };
+    }
+
+    // Check if tool is auto-allowed (with granular bash command support)
+    let auto_allowed = if name == "bash" {
+        let command = args["command"].as_str().unwrap_or("");
+        config.is_bash_command_allowed(command)
+    } else {
+        config.is_tool_allowed(name)
+    };
+
+    if auto_allowed {
+        info!("Tool '{}' is in the allow list, auto-approving", name);
+        ToolPermissionStatus::Allowed
+    } else {
+        ToolPermissionStatus::NeedsApproval
+    }
+}
+
+/// Execute a tool without CLI prompts (for web UI)
+/// This function performs the actual tool execution after permissions have been checked
+pub async fn execute_tool_direct(
+    name: &str,
+    args: &serde_json::Value,
+    config: &Config,
+) -> serde_json::Value {
+    // Validate paths for file operations
+    let ignore_patterns = PathValidator::load_ignore_patterns();
+    let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
+        None
+    } else {
+        Some(ignore_patterns)
+    });
+
+    let validated_path = match name {
+        "read_file" | "write_file" | "grep" => {
+            let path = args["path"].as_str().unwrap_or("");
+            match validator.validate(std::path::Path::new(path)) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    debug!("Path validation failed for {}: {}", name, e);
+                    let friendly_message = match e {
+                        crate::validate::PathValidationError::PathIgnored(_) => {
+                            format!(
+                                "I cannot access '{}' because it's protected by the project's .squidignore file.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("blacklisted") =>
+                        {
+                            format!(
+                                "I cannot access '{}' because it's a protected system file or directory.",
+                                path
+                            )
+                        }
+                        crate::validate::PathValidationError::PathNotAllowed(ref msg)
+                            if msg.contains("not whitelisted") =>
+                        {
+                            format!(
+                                "I cannot access '{}' because it's outside the current project directory.",
+                                path
+                            )
+                        }
+                        _ => {
+                            format!("I cannot access '{}' due to security restrictions.", path)
+                        }
+                    };
+                    return json!({"content": friendly_message});
+                }
+            }
+        }
+        _ => None,
+    };
+
+    // Execute the tool
+    match name {
+        "read_file" => {
+            let validated_path = validated_path.unwrap();
+            match std::fs::read_to_string(&validated_path) {
+                Ok(content) => {
+                    info!("Successfully read file: {} ({} bytes)", validated_path.display(), content.len());
+                    json!({"content": content})
+                }
+                Err(e) => {
+                    warn!("Failed to read file {}: {}", validated_path.display(), e);
+                    json!({"error": format!("Failed to read file: {}", e)})
+                }
+            }
+        }
+        "write_file" => {
+            let validated_path = validated_path.unwrap();
+            let content = args["content"].as_str().unwrap_or("");
+            match std::fs::write(&validated_path, content) {
+                Ok(_) => {
+                    info!("Successfully wrote file: {} ({} bytes)", validated_path.display(), content.len());
+                    json!({"success": true, "message": format!("File written successfully: {}", validated_path.display())})
+                }
+                Err(e) => {
+                    warn!("Failed to write file {}: {}", validated_path.display(), e);
+                    json!({"error": format!("Failed to write file: {}", e)})
+                }
+            }
+        }
+        "grep" => {
+            let validated_path = validated_path.unwrap();
+            let pattern = args["pattern"].as_str().unwrap_or("");
+            let case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
+            let max_results = args["max_results"].as_i64().unwrap_or(50) as usize;
+
+            match execute_grep(pattern, validated_path.to_str().unwrap_or(""), case_sensitive, max_results) {
+                Ok(results) => {
+                    info!("Grep found {} results for pattern '{}' in {}", results.len(), pattern, validated_path.display());
+                    if results.is_empty() {
+                        json!({"message": format!("No matches found for pattern '{}' in {}", pattern, validated_path.display())})
+                    } else {
+                        let mut formatted_results = format!(
+                            "Found {} match{} for pattern '{}' in {}:\n\n",
+                            results.len(),
+                            if results.len() == 1 { "" } else { "es" },
+                            pattern,
+                            validated_path.display()
+                        );
+                        for result in &results {
+                            let file = result["file"].as_str().unwrap_or("?");
+                            let line = result["line"].as_i64().unwrap_or(0);
+                            let content = result["content"].as_str().unwrap_or("");
+                            formatted_results.push_str(&format!("  - {}:{} — {}\n", file, line, content.trim()));
+                        }
+                        json!({"content": formatted_results})
+                    }
+                }
+                Err(e) => {
+                    warn!("Grep failed for pattern '{}' in {}: {}", pattern, validated_path.display(), e);
+                    json!({"error": format!("Grep failed: {}", e)})
+                }
+            }
+        }
+        "bash" => {
+            let command = args["command"].as_str().unwrap_or("");
+            let timeout_secs = args["timeout"].as_u64().unwrap_or(10);
+            match execute_bash(command, timeout_secs).await {
+                Ok(output) => {
+                    info!("Bash command executed successfully: {}", command);
+                    json!({"content": format!("Command executed successfully:\n\n{}", output)})
+                }
+                Err(e) => {
+                    warn!("Bash command failed: {}: {}", command, e);
+                    json!({"error": format!("Command failed: {}", e)})
+                }
+            }
+        }
+        "demo_tool" => {
+            let message = args["message"].as_str().unwrap_or("No message provided");
+            let delay = args["delay_seconds"].as_u64().unwrap_or(0);
+            info!("Demo tool called with message: '{}', delay: {}s", message, delay);
+            if delay > 0 {
+                tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+            }
+            json!({
+                "success": true,
+                "message": "Demo tool executed successfully!",
+                "echo": message,
+                "timestamp": Utc::now().to_rfc3339(),
+                "note": "This is a safe demo tool for testing the approval workflow"
+            })
+        }
+        _ => {
+            warn!("Unknown tool called: {}", name);
+            json!({"error": format!("Unknown tool: {}", name)})
+        }
+    }
+}
+
+pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::Value {
+    info!("Tool call: {} with args: {}", name, args);
+
+    // Parse arguments first to get command for bash tool
+    let args: serde_json::Value = match args.parse() {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed to parse tool arguments: {}", e);
+            return json!({"error": format!("Invalid arguments: {}", e)});
+        }
+    };
+
+    // Check permission status using the extracted function
+    match check_tool_permission(name, &args, config) {
+        ToolPermissionStatus::Denied { reason } => {
+            return json!({"error": reason, "skipped": true});
+        }
+        ToolPermissionStatus::Allowed => {
+            // Continue with execution (skip user prompt)
+        }
+        ToolPermissionStatus::NeedsApproval => {
+            // Will ask for user approval below
+        }
     }
 
     // Initialize path validator with ignore patterns from .squidignore
@@ -403,17 +629,10 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
         _ => None,
     };
 
-    // Check if tool is auto-allowed (with granular bash command support)
-    let auto_allowed = if name == "bash" {
-        let command = args["command"].as_str().unwrap_or("");
-        config.is_bash_command_allowed(command)
-    } else {
-        config.is_tool_allowed(name)
-    };
-
-    // Ask for user approval if not auto-allowed
-    let permission = if auto_allowed {
-        info!("Tool '{}' is in the allow list, auto-approving", name);
+    // Ask for user approval if not auto-allowed (checked above by check_tool_permission)
+    // This section only runs if ToolPermissionStatus::NeedsApproval was returned
+    let permission_status = check_tool_permission(name, &args, config);
+    let permission = if matches!(permission_status, ToolPermissionStatus::Allowed) {
         PermissionChoice::Yes
     } else {
         // Build approval message with styled formatting
@@ -692,6 +911,25 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                             json!({"error": format!("Command failed: {}", e)})
                         }
                     }
+                }
+                "demo_tool" => {
+                    let message = args["message"].as_str().unwrap_or("No message provided");
+                    let delay = args["delay_seconds"].as_u64().unwrap_or(0);
+
+                    info!("Demo tool called with message: '{}', delay: {}s", message, delay);
+
+                    // Optional delay to simulate work
+                    if delay > 0 {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                    }
+
+                    json!({
+                        "success": true,
+                        "message": format!("Demo tool executed successfully!"),
+                        "echo": message,
+                        "timestamp": Utc::now().to_rfc3339(),
+                        "note": "This is a safe demo tool for testing the approval workflow"
+                    })
                 }
                 _ => {
                     warn!("Unknown tool called: {}", name);

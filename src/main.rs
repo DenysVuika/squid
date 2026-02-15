@@ -643,6 +643,28 @@ async fn main() {
             };
 
             let session_manager = Arc::new(session::SessionManager::new(database));
+            
+            // Create approval state map for tool approval workflow
+            let approval_map: api::ApprovalStateMap = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+
+            // Spawn approval cleanup task to remove expired approvals
+            let approval_map_cleanup = approval_map.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    let mut approvals = approval_map_cleanup.lock().await;
+                    let now = std::time::Instant::now();
+                    let initial_count = approvals.len();
+                    approvals.retain(|_, state| {
+                        now.duration_since(state.created_at).as_secs() < 300
+                    });
+                    let removed = initial_count - approvals.len();
+                    if removed > 0 {
+                        log::debug!("Cleaned up {} expired approval(s), {} remaining", removed, approvals.len());
+                    }
+                }
+            });
 
             println!("🦑: Starting Squid Web UI...");
             println!("🌐 Server running at: http://{}", bind_address);
@@ -660,6 +682,7 @@ async fn main() {
                 App::new()
                     .app_data(web::Data::new(app_config.clone()))
                     .app_data(web::Data::new(session_manager.clone()))
+                    .app_data(web::Data::new(approval_map.clone()))
                     .wrap(cors)
                     .wrap(middleware::Logger::default())
                     .service(
@@ -672,6 +695,7 @@ async fn main() {
                             .route("/logs", web::get().to(api::get_logs))
                             .route("/models", web::get().to(api::get_models))
                             .route("/config", web::get().to(api::get_config))
+                            .route("/tool-approval", web::post().to(api::handle_tool_approval))
                             .route("/workspace/files", web::get().to(workspace::get_workspace_files))
                             .route("/workspace/files/{path:.*}", web::get().to(workspace::get_workspace_file))
                     )

@@ -1,9 +1,23 @@
 import { create } from 'zustand';
 import type { FileUIPart } from 'ai';
-import { streamChat, loadSession, type Source } from '@/lib/chat-api';
+import { streamChat, loadSession, sendToolApproval, type Source } from '@/lib/chat-api';
 import { toast } from 'sonner';
 import { useSessionStore } from './session-store';
 import { useModelStore } from './model-store';
+
+export interface ToolApproval {
+  approval_id: string;
+  tool_name: string;
+  tool_args: Record<string, unknown>;
+  tool_description: string;
+  message_id: string; // Associated message ID
+}
+
+export interface ToolApprovalDecision {
+  approval_id: string;
+  approved: boolean;
+  timestamp: number;
+}
 
 export interface MessageType {
   key: string;
@@ -25,6 +39,7 @@ export interface MessageType {
     result: string | undefined;
     error: string | undefined;
   }[];
+  toolApprovals?: ToolApproval[];
 }
 
 interface ChatStore {
@@ -37,6 +52,8 @@ interface ChatStore {
   isReasoningStreaming: boolean;
   abortController: AbortController | null;
   useWebSearch: boolean;
+  pendingApprovals: Map<string, ToolApproval>;
+  toolApprovalDecisions: Map<string, ToolApprovalDecision>;
 
   // Actions
   addUserMessage: (content: string, files?: FileUIPart[]) => void;
@@ -50,6 +67,9 @@ interface ChatStore {
   toggleWebSearch: () => void;
   updateStreamingContent: (content: string) => void;
   setIsReasoningStreaming: (isStreaming: boolean) => void;
+  addPendingApproval: (approval: ToolApproval) => void;
+  respondToApproval: (approval_id: string, approved: boolean, save_decision: boolean, scope?: string) => Promise<void>;
+  clearApproval: (approval_id: string) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -62,6 +82,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isReasoningStreaming: false,
   abortController: null,
   useWebSearch: false,
+  pendingApprovals: new Map(),
+  toolApprovalDecisions: new Map(),
 
   // Add user message and trigger streaming
   addUserMessage: (content: string, files?: FileUIPart[]) => {
@@ -270,6 +292,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               cache_tokens: modelStore.tokenUsage.cache_tokens + usage.cache_tokens,
             });
           },
+          onToolApprovalRequest: (approval) => {
+            // Add pending approval
+            get().addPendingApproval({
+              ...approval,
+              message_id: messageId,
+            });
+          },
+          onToolApprovalResponse: (approval_id, approved) => {
+            // Clear the approval from pending
+            get().clearApproval(approval_id);
+          },
           onError: (error) => {
             console.error('Stream error:', error);
             get().updateMessageContent(messageId, `Error: ${error}`);
@@ -432,5 +465,93 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Toggle web search
   toggleWebSearch: () => {
     set((state) => ({ useWebSearch: !state.useWebSearch }));
+  },
+
+  // Add pending tool approval
+  addPendingApproval: (approval: ToolApproval) => {
+    set((state) => {
+      const newPendingApprovals = new Map(state.pendingApprovals);
+      newPendingApprovals.set(approval.approval_id, approval);
+
+      // Add approval to the associated message
+      const messages = state.messages.map((msg) => {
+        if (msg.versions.some((v) => v.id === approval.message_id)) {
+          return {
+            ...msg,
+            toolApprovals: [...(msg.toolApprovals || []), approval],
+          };
+        }
+        return msg;
+      });
+
+      return {
+        pendingApprovals: newPendingApprovals,
+        messages,
+      };
+    });
+  },
+
+  // Respond to tool approval
+  respondToApproval: async (
+    approval_id: string,
+    approved: boolean,
+    save_decision: boolean,
+    scope?: string
+  ) => {
+    const state = get();
+    const approval = state.pendingApprovals.get(approval_id);
+
+    if (!approval) {
+      console.error('Approval not found:', approval_id);
+      return;
+    }
+
+    // Send approval to backend
+    const success = await sendToolApproval('', approval_id, approved, save_decision, scope || '');
+
+    if (success) {
+      // Record the decision
+      const decision: ToolApprovalDecision = {
+        approval_id,
+        approved,
+        timestamp: Date.now(),
+      };
+
+      set((state) => {
+        const newDecisions = new Map(state.toolApprovalDecisions);
+        newDecisions.set(approval_id, decision);
+
+        return {
+          toolApprovalDecisions: newDecisions,
+        };
+      });
+
+      // Show toast
+      if (approved) {
+        toast.success('Tool execution approved', {
+          description: `${approval.tool_name} can now execute`,
+        });
+      } else {
+        toast.info('Tool execution rejected', {
+          description: `${approval.tool_name} was not executed`,
+        });
+      }
+    } else {
+      toast.error('Failed to send approval', {
+        description: 'Could not communicate with the server',
+      });
+    }
+  },
+
+  // Clear approval
+  clearApproval: (approval_id: string) => {
+    set((state) => {
+      const newPendingApprovals = new Map(state.pendingApprovals);
+      newPendingApprovals.delete(approval_id);
+
+      return {
+        pendingApprovals: newPendingApprovals,
+      };
+    });
   },
 }));

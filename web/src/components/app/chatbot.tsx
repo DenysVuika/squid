@@ -63,6 +63,7 @@ import { toast } from 'sonner';
 import { SourceContentSidebar } from './source-content-sidebar';
 import { ModelItem } from './model-item';
 import { SuggestionItem } from './suggestion-item';
+import { ToolApprovalComponent } from './tool-approval';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -145,6 +146,8 @@ const Chatbot = () => {
     setStatus,
     stopStreaming,
     loadSessionHistory,
+    respondToApproval,
+    toolApprovalDecisions,
   } = useChatStore();
 
   // Local UI state
@@ -242,6 +245,21 @@ const Chatbot = () => {
     setSourceContentData({ title, content });
     setSourceContentOpen(true);
   }, []);
+
+  // Tool approval handlers
+  const handleToolApprove = useCallback(
+    (approval_id: string, save_decision: boolean, scope?: string) => {
+      void respondToApproval(approval_id, true, save_decision, scope);
+    },
+    [respondToApproval]
+  );
+
+  const handleToolReject = useCallback(
+    (approval_id: string, save_decision: boolean) => {
+      void respondToApproval(approval_id, false, save_decision);
+    },
+    [respondToApproval]
+  );
 
   // Detect language from filename
   const getLanguageFromFilename = useCallback((filename: string): BundledLanguage => {
@@ -385,6 +403,23 @@ const Chatbot = () => {
                           <ReasoningContent>{message.reasoning.content}</ReasoningContent>
                         </Reasoning>
                       )}
+                      {message.from === 'assistant' && message.toolApprovals?.map((approval) => {
+                        const decision = toolApprovalDecisions.get(approval.approval_id);
+                        return (
+                          <ToolApprovalComponent
+                            key={approval.approval_id}
+                            approval={approval}
+                            onApprove={(save_decision, scope) =>
+                              handleToolApprove(approval.approval_id, save_decision, scope)
+                            }
+                            onReject={(save_decision) =>
+                              handleToolReject(approval.approval_id, save_decision)
+                            }
+                            isApproved={decision?.approved === true}
+                            isRejected={decision?.approved === false}
+                          />
+                        );
+                      })}
                       <MessageContent>
                         {message.from === 'assistant' &&
                         !version.content &&

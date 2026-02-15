@@ -11,13 +11,39 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::debug;
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::{Mutex, oneshot};
+use std::time::Instant;
 
 use crate::{config, envinfo, llm, logger, session, tokens, tools};
+
+// Tool approval state management
+#[derive(Debug)]
+pub struct ApprovalState {
+    pub tool_name: String,
+    pub tool_args: Value,
+    pub tool_call_id: String,
+    pub sender: oneshot::Sender<bool>,
+    pub created_at: Instant,
+}
+
+pub type ApprovalStateMap = Arc<Mutex<HashMap<String, ApprovalState>>>;
+
+/// Get a human-readable description for a tool
+fn get_tool_description(tool_name: &str) -> String {
+    match tool_name {
+        "read_file" => "Read the contents of a file from the filesystem".to_string(),
+        "write_file" => "Write content to a file on the filesystem".to_string(),
+        "grep" => "Search for a pattern in files using regex".to_string(),
+        "bash" => "Execute a bash command (safe, read-only commands only)".to_string(),
+        "demo_tool" => "A demo tool for testing the approval workflow (safe, read-only)".to_string(),
+        _ => format!("Execute tool: {}", tool_name),
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct FileAttachment {
@@ -65,6 +91,18 @@ pub enum StreamEvent {
         output_tokens: i64,
         reasoning_tokens: i64,
         cache_tokens: i64,
+    },
+    #[serde(rename = "tool_approval_request")]
+    ToolApprovalRequest {
+        approval_id: String,
+        tool_name: String,
+        tool_args: Value,
+        tool_description: String,
+    },
+    #[serde(rename = "tool_approval_response")]
+    ToolApprovalResponse {
+        approval_id: String,
+        approved: bool,
     },
     #[serde(rename = "error")]
     Error { message: String },
@@ -316,6 +354,7 @@ pub async fn chat_stream(
     body: web::Json<ChatRequest>,
     app_config: web::Data<Arc<config::Config>>,
     session_manager: web::Data<Arc<session::SessionManager>>,
+    approval_map: web::Data<ApprovalStateMap>,
 ) -> Result<HttpResponse, Error> {
     debug!("Received chat request: {:?}", body);
 
@@ -400,6 +439,7 @@ pub async fn chat_stream(
             &model_id,
             &app_config_clone,
             &session_manager_clone,
+            approval_map.get_ref(),
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
@@ -611,6 +651,7 @@ async fn create_chat_stream(
     model_id: &str,
     app_config: &config::Config,
     session_manager: &session::SessionManager,
+    approval_map: &ApprovalStateMap,
 ) -> Result<
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
@@ -812,21 +853,151 @@ async fn create_chat_stream(
                                 .into(),
                             );
 
-                            // Execute tools
+                            // Execute tools with approval handling
                             for tool_call in tool_calls.iter() {
-                                let name = tool_call.function.name.clone();
-                                let args = tool_call.function.arguments.clone();
-                                let tool_call_id = tool_call.id.clone();
+                                let name = &tool_call.function.name;
+                                let args_str = &tool_call.function.arguments;
+                                let tool_call_id = &tool_call.id;
 
-                                let result = tools::call_tool(&name, &args, app_config).await;
-
-                                messages.push(
-                                    ChatCompletionRequestToolMessage {
-                                        content: result.to_string().into(),
-                                        tool_call_id,
+                                // Parse arguments
+                                let args_value: Value = match args_str.parse() {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        let error_result = json!({
+                                            "error": format!("Failed to parse tool arguments: {}", e)
+                                        });
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: error_result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                        continue;
                                     }
-                                    .into(),
-                                );
+                                };
+
+                                // Check permission status
+                                let permission_status = tools::check_tool_permission(name, &args_value, app_config);
+                                
+                                debug!("Tool '{}' permission status: {:?}", name, permission_status);
+
+                                match permission_status {
+                                    tools::ToolPermissionStatus::Denied { reason } => {
+                                        // Tool is denied, don't execute
+                                        let deny_result = json!({
+                                            "error": reason,
+                                            "skipped": true
+                                        });
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: deny_result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                    }
+                                    tools::ToolPermissionStatus::Allowed => {
+                                        // Tool is auto-allowed, execute directly
+                                        let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                        messages.push(
+                                            ChatCompletionRequestToolMessage {
+                                                content: result.to_string().into(),
+                                                tool_call_id: tool_call_id.clone(),
+                                            }
+                                            .into(),
+                                        );
+                                    }
+                                    tools::ToolPermissionStatus::NeedsApproval => {
+                                        use uuid::Uuid;
+                                        use std::time::Duration;
+                                        
+                                        // Generate unique approval ID
+                                        let approval_id = Uuid::new_v4().to_string();
+                                        
+                                        info!("Tool '{}' needs approval, generated approval_id: {}", name, approval_id);
+                                        
+                                        // Create oneshot channel for approval response
+                                        let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
+                                        
+                                        // Store approval state in map
+                                        {
+                                            let mut approvals = approval_map.lock().await;
+                                            approvals.insert(approval_id.clone(), ApprovalState {
+                                                tool_name: name.clone(),
+                                                tool_args: args_value.clone(),
+                                                tool_call_id: tool_call_id.clone(),
+                                                sender,
+                                                created_at: Instant::now(),
+                                            });
+                                        }
+                                        
+                                        // Yield approval request event
+                                        yield Ok(StreamEvent::ToolApprovalRequest {
+                                            approval_id: approval_id.clone(),
+                                            tool_name: name.clone(),
+                                            tool_args: args_value.clone(),
+                                            tool_description: get_tool_description(name),
+                                        });
+                                        
+                                        info!("Emitted ToolApprovalRequest event for approval_id: {}", approval_id);
+                                        
+                                        // Wait for approval with 5 minute timeout
+                                        let approved = match tokio::time::timeout(
+                                            Duration::from_secs(300),
+                                            receiver
+                                        ).await {
+                                            Ok(Ok(decision)) => {
+                                                info!("Tool '{}' approval received: {}", name, decision);
+                                                decision
+                                            }
+                                            Ok(Err(_)) => {
+                                                warn!("Tool '{}' approval channel closed without response", name);
+                                                false
+                                            }
+                                            Err(_) => {
+                                                warn!("Tool '{}' approval timed out after 5 minutes", name);
+                                                false
+                                            }
+                                        };
+                                        
+                                        // Clean up from map
+                                        {
+                                            let mut approvals = approval_map.lock().await;
+                                            approvals.remove(&approval_id);
+                                        }
+                                        
+                                        // Yield approval response event
+                                        yield Ok(StreamEvent::ToolApprovalResponse {
+                                            approval_id: approval_id.clone(),
+                                            approved,
+                                        });
+                                        
+                                        // Execute based on approval
+                                        if approved {
+                                            let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                            messages.push(
+                                                ChatCompletionRequestToolMessage {
+                                                    content: result.to_string().into(),
+                                                    tool_call_id: tool_call_id.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                        } else {
+                                            let reject_result = json!({
+                                                "message": format!("Tool '{}' was not executed because you rejected it.", name),
+                                                "skipped": true
+                                            });
+                                            messages.push(
+                                                ChatCompletionRequestToolMessage {
+                                                    content: reject_result.to_string().into(),
+                                                    tool_call_id: tool_call_id.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                        }
+                                    }
+                                }
                             }
 
                             // Continue the loop to make another request with tool results
@@ -1069,4 +1240,75 @@ pub async fn get_config(
     };
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToolApprovalRequest {
+    pub approval_id: String,
+    pub approved: bool,
+    #[serde(default)]
+    pub save_decision: bool,
+    #[serde(default)]
+    pub scope: String, // "tool" or "tool:specific" (e.g., "bash:ls")
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolApprovalResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Handle tool approval requests from the web UI
+pub async fn handle_tool_approval(
+    body: web::Json<ToolApprovalRequest>,
+    approval_map: web::Data<ApprovalStateMap>,
+) -> Result<HttpResponse, Error> {
+    debug!("Received tool approval: {:?}", body);
+
+    // Find the pending approval
+    let mut approvals = approval_map.lock().await;
+    
+    if let Some(approval_state) = approvals.remove(&body.approval_id) {
+        // Send the approval decision through the channel
+        if approval_state.sender.send(body.approved).is_err() {
+            return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                success: false,
+                message: "Failed to send approval response".to_string(),
+            }));
+        }
+
+        // If save_decision is true, update the config file
+        if body.save_decision {
+            let tool_name = &approval_state.tool_name;
+            let scope = if body.scope.is_empty() {
+                tool_name.clone()
+            } else {
+                body.scope.clone()
+            };
+
+            let mut config = config::Config::load();
+            let result = if body.approved {
+                config.allow_tool(&scope)
+            } else {
+                config.deny_tool(&scope)
+            };
+
+            if let Err(e) = result {
+                return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                    success: false,
+                    message: format!("Approval processed but failed to save to config: {}", e),
+                }));
+            }
+        }
+
+        Ok(HttpResponse::Ok().json(ToolApprovalResponse {
+            success: true,
+            message: "Approval processed successfully".to_string(),
+        }))
+    } else {
+        Ok(HttpResponse::NotFound().json(ToolApprovalResponse {
+            success: false,
+            message: "Approval request not found or expired".to_string(),
+        }))
+    }
 }
