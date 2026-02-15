@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(sources.len(), 1);
 
         manager
-            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None, None, None)
+            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None)
             .unwrap();
 
         let session = manager.get_session(&session_id).unwrap();
@@ -533,7 +533,7 @@ mod tests {
 
         // Add assistant response
         manager
-            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None, None, None)
+            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None)
             .unwrap();
 
         // Verify both messages exist
@@ -548,7 +548,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None, None, None)
+            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None)
             .unwrap();
 
         // Verify all 4 messages persist
@@ -575,7 +575,7 @@ mod tests {
                 .unwrap();
 
             manager
-                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None, None, None)
+                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None)
                 .unwrap();
         }
 
@@ -622,7 +622,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None, None, None)
+            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None)
             .unwrap();
 
         // Update token usage multiple times (simulates streaming updates)

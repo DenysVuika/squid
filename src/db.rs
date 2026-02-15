@@ -767,6 +767,7 @@ mod tests {
                 tool_arguments: Some(json!({"message": "Hello World"})),
                 tool_result: Some(r#"{"success": true, "echo": "Hello World"}"#.to_string()),
                 tool_error: None,
+                content_before_tool: None,
             },
             crate::session::ThinkingStep {
                 step_type: "tool".to_string(),
@@ -776,6 +777,7 @@ mod tests {
                 tool_arguments: Some(json!({"path": "/tmp/test.txt"})),
                 tool_result: None,
                 tool_error: Some("File not found".to_string()),
+                content_before_tool: None,
             },
         ];
 
