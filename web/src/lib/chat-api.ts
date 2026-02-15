@@ -112,6 +112,7 @@ export interface SessionMessage {
     tool_arguments?: Record<string, unknown>;
     tool_result?: string;
     tool_error?: string;
+    content_before_tool?: string;
   }>;
 }
 

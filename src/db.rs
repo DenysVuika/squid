@@ -120,6 +120,9 @@ impl Database {
         // Migration 009: Thinking steps
         run_migration(9, "Thinking steps", include_str!("../migrations/009_thinking_steps.sql"))?;
 
+        // Migration 010: Content split markers
+        run_migration(10, "Content split markers", include_str!("../migrations/010_content_split_markers.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -269,7 +272,7 @@ impl Database {
 
             // Load thinking steps for this message
             let mut steps_stmt = conn.prepare(
-                "SELECT step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error
+                "SELECT step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool
                  FROM thinking_steps
                  WHERE message_id = ?1
                  ORDER BY step_order ASC"
@@ -289,6 +292,7 @@ impl Database {
                     tool_arguments,
                     tool_result: row.get(5)?,
                     tool_error: row.get(6)?,
+                    content_before_tool: row.get(7)?,
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
 
@@ -402,8 +406,8 @@ impl Database {
                     .map(|args| serde_json::to_string(args).unwrap_or_default());
                 
                 conn.execute(
-                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, created_at) 
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool, created_at) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     params![
                         message_id,
                         step.step_order,
@@ -413,6 +417,7 @@ impl Database {
                         tool_args_json,
                         step.tool_result,
                         step.tool_error,
+                        step.content_before_tool,
                         chrono::Utc::now().timestamp(),
                     ],
                 )?;

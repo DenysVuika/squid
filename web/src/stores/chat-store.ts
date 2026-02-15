@@ -33,6 +33,7 @@ export interface ToolStep {
   parameters: Record<string, unknown>;
   result: string | undefined;
   error: string | undefined;
+  contentBeforeTool?: string;
 }
 
 export type ThinkingStep = ReasoningStep | ToolStep;
@@ -549,6 +550,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
             result: step.tool_result,
             error: step.tool_error,
+            contentBeforeTool: step.content_before_tool,
           });
         }
       });

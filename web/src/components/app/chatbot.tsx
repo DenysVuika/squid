@@ -1,5 +1,6 @@
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart } from 'ai';
+import React from 'react';
 
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -462,10 +463,109 @@ const Chatbot = () => {
                           </ChainOfThoughtContent>
                         </ChainOfThought>
                       ) : null}
-                      {/* Split message content around tool approvals in non-reasoning mode */}
-                      {message.from === 'assistant' && !message.thinkingSteps?.some(s => s.type === 'reasoning') && message.toolApprovals && message.toolApprovals.length > 0 ? (
+                      {/* Render content and tools in order using split markers (for loaded sessions with contentBeforeTool) */}
+                      {message.from === 'assistant' && 
+                       !message.thinkingSteps?.some(s => s.type === 'reasoning') && 
+                       message.thinkingSteps && 
+                       message.thinkingSteps.some(s => s.type === 'tool' && s.contentBeforeTool !== undefined) ? (
                         <>
-                          {/* If contentBeforeApproval exists, we're in split mode. Otherwise show all content (streaming before approval or legacy) */}
+                          {(() => {
+                            let contentPosition = 0;
+                            const elements: React.ReactNode[] = [];
+
+                            message.thinkingSteps!.forEach((step, idx) => {
+                              if (step.type === 'tool') {
+                                // Show content before this tool
+                                if (step.contentBeforeTool) {
+                                  elements.push(
+                                    <MessageContent key={`content-before-${idx}`}>
+                                      <MessageResponse>{step.contentBeforeTool}</MessageResponse>
+                                    </MessageContent>
+                                  );
+                                  contentPosition += step.contentBeforeTool.length;
+                                }
+
+                                // Find corresponding tool approval if exists
+                                const approval = message.toolApprovals?.find(
+                                  a => a.tool_name === step.name
+                                );
+                                const decision = approval ? toolApprovalDecisions.get(approval.approval_id) : null;
+
+                                // Show tool approval or result
+                                if (approval) {
+                                  elements.push(
+                                    <ToolApprovalComponent
+                                      key={`tool-${approval.approval_id}`}
+                                      approval={approval}
+                                      onApprove={(save_decision, scope) =>
+                                        handleToolApprove(approval.approval_id, save_decision, scope)
+                                      }
+                                      onReject={(save_decision) =>
+                                        handleToolReject(approval.approval_id, save_decision)
+                                      }
+                                      isApproved={decision?.approved === true}
+                                      isRejected={decision?.approved === false}
+                                    />
+                                  );
+                                } else if (step.result || step.error) {
+                                  // No approval exists but we have a result (loaded from session)
+                                  // Show the tool execution details
+                                  elements.push(
+                                    <div key={`tool-result-${idx}`} className="my-4 p-4 border rounded-lg bg-muted/50">
+                                      <div className="font-medium mb-2 flex items-center gap-2">
+                                        <span className="text-sm">Tool: {step.name}</span>
+                                        {step.status === 'error' && (
+                                          <span className="text-xs text-red-600 dark:text-red-400">Failed</span>
+                                        )}
+                                      </div>
+                                      {step.parameters && Object.keys(step.parameters).length > 0 && (
+                                        <div className="text-xs mb-2">
+                                          <div className="font-medium mb-1">Parameters:</div>
+                                          <pre className="bg-background p-2 rounded text-xs overflow-x-auto">
+                                            {JSON.stringify(step.parameters, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                      {step.result && (
+                                        <div className="text-xs">
+                                          <div className="font-medium mb-1">Result:</div>
+                                          <div className="bg-background p-2 rounded text-xs whitespace-pre-wrap">
+                                            {step.result}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {step.error && (
+                                        <div className="text-xs text-red-600 dark:text-red-400">
+                                          <div className="font-medium mb-1">Error:</div>
+                                          <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
+                                            {step.error}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              }
+                            });
+
+                            // Show remaining content after all tools
+                            if (contentPosition < version.content.length) {
+                              const remainingContent = version.content.substring(contentPosition);
+                              if (remainingContent.trim()) {
+                                elements.push(
+                                  <MessageContent key="content-after-tools">
+                                    <MessageResponse>{remainingContent}</MessageResponse>
+                                  </MessageContent>
+                                );
+                              }
+                            }
+
+                            return <>{elements}</>;
+                          })()}
+                        </>
+                      ) : message.from === 'assistant' && !message.thinkingSteps?.some(s => s.type === 'reasoning') && message.toolApprovals && message.toolApprovals.length > 0 ? (
+                        <>
+                          {/* Fallback: Legacy split mode using contentBeforeApproval */}
                           {message.toolApprovals[0].contentBeforeApproval !== undefined ? (
                             <>
                               {/* Split mode: content before approval */}

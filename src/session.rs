@@ -39,6 +39,8 @@ pub struct ThinkingStep {
     pub tool_result: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_before_tool: Option<String>, // Content accumulated before this tool
 }
 
 /// Represents a message in the chat history

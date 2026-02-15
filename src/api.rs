@@ -495,6 +495,7 @@ pub async fn chat_stream(
                                                     tool_arguments: None,
                                                     tool_result: None,
                                                     tool_error: None,
+                                                    content_before_tool: None,
                                                 });
                                                 step_order += 1;
                                             }
@@ -525,6 +526,9 @@ pub async fn chat_stream(
                             // Add tool invocation to thinking steps immediately
                             // This preserves the order: when a tool completes, it gets added right after the last reasoning step
                             if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
+                                // Capture content accumulated before this tool
+                                let content_snapshot = accumulated_content.trim().to_string();
+                                
                                 // Add tool as thinking step immediately (preserves order)
                                 thinking_steps_ordered.push(session::ThinkingStep {
                                     step_type: "tool".to_string(),
@@ -534,6 +538,11 @@ pub async fn chat_stream(
                                     tool_arguments: Some(arguments.clone()),
                                     tool_result: result.clone(),
                                     tool_error: error.clone(),
+                                    content_before_tool: if content_snapshot.is_empty() {
+                                        None
+                                    } else {
+                                        Some(content_snapshot)
+                                    },
                                 });
                                 step_order += 1;
                             }
