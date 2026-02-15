@@ -104,6 +104,13 @@ pub enum StreamEvent {
         approval_id: String,
         approved: bool,
     },
+    #[serde(rename = "tool_invocation_completed")]
+    ToolInvocationCompleted {
+        name: String,
+        arguments: Value,
+        result: Option<String>,
+        error: Option<String>,
+    },
     #[serde(rename = "error")]
     Error { message: String },
     #[serde(rename = "done")]
@@ -118,6 +125,8 @@ pub struct SessionMessage {
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<session::ToolInvocation>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -224,6 +233,7 @@ pub async fn get_session(
                     }).collect(),
                     timestamp: msg.timestamp,
                     reasoning: msg.reasoning.clone(),
+                    tools: msg.tools.clone(),
                 }).collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
@@ -450,6 +460,7 @@ pub async fn chat_stream(
                 let mut total_reasoning_tokens = 0i64;
                 let mut total_cache_tokens = 0i64;
                 let mut received_usage = false; // Track if provider sent usage
+                let mut collected_tool_invocations: Vec<session::ToolInvocation> = Vec::new();
 
                 // Stream each content chunk as it arrives
                 let mut pinned_stream = Box::pin(content_stream);
@@ -473,6 +484,16 @@ pub async fn chat_stream(
                                 total_reasoning_tokens += reasoning_tokens;
                                 total_cache_tokens += cache_tokens;
                                 received_usage = true;
+                            }
+
+                            // Collect tool invocations
+                            if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
+                                collected_tool_invocations.push(session::ToolInvocation {
+                                    name: name.clone(),
+                                    arguments: arguments.clone(),
+                                    result: result.clone(),
+                                    error: error.clone(),
+                                });
                             }
 
                             let json = serde_json::to_string(&chunk).unwrap_or_default();
@@ -516,13 +537,22 @@ pub async fn chat_stream(
                 }
 
                 if !final_content.is_empty() {
-                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {})",
-                        session_id, final_content.len(), reasoning_opt.is_some());
+                    debug!("Saving assistant message to session {} (length: {} chars, reasoning: {}, tools: {})",
+                        session_id, final_content.len(), reasoning_opt.is_some(), collected_tool_invocations.len());
+                    
+                    // Pass tools if any were collected
+                    let tools_opt = if collected_tool_invocations.is_empty() {
+                        None
+                    } else {
+                        Some(collected_tool_invocations.clone())
+                    };
+                    
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content.clone(),
                         sources,
                         reasoning_opt,
+                        tools_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),
@@ -741,6 +771,7 @@ async fn create_chat_stream(
     );
 
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
+    let mut completed_tool_invocations: Vec<session::ToolInvocation> = Vec::new();
 
     let output_stream = async_stream::stream! {
         loop {
@@ -901,6 +932,24 @@ async fn create_chat_stream(
                                     tools::ToolPermissionStatus::Allowed => {
                                         // Tool is auto-allowed, execute directly
                                         let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                        
+                                        // Track completed tool invocation
+                                        let tool_inv = session::ToolInvocation {
+                                            name: name.clone(),
+                                            arguments: args_value.clone(),
+                                            result: Some(result.to_string()),
+                                            error: None,
+                                        };
+                                        completed_tool_invocations.push(tool_inv.clone());
+                                        
+                                        // Emit tool invocation completed event
+                                        yield Ok(StreamEvent::ToolInvocationCompleted {
+                                            name: tool_inv.name,
+                                            arguments: tool_inv.arguments,
+                                            result: tool_inv.result,
+                                            error: tool_inv.error,
+                                        });
+                                        
                                         messages.push(
                                             ChatCompletionRequestToolMessage {
                                                 content: result.to_string().into(),
@@ -977,6 +1026,24 @@ async fn create_chat_stream(
                                         // Execute based on approval
                                         if approved {
                                             let result = tools::execute_tool_direct(name, &args_value, app_config).await;
+                                            
+                                            // Track completed tool invocation
+                                            let tool_inv = session::ToolInvocation {
+                                                name: name.clone(),
+                                                arguments: args_value.clone(),
+                                                result: Some(result.to_string()),
+                                                error: None,
+                                            };
+                                            completed_tool_invocations.push(tool_inv.clone());
+                                            
+                                            // Emit tool invocation completed event
+                                            yield Ok(StreamEvent::ToolInvocationCompleted {
+                                                name: tool_inv.name,
+                                                arguments: tool_inv.arguments,
+                                                result: tool_inv.result,
+                                                error: tool_inv.error,
+                                            });
+                                            
                                             messages.push(
                                                 ChatCompletionRequestToolMessage {
                                                     content: result.to_string().into(),

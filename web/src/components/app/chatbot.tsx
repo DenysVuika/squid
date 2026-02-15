@@ -55,6 +55,7 @@ import {
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestions } from '@/components/ai-elements/suggestion';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -420,6 +421,25 @@ const Chatbot = () => {
                           />
                         );
                       })}
+                      {message.from === 'assistant' && message.tools && message.tools.length > 0 && (
+                        message.tools.map((tool, idx) => (
+                          <Tool key={`${message.key}-tool-${idx}`} defaultOpen={false}>
+                            <ToolHeader 
+                              title={tool.name}
+                              type="dynamic-tool"
+                              state={tool.error ? "output-error" : "output-available"}
+                              toolName={tool.name}
+                            />
+                            <ToolContent>
+                              <ToolInput input={tool.parameters} />
+                              <ToolOutput 
+                                output={tool.result} 
+                                errorText={tool.error}
+                              />
+                            </ToolContent>
+                          </Tool>
+                        ))
+                      )}
                       <MessageContent>
                         {message.from === 'assistant' &&
                         !version.content &&

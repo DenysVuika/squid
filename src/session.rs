@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -12,6 +13,17 @@ pub struct FileAttachment {
     pub content: String,
 }
 
+/// Represents a tool invocation (execution) result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolInvocation {
+    pub name: String,
+    pub arguments: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 /// Represents a message in the chat history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -21,6 +33,8 @@ pub struct ChatMessage {
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<ToolInvocation>>,
 }
 
 /// Represents a source (file attachment) to be displayed with a message
@@ -122,7 +136,7 @@ impl ChatSession {
     }
 
     /// Add a message to the session
-    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>, reasoning: Option<String>) {
+    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>, reasoning: Option<String>, tools: Option<Vec<ToolInvocation>>) {
         let now = chrono::Utc::now().timestamp();
         self.messages.push(ChatMessage {
             role,
@@ -130,6 +144,7 @@ impl ChatSession {
             sources,
             timestamp: now,
             reasoning,
+            tools,
         });
         self.updated_at = now;
     }
@@ -274,8 +289,8 @@ impl SessionManager {
             })
             .collect();
 
-        // Add message to session (users don't have reasoning)
-        session.add_message("user".to_string(), content, sources.clone(), None);
+        // Add message to session (users don't have reasoning or tools)
+        session.add_message("user".to_string(), content, sources.clone(), None, None);
 
         // Auto-generate title from first user message if needed
         session.update_title_if_needed();
@@ -326,13 +341,14 @@ impl SessionManager {
         content: String,
         sources: Vec<Source>,
         reasoning: Option<String>,
+        tools: Option<Vec<ToolInvocation>>,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
-        session.add_message("assistant".to_string(), content, sources, reasoning);
+        session.add_message("assistant".to_string(), content, sources, reasoning, tools);
 
         // Get the last message
         let message = session.messages.last()
@@ -460,7 +476,7 @@ mod tests {
         assert_eq!(sources.len(), 1);
 
         manager
-            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None)
+            .add_assistant_message(&session_id, "Hi there!".to_string(), sources, None, None)
             .unwrap();
 
         let session = manager.get_session(&session_id).unwrap();
@@ -498,7 +514,7 @@ mod tests {
 
         // Add assistant response
         manager
-            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None)
+            .add_assistant_message(&session_id, "First answer".to_string(), vec![], None, None)
             .unwrap();
 
         // Verify both messages exist
@@ -513,7 +529,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None)
+            .add_assistant_message(&session_id, "Second answer".to_string(), vec![], None, None)
             .unwrap();
 
         // Verify all 4 messages persist
@@ -540,7 +556,7 @@ mod tests {
                 .unwrap();
 
             manager
-                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None)
+                .add_assistant_message(&session_id, format!("Answer {}", i), vec![], None, None)
                 .unwrap();
         }
 
@@ -587,7 +603,7 @@ mod tests {
             .unwrap();
 
         manager
-            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None)
+            .add_assistant_message(&session_id, "Test response".to_string(), vec![], None, None)
             .unwrap();
 
         // Update token usage multiple times (simulates streaming updates)

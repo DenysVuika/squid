@@ -419,6 +419,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               duration: undefined,
             }
           : undefined,
+        tools: msg.tools?.map((t: any) => ({
+          name: t.name,
+          description: '',
+          status: t.error ? 'error' : 'completed',
+          parameters: typeof t.arguments === 'object' ? t.arguments : {},
+          result: t.result,
+          error: t.error,
+        })),
       });
     }
 

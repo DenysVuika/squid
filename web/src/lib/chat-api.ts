@@ -27,6 +27,7 @@ export type StreamEventType =
   | 'tool_result'
   | 'tool_approval_request'
   | 'tool_approval_response'
+  | 'tool_invocation_completed'
   | 'usage'
   | 'error'
   | 'done';
@@ -97,6 +98,12 @@ export interface SessionMessage {
   sources: Source[];
   timestamp: number;
   reasoning?: string;
+  tools?: Array<{
+    name: string;
+    arguments: any;
+    result?: string;
+    error?: string;
+  }>;
 }
 
 export interface SessionData {

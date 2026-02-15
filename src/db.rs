@@ -114,6 +114,9 @@ impl Database {
         // Migration 007: Reasoning column
         run_migration(7, "Reasoning column", include_str!("../migrations/007_reasoning_column.sql"))?;
 
+        // Migration 008: Tool invocations
+        run_migration(8, "Tool invocations", include_str!("../migrations/008_tool_invocations.sql"))?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -206,7 +209,7 @@ impl Database {
 
         // Load messages
         let mut msg_stmt = conn.prepare(
-            "SELECT id, role, content, timestamp, reasoning FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
+            "SELECT id, role, content, timestamp, reasoning, tools FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
         let messages = msg_stmt.query_map(params![session_id], |row| {
@@ -215,13 +218,14 @@ impl Database {
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, i64>(3)?,
-                row.get::<_, Option<String>>(4)?
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?
             ))
         })?
-        .collect::<SqliteResult<Vec<(i64, String, String, i64, Option<String>)>>>()?;
+        .collect::<SqliteResult<Vec<(i64, String, String, i64, Option<String>, Option<String>)>>>()?;
 
         // Convert to ChatMessages and load sources for each
-        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning)| {
+        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning, tools_json)| {
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -260,12 +264,18 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<Source>>>()?;
 
+            // Deserialize tools from JSON if present
+            let tools = tools_json.and_then(|json| {
+                serde_json::from_str(&json).ok()
+            });
+
             Ok(ChatMessage {
                 role,
                 content,
                 sources,
                 timestamp,
                 reasoning,
+                tools,
             })
         }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
 
@@ -280,10 +290,13 @@ impl Database {
 
         debug!("Saving message for session: {} (role: {})", session_id, message.role);
 
+        // Serialize tools to JSON if present
+        let tools_json = message.tools.as_ref().map(|t| serde_json::to_string(t).unwrap_or_default());
+
         // Insert message
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp, reasoning) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![session_id, message.role, message.content, message.timestamp, message.reasoning.as_ref()],
+            "INSERT INTO messages (session_id, role, content, timestamp, reasoning, tools) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![session_id, message.role, message.content, message.timestamp, message.reasoning.as_ref(), tools_json],
         )?;
 
         let message_id = conn.last_insert_rowid();
