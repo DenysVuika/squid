@@ -49,11 +49,7 @@ pub struct ChatMessage {
     pub sources: Vec<Source>,
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>, // Keep for backward compatibility
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<ToolInvocation>>, // Keep for backward compatibility
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking_steps: Option<Vec<ThinkingStep>>, // NEW: ordered chain of thought
+    pub thinking_steps: Option<Vec<ThinkingStep>>, // Ordered chain of thought
 }
 
 /// Represents a source (file attachment) to be displayed with a message
@@ -155,15 +151,13 @@ impl ChatSession {
     }
 
     /// Add a message to the session
-    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>, reasoning: Option<String>, tools: Option<Vec<ToolInvocation>>) {
+    pub fn add_message(&mut self, role: String, content: String, sources: Vec<Source>) {
         let now = chrono::Utc::now().timestamp();
         self.messages.push(ChatMessage {
             role,
             content,
             sources,
             timestamp: now,
-            reasoning,
-            tools,
             thinking_steps: None, // Will be set separately when available
         });
         self.updated_at = now;
@@ -309,8 +303,8 @@ impl SessionManager {
             })
             .collect();
 
-        // Add message to session (users don't have reasoning or tools)
-        session.add_message("user".to_string(), content, sources.clone(), None, None);
+        // Add message to session (users don't have thinking steps)
+        session.add_message("user".to_string(), content, sources.clone());
 
         // Auto-generate title from first user message if needed
         session.update_title_if_needed();
@@ -360,8 +354,6 @@ impl SessionManager {
         session_id: &str,
         content: String,
         sources: Vec<Source>,
-        reasoning: Option<String>,
-        tools: Option<Vec<ToolInvocation>>,
         thinking_steps: Option<Vec<ThinkingStep>>,
     ) -> Result<(), String> {
         // Get or load session
@@ -369,7 +361,7 @@ impl SessionManager {
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
-        session.add_message("assistant".to_string(), content, sources, reasoning, tools);
+        session.add_message("assistant".to_string(), content, sources);
 
         // Get the last message and set thinking steps
         if let Some(message) = session.messages.last_mut() {

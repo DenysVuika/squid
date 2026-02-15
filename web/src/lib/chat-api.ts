@@ -55,6 +55,7 @@ export interface StreamEvent {
   name?: string;
   arguments?: string;
   result?: string;
+  error?: string;
   approval_id?: string;
   tool_name?: string;
   tool_args?: Record<string, unknown>;
@@ -103,13 +104,6 @@ export interface SessionMessage {
   content: string;
   sources: Source[];
   timestamp: number;
-  reasoning?: string;
-  tools?: Array<{
-    name: string;
-    arguments: Record<string, unknown>;
-    result?: string;
-    error?: string;
-  }>;
   thinking_steps?: Array<{
     step_type: string;
     step_order: number;
@@ -289,9 +283,19 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
 
               case 'tool_invocation_completed':
                 if (onToolInvocationCompleted && event.name && event.arguments) {
+                  // Parse arguments if it's a string
+                  let parsedArgs: Record<string, unknown>;
+                  try {
+                    parsedArgs = typeof event.arguments === 'string' 
+                      ? JSON.parse(event.arguments) 
+                      : event.arguments;
+                  } catch {
+                    parsedArgs = {};
+                  }
+                  
                   onToolInvocationCompleted({
                     name: event.name,
-                    arguments: event.arguments,
+                    arguments: parsedArgs,
                     result: event.result,
                     error: event.error,
                   });

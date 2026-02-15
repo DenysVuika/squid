@@ -52,10 +52,8 @@ import {
   PromptInputTools,
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
-import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestions } from '@/components/ai-elements/suggestion';
-import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import {
   ChainOfThought,
   ChainOfThoughtHeader,
@@ -149,7 +147,6 @@ const Chatbot = () => {
     messages,
     status,
     streamingMessageId,
-    isReasoningStreaming,
     addUserMessage,
     setStatus,
     stopStreaming,
@@ -396,8 +393,8 @@ const Chatbot = () => {
                           </SourcesContent>
                         </Sources>
                       )}
-                      {/* Display chain of thought only if there are multiple steps (reasoning + tools) */}
-                      {message.thinkingSteps && message.thinkingSteps.length > 1 && message.thinkingSteps.some(s => s.type === 'reasoning') ? (
+                      {/* Display chain of thought if there are thinking steps with reasoning */}
+                      {message.thinkingSteps && message.thinkingSteps.some(s => s.type === 'reasoning') ? (
                         <ChainOfThought defaultOpen={status === 'streaming' && streamingMessageId === version.id}>
                           <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
                           <ChainOfThoughtContent>
@@ -464,74 +461,118 @@ const Chatbot = () => {
                             })}
                           </ChainOfThoughtContent>
                         </ChainOfThought>
-                      ) : message.reasoning ? (
-                        <Reasoning
-                          duration={
-                            status === 'streaming' && streamingMessageId === version.id
-                              ? undefined
-                              : message.reasoning.duration
-                          }
-                          isStreaming={
-                            isReasoningStreaming && status === 'streaming' && streamingMessageId === version.id
-                          }
-                        >
-                          <ReasoningTrigger />
-                          <ReasoningContent>{message.reasoning.content}</ReasoningContent>
-                        </Reasoning>
                       ) : null}
-                      {/* Show tool approvals (always visible when pending) */}
-                      {message.from === 'assistant' && message.toolApprovals?.map((approval) => {
-                        const decision = toolApprovalDecisions.get(approval.approval_id);
-                        const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
-                        // Hide approved/rejected approvals when chain of thought is active (has reasoning)
-                        if (hasReasoning && decision) {
-                          return null;
-                        }
-                        return (
-                          <ToolApprovalComponent
-                            key={approval.approval_id}
-                            approval={approval}
-                            onApprove={(save_decision, scope) =>
-                              handleToolApprove(approval.approval_id, save_decision, scope)
+                      {/* Split message content around tool approvals in non-reasoning mode */}
+                      {message.from === 'assistant' && !message.thinkingSteps?.some(s => s.type === 'reasoning') && message.toolApprovals && message.toolApprovals.length > 0 ? (
+                        <>
+                          {/* If contentBeforeApproval exists, we're in split mode. Otherwise show all content (streaming before approval or legacy) */}
+                          {message.toolApprovals[0].contentBeforeApproval !== undefined ? (
+                            <>
+                              {/* Split mode: content before approval */}
+                              {message.toolApprovals[0].contentBeforeApproval && (
+                                <MessageContent>
+                                  <MessageResponse>
+                                    {message.toolApprovals[0].contentBeforeApproval}
+                                  </MessageResponse>
+                                </MessageContent>
+                              )}
+                              {/* Tool approvals */}
+                              {message.toolApprovals.map((approval) => {
+                                const decision = toolApprovalDecisions.get(approval.approval_id);
+                                return (
+                                  <ToolApprovalComponent
+                                    key={approval.approval_id}
+                                    approval={approval}
+                                    onApprove={(save_decision, scope) =>
+                                      handleToolApprove(approval.approval_id, save_decision, scope)
+                                    }
+                                    onReject={(save_decision) =>
+                                      handleToolReject(approval.approval_id, save_decision)
+                                    }
+                                    isApproved={decision?.approved === true}
+                                    isRejected={decision?.approved === false}
+                                  />
+                                );
+                              })}
+                              {/* Split mode: content after approval */}
+                              {version.content && 
+                               version.content.length > (message.toolApprovals[0].contentBeforeApproval?.length || 0) && (
+                                <MessageContent>
+                                  <MessageResponse>
+                                    {version.content.substring(message.toolApprovals[0].contentBeforeApproval?.length || 0)}
+                                  </MessageResponse>
+                                </MessageContent>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {/* No split mode: show all content then approval (streaming before approval or legacy sessions) */}
+                              {version.content && (
+                                <MessageContent>
+                                  <MessageResponse>
+                                    {version.content}
+                                  </MessageResponse>
+                                </MessageContent>
+                              )}
+                              {/* Tool approvals */}
+                              {message.toolApprovals.map((approval) => {
+                                const decision = toolApprovalDecisions.get(approval.approval_id);
+                                return (
+                                  <ToolApprovalComponent
+                                    key={approval.approval_id}
+                                    approval={approval}
+                                    onApprove={(save_decision, scope) =>
+                                      handleToolApprove(approval.approval_id, save_decision, scope)
+                                    }
+                                    onReject={(save_decision) =>
+                                      handleToolReject(approval.approval_id, save_decision)
+                                    }
+                                    isApproved={decision?.approved === true}
+                                    isRejected={decision?.approved === false}
+                                  />
+                                );
+                              })}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {/* Normal message content (reasoning mode or no approvals) */}
+                          <MessageContent>
+                            {message.from === 'assistant' &&
+                            !version.content &&
+                            status === 'streaming' &&
+                            !message.thinkingSteps ? (
+                              <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                            ) : (
+                              <MessageResponse>{version.content}</MessageResponse>
+                            )}
+                          </MessageContent>
+                          {/* Tool approvals for reasoning mode (after content) */}
+                          {message.toolApprovals?.map((approval) => {
+                            const decision = toolApprovalDecisions.get(approval.approval_id);
+                            const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
+                            // Hide approved/rejected approvals when chain of thought is active (has reasoning)
+                            if (hasReasoning && decision) {
+                              return null;
                             }
-                            onReject={(save_decision) =>
-                              handleToolReject(approval.approval_id, save_decision)
-                            }
-                            isApproved={decision?.approved === true}
-                            isRejected={decision?.approved === false}
-                          />
-                        );
-                      })}
-                      {/* Only show tools if NOT using chain of thought OR if no reasoning */}
-                      {(!message.thinkingSteps || !message.thinkingSteps.some(s => s.type === 'reasoning')) && message.from === 'assistant' && message.tools && message.tools.length > 0 && (
-                        message.tools.map((tool, idx) => (
-                          <Tool key={`${message.key}-tool-${idx}`} defaultOpen={false}>
-                            <ToolHeader 
-                              title={tool.name}
-                              type="dynamic-tool"
-                              state={tool.error ? "output-error" : "output-available"}
-                              toolName={tool.name}
-                            />
-                            <ToolContent>
-                              <ToolInput input={tool.parameters} />
-                              <ToolOutput 
-                                output={tool.result} 
-                                errorText={tool.error}
+                            return (
+                              <ToolApprovalComponent
+                                key={approval.approval_id}
+                                approval={approval}
+                                onApprove={(save_decision, scope) =>
+                                  handleToolApprove(approval.approval_id, save_decision, scope)
+                                }
+                                onReject={(save_decision) =>
+                                  handleToolReject(approval.approval_id, save_decision)
+                                }
+                                isApproved={decision?.approved === true}
+                                isRejected={decision?.approved === false}
                               />
-                            </ToolContent>
-                          </Tool>
-                        ))
+                            );
+                          })}
+                        </>
                       )}
-                      <MessageContent>
-                        {message.from === 'assistant' &&
-                        !version.content &&
-                        status === 'streaming' &&
-                        !message.reasoning ? (
-                          <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
-                        ) : (
-                          <MessageResponse>{version.content}</MessageResponse>
-                        )}
-                      </MessageContent>
                     </div>
                   </Message>
                 ))}

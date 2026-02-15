@@ -11,6 +11,7 @@ export interface ToolApproval {
   tool_args: Record<string, unknown>;
   tool_description: string;
   message_id: string; // Associated message ID
+  contentBeforeApproval?: string; // Content before the approval request
 }
 
 export interface ToolApprovalDecision {
@@ -44,21 +45,8 @@ export interface MessageType {
     id: string;
     content: string;
   }[];
-  // Legacy reasoning field (for backward compatibility with DB)
-  reasoning?: {
-    content: string;
-    duration?: number;
-  };
-  // New chain-of-thought steps
+  // Chain-of-thought steps
   thinkingSteps?: ThinkingStep[];
-  tools?: {
-    name: string;
-    description: string;
-    status: string;
-    parameters: Record<string, unknown>;
-    result: string | undefined;
-    error: string | undefined;
-  }[];
   toolApprovals?: ToolApproval[];
 }
 
@@ -286,12 +274,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               
               if (thinkEnd === -1) {
                 // Opening tag without closing - reasoning is streaming
-                const reasoningText = fullContent.substring(thinkStart + 7);
-                if (reasoningText) {
+                let reasoningText = fullContent.substring(thinkStart + 7);
+                
+                // Remove any <tool_call>...</tool_call> tags from streaming reasoning
+                while (reasoningText.includes('<tool_call>')) {
+                  const toolStart = reasoningText.indexOf('<tool_call>');
+                  const toolEnd = reasoningText.indexOf('</tool_call>');
+                  if (toolEnd > toolStart) {
+                    reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                  } else {
+                    // Incomplete tool_call tag, remove from start
+                    reasoningText = reasoningText.substring(0, toolStart);
+                    break;
+                  }
+                }
+                
+                if (reasoningText.trim()) {
                   // Add as a new reasoning step (don't merge)
                   thinkingSteps.push({
                     type: 'reasoning',
-                    content: reasoningText,
+                    content: reasoningText.trim(),
                   });
                 }
                 hasOpenTag = true;
@@ -299,12 +301,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               }
 
               // Complete <think>...</think> block found
-              const reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
-              if (reasoningText) {
+              let reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
+              
+              // Remove any <tool_call>...</tool_call> tags from reasoning
+              while (reasoningText.includes('<tool_call>')) {
+                const toolStart = reasoningText.indexOf('<tool_call>');
+                const toolEnd = reasoningText.indexOf('</tool_call>');
+                if (toolEnd > toolStart) {
+                  reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                } else {
+                  // Incomplete tool_call tag, remove from start
+                  reasoningText = reasoningText.substring(0, toolStart);
+                  break;
+                }
+              }
+              
+              if (reasoningText.trim()) {
                 // Add each closed <think> block as a SEPARATE reasoning step
                 thinkingSteps.push({
                   type: 'reasoning',
-                  content: reasoningText,
+                  content: reasoningText.trim(),
                 });
               }
               
@@ -328,12 +344,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               messages: state.messages.map((msg) => {
                 const hasVersion = msg.versions.some((v) => v.id === messageId);
                 if (hasVersion) {
-                  // For backward compatibility, keep the old reasoning format too
-                  const reasoningContent = thinkingSteps
-                    .filter(s => s.type === 'reasoning')
-                    .map(s => s.content)
-                    .join('\n\n');
-                  
                   // Build final thinking steps by intelligently merging:
                   // 1. Keep existing steps that are already there (both reasoning and tools)
                   // 2. Update reasoning steps with new content from current parse
@@ -367,11 +377,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   return {
                     ...msg,
                     versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
-                    reasoning: reasoningContent
-                      ? {
-                          content: reasoningContent,
-                        }
-                      : msg.reasoning,
                     thinkingSteps: finalSteps.length > 0 ? finalSteps : undefined,
                   };
                 }
@@ -419,10 +424,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             }));
           },
           onToolApprovalRequest: (approval) => {
-            // Add pending approval
+            // Capture the current content at the time of approval request
+            const currentContent = get().streamingContentRef;
+            
+            // Add pending approval with content snapshot
             get().addPendingApproval({
               ...approval,
               message_id: messageId,
+              contentBeforeApproval: currentContent,
             });
           },
           onToolApprovalResponse: (approval_id) => {
@@ -454,65 +463,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             // Refresh sessions list (to update sidebar)
             sessionStore.refreshSessions();
             
-            // Reload the full session to get the complete message with tools
+            // Reload the session to get updated token usage
             if (sessionStore.activeSessionId) {
               try {
                 const session = await loadSession('', sessionStore.activeSessionId);
                 if (session) {
                   modelStore.updateTokenUsage(session.token_usage);
-                  
-                  // Find the assistant message we just created and update it with tools
-                  const lastMessage = session.messages[session.messages.length - 1];
-                  if (lastMessage && lastMessage.role === 'assistant' && lastMessage.tools) {
-                    console.log('[Chain] Loading tools from session:', lastMessage.tools);
-                    
-                    // Update the message with thinking steps that include tools
-                    set((state) => ({
-                      messages: state.messages.map((msg) => {
-                        if (msg.versions.some((v) => v.id === messageId)) {
-                          const thinkingSteps: ThinkingStep[] = [];
-                          
-                          // Add existing reasoning steps
-                          const existingReasoningSteps = (msg.thinkingSteps || []).filter(s => s.type === 'reasoning');
-                          thinkingSteps.push(...existingReasoningSteps);
-                          
-                          // Add tool steps from the session
-                          if (lastMessage.tools) {
-                            lastMessage.tools.forEach((t) => {
-                              thinkingSteps.push({
-                                type: 'tool',
-                                name: t.name,
-                                description: '',
-                                status: t.error ? 'error' : 'completed',
-                                parameters: typeof t.arguments === 'object' ? t.arguments : {},
-                                result: t.result,
-                                error: t.error,
-                              });
-                            });
-                          }
-                          
-                          console.log('[Chain] Final thinking steps:', thinkingSteps);
-                          
-                          // Convert tools to proper format (we already checked lastMessage.tools exists)
-                          const convertedTools = lastMessage.tools!.map((t) => ({
-                            name: t.name,
-                            description: '',
-                            status: t.error ? 'error' : 'completed',
-                            parameters: typeof t.arguments === 'object' ? t.arguments : {},
-                            result: t.result,
-                            error: t.error,
-                          }));
-                          
-                          return {
-                            ...msg,
-                            thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
-                            tools: convertedTools,
-                          };
-                        }
-                        return msg;
-                      }),
-                    }));
-                  }
                 }
               } catch (error) {
                 console.error('Failed to reload session:', error);
@@ -576,71 +532,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const uiMessages: MessageType[] = [];
     for (const msg of session.messages) {
       // Build thinking steps from the message
-      // Prefer thinking_steps if available (new format), fallback to reasoning+tools (old format)
       const thinkingSteps: ThinkingStep[] = [];
       
-      if (msg.thinking_steps && msg.thinking_steps.length > 0) {
-        // New format: use thinking_steps directly from the message
-        msg.thinking_steps.forEach((step: any) => {
-          if (step.step_type === 'reasoning') {
-            thinkingSteps.push({
-              type: 'reasoning',
-              content: step.content || '',
-            });
-          } else if (step.step_type === 'tool') {
-            thinkingSteps.push({
-              type: 'tool',
-              name: step.tool_name || '',
-              description: '',
-              status: step.tool_error ? 'error' : 'completed',
-              parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
-              result: step.tool_result,
-              error: step.tool_error,
-            });
-          }
-        });
-      } else {
-        // Old format: build from reasoning and tools (backward compatibility)
-        if (msg.reasoning && msg.tools) {
-          // Add reasoning step
+      msg.thinking_steps?.forEach((step) => {
+        if (step.step_type === 'reasoning') {
           thinkingSteps.push({
             type: 'reasoning',
-            content: msg.reasoning,
+            content: step.content || '',
           });
-          
-          // Add tool steps after reasoning
-          msg.tools.forEach((t) => {
-            thinkingSteps.push({
-              type: 'tool',
-              name: t.name,
-              description: '',
-              status: t.error ? 'error' : 'completed',
-              parameters: typeof t.arguments === 'object' ? t.arguments : {},
-              result: t.result,
-              error: t.error,
-            });
-          });
-        } else if (msg.reasoning) {
-          // Only reasoning, no tools
+        } else if (step.step_type === 'tool') {
           thinkingSteps.push({
-            type: 'reasoning',
-            content: msg.reasoning,
-          });
-        } else if (msg.tools) {
-          // Only tools, no reasoning
-          msg.tools.forEach((t) => {
-            thinkingSteps.push({
-              type: 'tool',
-              name: t.name,
-              description: '',
-              status: t.error ? 'error' : 'completed',
-              parameters: typeof t.arguments === 'object' ? t.arguments : {},
-              result: t.result,
-              error: t.error,
-            });
+            type: 'tool',
+            name: step.tool_name || '',
+            description: '',
+            status: step.tool_error ? 'error' : 'completed',
+            parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
+            result: step.tool_result,
+            error: step.tool_error,
           });
         }
-      }
+      });
 
       uiMessages.push({
         from: msg.role as 'user' | 'assistant',
@@ -659,21 +570,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             content: msg.content,
           },
         ],
-        reasoning: msg.reasoning
-          ? {
-              content: msg.reasoning,
-              duration: undefined,
-            }
-          : undefined,
         thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
-        tools: msg.tools?.map((t) => ({
-          name: t.name,
-          description: '',
-          status: t.error ? 'error' : 'completed',
-          parameters: typeof t.arguments === 'object' ? t.arguments : {},
-          result: t.result,
-          error: t.error,
-        })),
       });
     }
 

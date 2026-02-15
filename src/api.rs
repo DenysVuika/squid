@@ -124,10 +124,6 @@ pub struct SessionMessage {
     pub sources: Vec<Source>,
     pub timestamp: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<session::ToolInvocation>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_steps: Option<Vec<session::ThinkingStep>>,
 }
 
@@ -236,8 +232,6 @@ pub async fn get_session(
                             content: s.content.clone(),
                         }).collect(),
                         timestamp: msg.timestamp,
-                        reasoning: msg.reasoning.clone(),
-                        tools: msg.tools.clone(),
                         thinking_steps: msg.thinking_steps.clone(),
                     }
                 }).collect(),
@@ -466,7 +460,6 @@ pub async fn chat_stream(
                 let mut total_reasoning_tokens = 0i64;
                 let mut total_cache_tokens = 0i64;
                 let mut received_usage = false; // Track if provider sent usage
-                let mut collected_tool_invocations: Vec<session::ToolInvocation> = Vec::new();
                 // Track thinking steps in order as they occur during streaming
                 let mut thinking_steps_ordered: Vec<session::ThinkingStep> = Vec::new();
                 let mut step_order = 0i32;
@@ -529,16 +522,9 @@ pub async fn chat_stream(
                                 received_usage = true;
                             }
 
-                            // Collect tool invocations AND add to thinking steps immediately
+                            // Add tool invocation to thinking steps immediately
                             // This preserves the order: when a tool completes, it gets added right after the last reasoning step
                             if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
-                                collected_tool_invocations.push(session::ToolInvocation {
-                                    name: name.clone(),
-                                    arguments: arguments.clone(),
-                                    result: result.clone(),
-                                    error: error.clone(),
-                                });
-                                
                                 // Add tool as thinking step immediately (preserves order)
                                 thinking_steps_ordered.push(session::ThinkingStep {
                                     step_type: "tool".to_string(),
@@ -616,13 +602,6 @@ pub async fn chat_stream(
                     }
                 }
 
-                // Build reasoning_opt for backward compatibility
-                let reasoning_opt = if reasoning_parts.is_empty() {
-                    None
-                } else {
-                    Some(reasoning_parts.join("\n\n"))
-                };
-
                 // Use the thinking steps we built during streaming
                 let thinking_steps_opt = if thinking_steps_ordered.is_empty() {
                     None
@@ -633,24 +612,15 @@ pub async fn chat_stream(
                 // Trim whitespace and check if we have actual content
                 let final_content_trimmed = final_content.trim();
 
-                if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() || !collected_tool_invocations.is_empty() {
-                    debug!("Saving assistant message to session {} (content length: {} chars, reasoning: {}, tools: {}, thinking_steps: {})",
-                        session_id, final_content_trimmed.len(), reasoning_opt.is_some(), collected_tool_invocations.len(),
+                if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
+                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {})",
+                        session_id, final_content_trimmed.len(),
                         thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0));
-                    
-                    // Pass tools if any were collected
-                    let tools_opt = if collected_tool_invocations.is_empty() {
-                        None
-                    } else {
-                        Some(collected_tool_invocations.clone())
-                    };
                     
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
                         sources,
-                        reasoning_opt,
-                        tools_opt,
                         thinking_steps_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
@@ -870,7 +840,6 @@ async fn create_chat_stream(
     );
 
     let mut tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
-    let mut completed_tool_invocations: Vec<session::ToolInvocation> = Vec::new();
 
     let output_stream = async_stream::stream! {
         loop {
@@ -1032,21 +1001,12 @@ async fn create_chat_stream(
                                         // Tool is auto-allowed, execute directly
                                         let result = tools::execute_tool_direct(name, &args_value, app_config).await;
                                         
-                                        // Track completed tool invocation
-                                        let tool_inv = session::ToolInvocation {
+                                        // Emit tool invocation completed event
+                                        yield Ok(StreamEvent::ToolInvocationCompleted {
                                             name: name.clone(),
                                             arguments: args_value.clone(),
                                             result: Some(result.to_string()),
                                             error: None,
-                                        };
-                                        completed_tool_invocations.push(tool_inv.clone());
-                                        
-                                        // Emit tool invocation completed event
-                                        yield Ok(StreamEvent::ToolInvocationCompleted {
-                                            name: tool_inv.name,
-                                            arguments: tool_inv.arguments,
-                                            result: tool_inv.result,
-                                            error: tool_inv.error,
                                         });
                                         
                                         messages.push(
@@ -1126,21 +1086,12 @@ async fn create_chat_stream(
                                         if approved {
                                             let result = tools::execute_tool_direct(name, &args_value, app_config).await;
                                             
-                                            // Track completed tool invocation
-                                            let tool_inv = session::ToolInvocation {
+                                            // Emit tool invocation completed event
+                                            yield Ok(StreamEvent::ToolInvocationCompleted {
                                                 name: name.clone(),
                                                 arguments: args_value.clone(),
                                                 result: Some(result.to_string()),
                                                 error: None,
-                                            };
-                                            completed_tool_invocations.push(tool_inv.clone());
-                                            
-                                            // Emit tool invocation completed event
-                                            yield Ok(StreamEvent::ToolInvocationCompleted {
-                                                name: tool_inv.name,
-                                                arguments: tool_inv.arguments,
-                                                result: tool_inv.result,
-                                                error: tool_inv.error,
                                             });
                                             
                                             messages.push(

@@ -212,7 +212,7 @@ impl Database {
 
         // Load messages
         let mut msg_stmt = conn.prepare(
-            "SELECT id, role, content, timestamp, reasoning, tools FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
+            "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
         let messages = msg_stmt.query_map(params![session_id], |row| {
@@ -221,14 +221,12 @@ impl Database {
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, i64>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?
             ))
         })?
-        .collect::<SqliteResult<Vec<(i64, String, String, i64, Option<String>, Option<String>)>>>()?;
+        .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
 
         // Convert to ChatMessages and load sources for each
-        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp, reasoning, tools_json)| {
+        let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
             debug!("Processing message_id {} for session {}", message_id, session_id);
             
             // Load sources for this message (support both old and new schema)
@@ -269,11 +267,6 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<Source>>>()?;
 
-            // Deserialize tools from JSON if present
-            let tools = tools_json.and_then(|json| {
-                serde_json::from_str(&json).ok()
-            });
-
             // Load thinking steps for this message
             let mut steps_stmt = conn.prepare(
                 "SELECT step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error
@@ -313,8 +306,6 @@ impl Database {
                 content,
                 sources,
                 timestamp,
-                reasoning,
-                tools,
                 thinking_steps,
             })
         }).collect::<SqliteResult<Vec<ChatMessage>>>()?;
@@ -330,13 +321,10 @@ impl Database {
 
         debug!("Saving message for session: {} (role: {})", session_id, message.role);
 
-        // Serialize tools to JSON if present
-        let tools_json = message.tools.as_ref().map(|t| serde_json::to_string(t).unwrap_or_default());
-
         // Insert message
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp, reasoning, tools) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![session_id, message.role, message.content, message.timestamp, message.reasoning.as_ref(), tools_json],
+            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
+            params![session_id, message.role, message.content, message.timestamp],
         )?;
 
         let message_id = conn.last_insert_rowid();
@@ -569,7 +557,7 @@ mod tests {
             content: "test content".to_string(),
         }];
 
-        session.add_message("user".to_string(), "Hello".to_string(), sources.clone(), None, None);
+        session.add_message("user".to_string(), "Hello".to_string(), sources.clone());
 
         let message = session.messages.last().unwrap();
         db.save_message(&session_id, message).unwrap();
@@ -637,7 +625,7 @@ mod tests {
         db.save_session(&session).unwrap();
 
         // Add first user message
-        session.add_message("user".to_string(), "First message".to_string(), vec![], None, None);
+        session.add_message("user".to_string(), "First message".to_string(), vec![]);
         let message1 = session.messages.last().unwrap();
         db.save_message(&session_id, message1).unwrap();
 
@@ -652,7 +640,7 @@ mod tests {
         assert_eq!(loaded.messages[0].role, "user");
 
         // Add second assistant message
-        session.add_message("assistant".to_string(), "Response".to_string(), vec![], None, None);
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
         let message2 = session.messages.last().unwrap();
         db.save_message(&session_id, message2).unwrap();
 
@@ -696,8 +684,6 @@ mod tests {
                 "user".to_string(),
                 format!("User message {}", i),
                 vec![],
-                None,
-                None,
             );
             let user_msg = session.messages.last().unwrap();
             db.save_message(&session_id, user_msg).unwrap();
@@ -710,8 +696,6 @@ mod tests {
                 "assistant".to_string(),
                 format!("Assistant response {}", i),
                 vec![],
-                None,
-                None,
             );
             let assistant_msg = session.messages.last().unwrap();
             db.save_message(&session_id, assistant_msg).unwrap();
@@ -764,25 +748,29 @@ mod tests {
             "user".to_string(),
             "Execute demo tool".to_string(),
             vec![],
-            None,
-            None,
         );
         let user_msg = session.messages.last().unwrap();
         db.save_message(&session_id, user_msg).unwrap();
 
-        // Add assistant message with tool invocations
-        let tool_invocations = vec![
-            crate::session::ToolInvocation {
-                name: "demo_tool".to_string(),
-                arguments: json!({"message": "Hello World"}),
-                result: Some(r#"{"success": true, "echo": "Hello World"}"#.to_string()),
-                error: None,
+        // Add assistant message with thinking steps (tool invocations)
+        let thinking_steps = vec![
+            crate::session::ThinkingStep {
+                step_type: "tool".to_string(),
+                step_order: 1,
+                content: None,
+                tool_name: Some("demo_tool".to_string()),
+                tool_arguments: Some(json!({"message": "Hello World"})),
+                tool_result: Some(r#"{"success": true, "echo": "Hello World"}"#.to_string()),
+                tool_error: None,
             },
-            crate::session::ToolInvocation {
-                name: "read_file".to_string(),
-                arguments: json!({"path": "/tmp/test.txt"}),
-                result: None,
-                error: Some("File not found".to_string()),
+            crate::session::ThinkingStep {
+                step_type: "tool".to_string(),
+                step_order: 2,
+                content: None,
+                tool_name: Some("read_file".to_string()),
+                tool_arguments: Some(json!({"path": "/tmp/test.txt"})),
+                tool_result: None,
+                tool_error: Some("File not found".to_string()),
             },
         ];
 
@@ -790,37 +778,43 @@ mod tests {
             "assistant".to_string(),
             "Tools executed".to_string(),
             vec![],
-            None,
-            Some(tool_invocations.clone()),
         );
+        
+        // Set thinking steps on the message
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps.clone());
+        }
+        
         let assistant_msg = session.messages.last().unwrap();
         db.save_message(&session_id, assistant_msg).unwrap();
 
-        // Load session and verify tools were persisted
+        // Load session and verify thinking steps were persisted
         let loaded = db.load_session(&session_id).unwrap().unwrap();
         assert_eq!(loaded.messages.len(), 2);
 
-        // Verify user message has no tools
+        // Verify user message has no thinking steps
         assert_eq!(loaded.messages[0].role, "user");
-        assert!(loaded.messages[0].tools.is_none());
+        assert!(loaded.messages[0].thinking_steps.is_none());
 
-        // Verify assistant message has tools
+        // Verify assistant message has thinking steps
         assert_eq!(loaded.messages[1].role, "assistant");
-        let loaded_tools = loaded.messages[1].tools.as_ref().unwrap();
-        assert_eq!(loaded_tools.len(), 2);
+        let loaded_steps = loaded.messages[1].thinking_steps.as_ref().unwrap();
+        assert_eq!(loaded_steps.len(), 2);
 
-        // Verify first tool (successful execution)
-        assert_eq!(loaded_tools[0].name, "demo_tool");
-        assert_eq!(loaded_tools[0].arguments["message"], "Hello World");
-        assert!(loaded_tools[0].result.is_some());
-        assert!(loaded_tools[0].error.is_none());
-        assert!(loaded_tools[0].result.as_ref().unwrap().contains("Hello World"));
+        // Verify first tool step (successful execution)
+        assert_eq!(loaded_steps[0].step_type, "tool");
+        assert_eq!(loaded_steps[0].tool_name.as_ref().unwrap(), "demo_tool");
+        assert_eq!(loaded_steps[0].tool_arguments.as_ref().unwrap()["message"], "Hello World");
+        assert!(loaded_steps[0].tool_result.is_some());
+        assert!(loaded_steps[0].tool_error.is_none());
+        assert!(loaded_steps[0].tool_result.as_ref().unwrap().contains("Hello World"));
 
-        // Verify second tool (error case)
-        assert_eq!(loaded_tools[1].name, "read_file");
-        assert_eq!(loaded_tools[1].arguments["path"], "/tmp/test.txt");
-        assert!(loaded_tools[1].result.is_none());
-        assert!(loaded_tools[1].error.is_some());
-        assert_eq!(loaded_tools[1].error.as_ref().unwrap(), "File not found");
+        // Verify second tool step (error case)
+        assert_eq!(loaded_steps[1].step_type, "tool");
+        assert_eq!(loaded_steps[1].tool_name.as_ref().unwrap(), "read_file");
+        assert_eq!(loaded_steps[1].tool_arguments.as_ref().unwrap()["path"], "/tmp/test.txt");
+        assert!(loaded_steps[1].tool_result.is_none());
+        assert!(loaded_steps[1].tool_error.is_some());
+        assert_eq!(loaded_steps[1].tool_error.as_ref().unwrap(), "File not found");
     }
 }
