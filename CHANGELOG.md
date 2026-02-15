@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tool Approval in Web UI**: Interactive approval dialogs for tool execution requests
+  - See approval requests in real-time with tool name, description, and arguments
+  - Choose "Approve" to execute once, "Reject" to skip, or use "Always..." for permanent decisions
+  - "Always Approve" adds the tool to your allow list for automatic execution
+  - "Always Reject" adds the tool to your deny list to block future requests
+  - Your approval decisions are saved to `squid.config.json` automatically
+  - The LLM responds naturally to your approval choices
+
 - **Chat with Files**: Ask questions about any workspace file directly from the file viewer
   - Select a model and type your question to start a conversation about the file
   - File is automatically attached and opens in the chat interface
