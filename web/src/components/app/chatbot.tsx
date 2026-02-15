@@ -61,6 +61,13 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtStep,
 } from '@/components/ai-elements/chain-of-thought';
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from '@/components/ai-elements/tool';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -509,40 +516,25 @@ const Chatbot = () => {
                                   );
                                 } else if (step.result || step.error) {
                                   // No approval exists but we have a result (loaded from session)
-                                  // Show the tool execution details
+                                  // Show the tool execution details using Tool component
+                                  const toolState = step.status === 'error' ? 'output-error' : 'output-available';
                                   elements.push(
-                                    <div key={`tool-result-${idx}`} className="my-4 p-4 border rounded-lg bg-muted/50">
-                                      <div className="font-medium mb-2 flex items-center gap-2">
-                                        <span className="text-sm">Tool: {step.name}</span>
-                                        {step.status === 'error' && (
-                                          <span className="text-xs text-red-600 dark:text-red-400">Failed</span>
+                                    <Tool key={`tool-result-${idx}`} className="mt-4">
+                                      <ToolHeader
+                                        type="dynamic-tool"
+                                        toolName={step.name}
+                                        state={toolState}
+                                      />
+                                      <ToolContent>
+                                        {step.parameters && Object.keys(step.parameters).length > 0 && (
+                                          <ToolInput input={step.parameters} />
                                         )}
-                                      </div>
-                                      {step.parameters && Object.keys(step.parameters).length > 0 && (
-                                        <div className="text-xs mb-2">
-                                          <div className="font-medium mb-1">Parameters:</div>
-                                          <pre className="bg-background p-2 rounded text-xs overflow-x-auto">
-                                            {JSON.stringify(step.parameters, null, 2)}
-                                          </pre>
-                                        </div>
-                                      )}
-                                      {step.result && (
-                                        <div className="text-xs">
-                                          <div className="font-medium mb-1">Result:</div>
-                                          <div className="bg-background p-2 rounded text-xs whitespace-pre-wrap">
-                                            {step.result}
-                                          </div>
-                                        </div>
-                                      )}
-                                      {step.error && (
-                                        <div className="text-xs text-red-600 dark:text-red-400">
-                                          <div className="font-medium mb-1">Error:</div>
-                                          <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
-                                            {step.error}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
+                                        <ToolOutput
+                                          errorText={step.error}
+                                          output={step.result}
+                                        />
+                                      </ToolContent>
+                                    </Tool>
                                   );
                                 }
                               }
