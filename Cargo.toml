@@ -1,6 +1,6 @@
 [package]
 name = "squid-rs"
-version = "0.8.0"
+version = "0.9.0"
 description = "An AI-powered command-line tool for code reviews and suggestions."
 repository = "https://github.com/DenysVuika/squid"
 authors = ["Denys Vuika <denys.vuika@gmail.com>"]

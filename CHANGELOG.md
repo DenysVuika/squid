@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02-16
+
 ### Added
 
 - **Chain of Thought Storage**: Thinking steps (reasoning and tool calls) now preserve their exact execution order
