@@ -45,6 +45,37 @@ pub fn combine_prompts(task_prompt: &str) -> String {
     format!("{}\n\n{}\n\n{}", PERSONA, TOOLS, task_prompt)
 }
 
+/// Strip <think>...</think> blocks from content
+/// Used when sending conversation history back to the model to reduce token usage.
+/// The model doesn't need to see its own past reasoning to continue the conversation.
+pub fn strip_reasoning_blocks(content: &str) -> String {
+    let mut result = content.to_string();
+    
+    // Remove all <think>...</think> blocks
+    loop {
+        if let Some(start) = result.find("<think>") {
+            if let Some(end) = result[start..].find("</think>") {
+                let absolute_end = start + end;
+                // Remove the <think>...</think> section
+                result = format!(
+                    "{}{}",
+                    &result[..start],
+                    &result[absolute_end + 8..]
+                );
+            } else {
+                // Malformed tag - no closing tag found, leave as-is
+                break;
+            }
+        } else {
+            // No more <think> tags
+            break;
+        }
+    }
+    
+    // Trim any extra whitespace that might result from removing blocks
+    result.trim().to_string()
+}
+
 /// Composes the user message by injecting environment context and optional file content
 fn compose_user_message(
     question: &str,
@@ -520,4 +551,52 @@ pub async fn ask_llm(
     let answer = response_message.content.ok_or("No response from LLM")?;
 
     Ok(answer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_reasoning_blocks_single() {
+        let content = "Hello <think>internal reasoning here</think> world!";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Hello  world!");
+    }
+
+    #[test]
+    fn test_strip_reasoning_blocks_multiple() {
+        let content = "Start <think>first thought</think> middle <think>second thought</think> end";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Start  middle  end");
+    }
+
+    #[test]
+    fn test_strip_reasoning_blocks_empty() {
+        let content = "Hello <think></think> world!";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Hello  world!");
+    }
+
+    #[test]
+    fn test_strip_reasoning_blocks_no_blocks() {
+        let content = "Hello world!";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Hello world!");
+    }
+
+    #[test]
+    fn test_strip_reasoning_blocks_malformed() {
+        // Missing closing tag - should leave as-is
+        let content = "Hello <think>unclosed reasoning";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Hello <think>unclosed reasoning");
+    }
+
+    #[test]
+    fn test_strip_reasoning_blocks_with_newlines() {
+        let content = "Text before\n<think>\nMulti-line\nreasoning\n</think>\nText after";
+        let result = strip_reasoning_blocks(content);
+        assert_eq!(result, "Text before\n\nText after");
+    }
 }

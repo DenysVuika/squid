@@ -851,12 +851,18 @@ async fn create_chat_stream(
                         .collect();
 
                     // Add assistant message with tool calls
+                    // Strip reasoning blocks when sending back to model
+                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
+                    if filtered_content.len() != msg.content.len() {
+                        debug!("Filtered reasoning from assistant message: {} chars -> {} chars", 
+                               msg.content.len(), filtered_content.len());
+                    }
                     messages.push(
                         ChatCompletionRequestAssistantMessage {
-                            content: if msg.content.is_empty() { 
+                            content: if filtered_content.is_empty() { 
                                 None 
                             } else { 
-                                Some(msg.content.clone().into()) 
+                                Some(filtered_content.into()) 
                             },
                             tool_calls: Some(assistant_tool_calls),
                             ..Default::default()
@@ -885,9 +891,11 @@ async fn create_chat_stream(
                     }
                 } else {
                     // No tools, just add normal assistant message
+                    // Strip reasoning blocks when sending back to model
+                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
                     messages.push(
                         ChatCompletionRequestAssistantMessage {
-                            content: Some(msg.content.clone().into()),
+                            content: Some(filtered_content.into()),
                             ..Default::default()
                         }
                         .into(),
@@ -895,9 +903,11 @@ async fn create_chat_stream(
                 }
             } else {
                 // No thinking steps, just add normal assistant message
+                // Strip reasoning blocks when sending back to model
+                let filtered_content = llm::strip_reasoning_blocks(&msg.content);
                 messages.push(
                     ChatCompletionRequestAssistantMessage {
-                        content: Some(msg.content.clone().into()),
+                        content: Some(filtered_content.into()),
                         ..Default::default()
                     }
                     .into(),

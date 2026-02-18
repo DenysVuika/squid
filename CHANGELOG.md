@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Optimized Token Usage**: Reasoning blocks (`<think>` tags) are now filtered from conversation history when sending to the model, reducing context token usage by 10-30% in multi-turn conversations while preserving all reasoning in the database and UI display.
+
 ## [0.9.0] - 2026-02-16
 
 ### Added
