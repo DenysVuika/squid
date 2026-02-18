@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Simplified Reasoning Display**: Improved reasoning UI for cleaner, more focused presentation
+  - Simple reasoning (without tools) now shows as a collapsible "Thinking..." indicator instead of full chain of thought
+  - Complex reasoning (with tools) displays complete chain of thought with step-by-step breakdown
+  - All reasoning blocks collapsed by default when streaming completes or when loading sessions
+  - Users can expand to review the thinking process if interested
 - **Optimized Token Usage**: Reasoning blocks (`<think>` tags) are now filtered from conversation history when sending to the model, reducing context token usage by 10-30% in multi-turn conversations while preserving all reasoning in the database and UI display.
 
 ## [0.9.0] - 2026-02-16
