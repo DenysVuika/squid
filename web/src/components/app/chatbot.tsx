@@ -62,6 +62,11 @@ import {
   ChainOfThoughtStep,
 } from '@/components/ai-elements/chain-of-thought';
 import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from '@/components/ai-elements/reasoning';
+import {
   Tool,
   ToolContent,
   ToolHeader,
@@ -401,75 +406,101 @@ const Chatbot = () => {
                           </SourcesContent>
                         </Sources>
                       )}
-                      {/* Display chain of thought if there are thinking steps with reasoning */}
-                      {message.thinkingSteps && message.thinkingSteps.some(s => s.type === 'reasoning') ? (
-                        <ChainOfThought defaultOpen={status === 'streaming' && streamingMessageId === version.id}>
-                          <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
-                          <ChainOfThoughtContent>
-                            {message.thinkingSteps.map((step, idx) => {
-                              if (step.type === 'reasoning') {
-                                return (
-                                  <ChainOfThoughtStep
-                                    key={`reasoning-${idx}`}
-                                    icon={BrainIcon}
-                                    label="Reasoning"
-                                    status={
-                                      status === 'streaming' &&
-                                      streamingMessageId === version.id &&
-                                      idx === message.thinkingSteps!.length - 1
-                                        ? 'active'
-                                        : 'complete'
-                                    }
-                                  >
-                                    <div className="text-sm whitespace-pre-wrap">{step.content}</div>
-                                  </ChainOfThoughtStep>
-                                );
-                              } else {
-                                return (
-                                  <ChainOfThoughtStep
-                                    key={`tool-${idx}`}
-                                    icon={WrenchIcon}
-                                    label={`Tool: ${step.name}`}
-                                    status={step.status === 'pending' ? 'active' : 'complete'}
-                                  >
-                                    <div className="space-y-2">
-                                      {step.parameters && Object.keys(step.parameters).length > 0 && (
-                                        <div className="text-xs">
-                                          <div className="font-medium mb-1">Input:</div>
-                                          <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
-                                            {JSON.stringify(step.parameters, null, 2)}
-                                          </pre>
-                                        </div>
-                                      )}
-                                      {step.result && (
-                                        <div className="text-xs">
-                                          <div className="font-medium mb-1">Output:</div>
-                                          <div className="bg-muted p-2 rounded text-xs whitespace-pre-wrap">
-                                            {step.result}
+                      {/* Reasoning display logic */}
+                      {(() => {
+                        const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
+                        const hasTools = message.thinkingSteps?.some(s => s.type === 'tool');
+                        const isCurrentlyStreaming = status === 'streaming' && streamingMessageId === version.id;
+
+                        if (!hasReasoning) {
+                          return null;
+                        }
+
+                        if (hasReasoning && !hasTools) {
+                          const reasoningContent = message.thinkingSteps!
+                            .filter(s => s.type === 'reasoning')
+                            .map(s => s.type === 'reasoning' ? s.content : '')
+                            .join('\n\n');
+
+                          return (
+                            <Reasoning 
+                              isStreaming={isCurrentlyStreaming}
+                              defaultOpen={false}
+                            >
+                              <ReasoningTrigger />
+                              <ReasoningContent>{reasoningContent}</ReasoningContent>
+                            </Reasoning>
+                          );
+                        }
+
+                        return (
+                          <ChainOfThought defaultOpen={false}>
+                            <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
+                            <ChainOfThoughtContent>
+                              {message.thinkingSteps!.map((step, idx) => {
+                                if (step.type === 'reasoning') {
+                                  return (
+                                    <ChainOfThoughtStep
+                                      key={`reasoning-${idx}`}
+                                      icon={BrainIcon}
+                                      label="Reasoning"
+                                      status={
+                                        isCurrentlyStreaming &&
+                                        idx === message.thinkingSteps!.length - 1
+                                          ? 'active'
+                                          : 'complete'
+                                      }
+                                    >
+                                      <div className="text-sm whitespace-pre-wrap">{step.content}</div>
+                                    </ChainOfThoughtStep>
+                                  );
+                                } else {
+                                  return (
+                                    <ChainOfThoughtStep
+                                      key={`tool-${idx}`}
+                                      icon={WrenchIcon}
+                                      label={`Tool: ${step.name}`}
+                                      status={step.status === 'pending' ? 'active' : 'complete'}
+                                    >
+                                      <div className="space-y-2">
+                                        {step.parameters && Object.keys(step.parameters).length > 0 && (
+                                          <div className="text-xs">
+                                            <div className="font-medium mb-1">Input:</div>
+                                            <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
+                                              {JSON.stringify(step.parameters, null, 2)}
+                                            </pre>
                                           </div>
-                                        </div>
-                                      )}
-                                      {step.error && (
-                                        <div className="text-xs text-red-600 dark:text-red-400">
-                                          <div className="font-medium mb-1">Error:</div>
-                                          <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
-                                            {step.error}
+                                        )}
+                                        {step.result && (
+                                          <div className="text-xs">
+                                            <div className="font-medium mb-1">Output:</div>
+                                            <div className="bg-muted p-2 rounded text-xs whitespace-pre-wrap">
+                                              {step.result}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
-                                      {!step.result && !step.error && step.status === 'pending' && (
-                                        <div className="text-xs text-muted-foreground">
-                                          Waiting for tool execution...
-                                        </div>
-                                      )}
-                                    </div>
-                                  </ChainOfThoughtStep>
-                                );
-                              }
-                            })}
-                          </ChainOfThoughtContent>
-                        </ChainOfThought>
-                      ) : null}
+                                        )}
+                                        {step.error && (
+                                          <div className="text-xs text-red-600 dark:text-red-400">
+                                            <div className="font-medium mb-1">Error:</div>
+                                            <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
+                                              {step.error}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {!step.result && !step.error && step.status === 'pending' && (
+                                          <div className="text-xs text-muted-foreground">
+                                            Waiting for tool execution...
+                                          </div>
+                                        )}
+                                      </div>
+                                    </ChainOfThoughtStep>
+                                  );
+                                }
+                              })}
+                            </ChainOfThoughtContent>
+                          </ChainOfThought>
+                        );
+                      })()}
                       {/* Render content and tools in order using split markers (for loaded sessions with contentBeforeTool) */}
                       {message.from === 'assistant' && 
                        !message.thinkingSteps?.some(s => s.type === 'reasoning') && 
