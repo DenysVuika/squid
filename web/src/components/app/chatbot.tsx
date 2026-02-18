@@ -164,6 +164,7 @@ const Chatbot = () => {
     setStatus,
     stopStreaming,
     loadSessionHistory,
+    clearMessages,
     respondToApproval,
     toolApprovalDecisions,
   } = useChatStore();
@@ -190,6 +191,12 @@ const Chatbot = () => {
     // Update ref for next comparison
     prevActiveSessionIdRef.current = activeSessionId;
     
+    // If session was deleted (changed to null from a valid ID), clear messages
+    if (!activeSessionId && prevId) {
+      clearMessages();
+      return;
+    }
+    
     // Don't load if:
     // 1. No session ID
     // 2. Same as previous (no actual change)
@@ -200,7 +207,7 @@ const Chatbot = () => {
     
     // Load session history
     void loadSessionHistory(activeSessionId);
-  }, [activeSessionId, status, loadSessionHistory]);
+  }, [activeSessionId, status, loadSessionHistory, clearMessages]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
