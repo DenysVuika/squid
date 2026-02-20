@@ -660,8 +660,8 @@ RAG (Retrieval-Augmented Generation) enhances AI responses by searching through 
 RAG requires an embedding model for generating vector representations of your documents. The recommended setup uses LM Studio:
 
 1. **Start LM Studio** with an embedding model:
-   - Download an embedding model like `nomic-embed-text`
-   - Start LM Studio's local server (default: `http://127.0.0.1:11434/v1`)
+   - Download an embedding model like `text-embedding-nomic-embed-text-v1.5`
+   - Start LM Studio's local server (default: `http://127.0.0.1:11434` - **note: no /v1 suffix**)
 
 2. **Configure RAG** in `squid.config.json`:
 
@@ -669,8 +669,8 @@ RAG requires an embedding model for generating vector representations of your do
 {
   "rag": {
     "enabled": true,
-    "embedding_model": "nomic-embed-text",
-    "embedding_url": "http://127.0.0.1:11434/v1",
+    "embedding_model": "text-embedding-nomic-embed-text-v1.5",
+    "embedding_url": "http://127.0.0.1:11434",
     "chunk_size": 512,
     "chunk_overlap": 50,
     "top_k": 5,
@@ -761,8 +761,8 @@ RAG supports indexing of common development file formats:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `true` | Enable/disable RAG features |
-| `embedding_model` | `"nomic-embed-text"` | Model name for embeddings |
-| `embedding_url` | `"http://127.0.0.1:11434/v1"` | OpenAI-compatible embedding API URL |
+| `embedding_model` | `"text-embedding-nomic-embed-text-v1.5"` | Model name for embeddings |
+| `embedding_url` | `"http://127.0.0.1:11434"` | OpenAI-compatible embedding API URL (base URL without /v1) |
 | `chunk_size` | `512` | Size of document chunks in tokens |
 | `chunk_overlap` | `50` | Overlap between chunks in tokens |
 | `top_k` | `5` | Number of results to retrieve |

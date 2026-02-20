@@ -27,7 +27,9 @@ pub struct RagEmbedder {
 impl RagEmbedder {
     /// Create a new RAG embedder with the specified configuration
     pub fn new(embedding_url: &str, model: &str) -> Result<Self> {
-        let client = rig::providers::openai::Client::new(embedding_url);
+        // For local services (LM Studio, Ollama), use a dummy API key
+        // The from_url method accepts: (api_key, base_url)
+        let client = rig::providers::openai::Client::from_url("not-needed", embedding_url);
         Ok(Self {
             client,
             model: model.to_string(),

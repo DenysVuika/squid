@@ -58,11 +58,11 @@ fn default_rag_enabled() -> bool {
 }
 
 fn default_embedding_model() -> String {
-    "nomic-embed-text".to_string()
+    "text-embedding-nomic-embed-text-v1.5".to_string()
 }
 
 fn default_embedding_url() -> String {
-    "http://127.0.0.1:11434/v1".to_string()
+    "http://127.0.0.1:11434".to_string()
 }
 
 fn default_chunk_size() -> usize {
