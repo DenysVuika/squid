@@ -59,3 +59,4 @@ reqwest = { version = "0.12", features = ["json"] }
 rig-core = "0.2"
 notify = "6.0"
 anyhow = "1.0"
+sqlite-vec = "0.1"

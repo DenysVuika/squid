@@ -1,6 +1,6 @@
 use log::{debug, info};
-use rusqlite::{params, Connection, Result as SqliteResult, LoadExtensionGuard};
-use std::path::{Path, PathBuf};
+use rusqlite::{params, Connection, Result as SqliteResult};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::io::{Read, Write};
 use flate2::Compression;
@@ -19,6 +19,9 @@ impl Database {
     /// Create a new database connection
     /// If the database file doesn't exist, it will be created
     pub fn new<P: AsRef<Path>>(path: P) -> SqliteResult<Self> {
+        // Register sqlite-vec extension once at startup
+        Self::register_vec_extension();
+
         let conn = Connection::open(path)?;
 
         // Enable foreign keys
@@ -28,59 +31,24 @@ impl Database {
             conn: Arc::new(Mutex::new(conn)),
         };
 
-        // Try to load sqlite-vec extension for RAG features
-        db.load_vec_extension()?;
-
         // Run migrations
         db.migrate()?;
 
         Ok(db)
     }
 
-    /// Load the sqlite-vec extension for vector operations
-    /// Looks for the extension in:
-    /// 1. ~/.squid/extensions/vec0.{dylib,so,dll}
-    /// 2. SQUID_VEC_EXTENSION_PATH environment variable
-    fn load_vec_extension(&self) -> SqliteResult<()> {
-        let conn = self.conn.lock().unwrap();
+    /// Register the sqlite-vec extension using sqlite3_auto_extension
+    /// This only needs to be called once, and all future connections will have it
+    fn register_vec_extension() {
+        use rusqlite::ffi::sqlite3_auto_extension;
+        use sqlite_vec::sqlite3_vec_init;
 
-        // Determine extension path
-        let extension_name = if cfg!(target_os = "macos") {
-            "vec0.dylib"
-        } else if cfg!(target_os = "windows") {
-            "vec0.dll"
-        } else {
-            "vec0.so"
-        };
-
-        // Try SQUID_VEC_EXTENSION_PATH environment variable first
-        let extension_path = if let Ok(path) = std::env::var("SQUID_VEC_EXTENSION_PATH") {
-            PathBuf::from(path)
-        } else {
-            // Default: ~/.squid/extensions/vec0.{ext}
-            let home = std::env::var("HOME")
-                .or_else(|_| std::env::var("USERPROFILE"))
-                .unwrap_or_else(|_| ".".to_string());
-            PathBuf::from(home).join(".squid").join("extensions").join(extension_name)
-        };
-
-        // Try to load the extension
         unsafe {
-            let _guard = LoadExtensionGuard::new(&conn)?;
-            
-            match conn.load_extension(&extension_path, None::<&str>) {
-                Ok(_) => {
-                    info!("Loaded sqlite-vec extension from: {:?}", extension_path);
-                    Ok(())
-                }
-                Err(e) => {
-                    debug!("Could not load sqlite-vec extension from {:?}: {}", extension_path, e);
-                    debug!("RAG features will not be available. See docs/SQLITE_VEC_SETUP.md for installation instructions.");
-                    // Don't fail - RAG is optional
-                    Ok(())
-                }
-            }
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_vec_init as *const (),
+            )));
         }
+        info!("Registered sqlite-vec extension");
     }
 
     /// Run database migrations
