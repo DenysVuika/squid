@@ -61,6 +61,7 @@ interface ChatStore {
   isReasoningStreaming: boolean;
   abortController: AbortController | null;
   useWebSearch: boolean;
+  useRag: boolean;
   pendingApprovals: Map<string, ToolApproval>;
   toolApprovalDecisions: Map<string, ToolApprovalDecision>;
 
@@ -74,6 +75,7 @@ interface ChatStore {
   loadSessionHistory: (sessionId: string) => Promise<void>;
   clearMessages: () => void;
   toggleWebSearch: () => void;
+  toggleRag: () => void;
   updateStreamingContent: (content: string) => void;
   setIsReasoningStreaming: (isStreaming: boolean) => void;
   addPendingApproval: (approval: ToolApproval) => void;
@@ -91,6 +93,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isReasoningStreaming: false,
   abortController: null,
   useWebSearch: false,
+  useRag: false,
   pendingApprovals: new Map(),
   toolApprovalDecisions: new Map(),
 
@@ -217,6 +220,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           session_id: sessionStore.activeSessionId || undefined,
           files: fileAttachments,
           model: modelStore.selectedModel || undefined,
+          use_rag: get().useRag || undefined,
         },
         {
           signal: abortController.signal,
@@ -619,6 +623,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Toggle web search
   toggleWebSearch: () => {
     set((state) => ({ useWebSearch: !state.useWebSearch }));
+  },
+
+  // Toggle RAG
+  toggleRag: () => {
+    set((state) => ({ useRag: !state.useRag }));
   },
 
   // Add pending tool approval

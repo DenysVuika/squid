@@ -62,6 +62,8 @@ pub struct ChatRequest {
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub use_rag: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -365,10 +367,12 @@ pub async fn chat_stream(
     app_config: web::Data<Arc<config::Config>>,
     session_manager: web::Data<Arc<session::SessionManager>>,
     approval_map: web::Data<ApprovalStateMap>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
     debug!("Received chat request: {:?}", body);
 
     let question = body.message.clone();
+    let use_rag = body.use_rag.unwrap_or(false);
 
     // Validate file sizes (10MB limit per file)
     const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
@@ -408,7 +412,43 @@ pub async fn chat_stream(
             web::Bytes::from(format!("data: {}\n\n", json))
         );
 
-        // Add user message to session and get sources
+        // Query RAG if enabled
+        let mut rag_sources = Vec::new();
+        if use_rag {
+            if let Some(rag_sys) = rag_system.as_ref() {
+                debug!("🔍 RAG enabled - querying for context: {}", question);
+                match rag_sys.query.execute_structured(&question).await {
+                    Ok(results) => {
+                        debug!("✅ RAG returned {} results", results.len());
+                        for result in results.iter() {
+                            debug!("  📄 {} (relevance: {:.3})", result.filename, 1.0 - result.distance.min(1.0));
+                            rag_sources.push(Source {
+                                title: result.filename.clone(),
+                                content: result.chunk_text.clone(),
+                            });
+                        }
+                        
+                        // Send RAG sources as sources event
+                        if !rag_sources.is_empty() {
+                            let sources_event = StreamEvent::Sources {
+                                sources: rag_sources.clone(),
+                            };
+                            let json = serde_json::to_string(&sources_event).unwrap_or_default();
+                            yield Ok::<_, actix_web::Error>(
+                                web::Bytes::from(format!("data: {}\n\n", json))
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!("⚠️  RAG query failed: {}", e);
+                    }
+                }
+            } else {
+                warn!("⚠️  RAG requested but system not available");
+            }
+        }
+
+        // Add user message to session and get file sources
         let sources = match session_manager_clone.add_user_message(
             &session_id,
             question.clone(),
@@ -427,7 +467,7 @@ pub async fn chat_stream(
             }
         };
 
-        // Send sources if any
+        // Send file sources if any (these are from attached files, not RAG)
         if !sources.is_empty() {
             let sources_event = StreamEvent::Sources {
                 sources: sources.iter().map(|s| Source {
@@ -450,6 +490,7 @@ pub async fn chat_stream(
             &app_config_clone,
             &session_manager_clone,
             approval_map.get_ref(),
+            if use_rag && !rag_sources.is_empty() { Some(rag_sources.clone()) } else { None },
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
@@ -621,15 +662,23 @@ pub async fn chat_stream(
                 // Trim whitespace and check if we have actual content
                 let final_content_trimmed = final_content.trim();
 
+                // Save assistant message to session with both file sources and RAG sources
+                let mut all_sources = sources.clone();
+                all_sources.extend(rag_sources.iter().map(|s| session::Source {
+                    title: s.title.clone(),
+                    content: s.content.clone(),
+                }));
+                
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
-                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {})",
+                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
                         session_id, final_content_trimmed.len(),
-                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0));
+                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
+                        sources.len(), rag_sources.len(), all_sources.len());
                     
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
-                        sources,
+                        all_sources,
                         thinking_steps_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
@@ -761,6 +810,7 @@ async fn create_chat_stream(
     app_config: &config::Config,
     session_manager: &session::SessionManager,
     approval_map: &ApprovalStateMap,
+    rag_sources: Option<Vec<Source>>,
 ) -> Result<
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
@@ -777,23 +827,38 @@ async fn create_chat_stream(
     // Get environment context
     let env_context = envinfo::get_env_context();
 
-    // Build user message with file contents if present
-    let user_message = if !files.is_empty() {
-        let mut message = env_context.clone();
-        message.push_str("\n\n");
-
+    // Build user message with RAG context if provided
+    let mut user_message = env_context.clone();
+    user_message.push_str("\n\n");
+    
+    // Add RAG context first if available
+    if let Some(ref sources) = rag_sources {
+        if !sources.is_empty() {
+            user_message.push_str("# Retrieved Context from Documents\n\n");
+            for (idx, source) in sources.iter().enumerate() {
+                user_message.push_str(&format!(
+                    "## Document {}: {}\n\n{}\n\n",
+                    idx + 1,
+                    source.title,
+                    source.content
+                ));
+            }
+            user_message.push_str("---\n\n");
+            debug!("✅ Added {} RAG sources to context", sources.len());
+        }
+    }
+    
+    // Add file contents if present
+    if !files.is_empty() {
         for file in files {
-            message.push_str(&format!(
+            user_message.push_str(&format!(
                 "Here is the content of '{}':\n\n```\n{}\n```\n\n",
                 file.filename, file.content
             ));
         }
+    }
 
-        message.push_str(&format!("User query: {}", question));
-        message
-    } else {
-        format!("{}\n\nUser query: {}", env_context, question)
-    };
+    user_message.push_str(&format!("User query: {}", question));
 
     let default_prompt = llm::combine_prompts(llm::get_ask_prompt());
     let system_message = system_prompt.unwrap_or(&default_prompt);

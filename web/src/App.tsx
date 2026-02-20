@@ -4,10 +4,11 @@ import Logs from './components/app/logs';
 import { FileViewer } from './components/app/file-viewer';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
+import { DocumentManager } from './components/app/document-manager';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
-import { FileText, MessageSquare, Files } from 'lucide-react';
+import { FileText, MessageSquare, Files, Database } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
@@ -24,6 +25,7 @@ function AppContent() {
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
+  const [showRagPanel, setShowRagPanel] = useState(false);
 
   useEffect(() => {
     void loadSessions();
@@ -101,8 +103,23 @@ function AppContent() {
               <Button
                 variant="ghost"
                 size="icon"
+                className="mr-2"
+                onClick={() => {
+                  setShowRagPanel(!showRagPanel);
+                  if (!showRagPanel) setShowFilesPanel(false);
+                }}
+                title="Toggle RAG documents"
+              >
+                <Database className={showRagPanel ? 'text-primary' : ''} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="mr-4"
-                onClick={() => setShowFilesPanel(!showFilesPanel)}
+                onClick={() => {
+                  setShowFilesPanel(!showFilesPanel);
+                  if (!showFilesPanel) setShowRagPanel(false);
+                }}
                 title="Toggle workspace files"
               >
                 <Files className={showFilesPanel ? 'text-primary' : ''} />
@@ -118,6 +135,11 @@ function AppContent() {
               <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>
+          {!isLogsPage && showRagPanel && (
+            <div className="border-l w-96 shrink-0 overflow-auto p-4">
+              <DocumentManager />
+            </div>
+          )}
           {!isLogsPage && showFilesPanel && (
             <div className="border-l w-80 shrink-0">
               <FilesSidebar />
