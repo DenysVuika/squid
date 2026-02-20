@@ -76,14 +76,13 @@ import {
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { BrainIcon, WrenchIcon } from 'lucide-react';
+import { BrainIcon, WrenchIcon, Sparkles } from 'lucide-react';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
 import { ModelItem } from './model-item';
 import { SuggestionItem } from './suggestion-item';
 import { ToolApprovalComponent } from './tool-approval';
-import { RagQueryPanel } from './rag-query-panel';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -777,13 +776,6 @@ const Chatbot = () => {
       </Conversation>
       </div>
       <div className="grid shrink-0 gap-4 border-t pt-4">
-        {/* RAG Query Panel */}
-        <div className="px-4">
-          <RagQueryPanel
-            enabled={useRag}
-            onToggle={handleRagToggle}
-          />
-        </div>
         <Suggestions className="px-4">
           {suggestions.map((suggestion) => (
             <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
@@ -811,16 +803,19 @@ const Chatbot = () => {
                     <PromptInputActionAddAttachments />
                   </PromptInputActionMenuContent>
                 </PromptInputActionMenu>
-                {/* <SpeechInput
-                  className="shrink-0"
-                  onTranscriptionChange={handleTranscriptionChange}
-                  size="icon-sm"
-                  variant="ghost"
-                /> */}
-                {/* <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
-                  <GlobeIcon size={16} />
-                  <span>Search</span>
-                </PromptInputButton> */}
+                <PromptInputButton 
+                  onClick={handleRagToggle}
+                  tooltip={{ 
+                    content: useRag 
+                      ? "RAG enabled - queries enhanced with document context" 
+                      : "Enable RAG to search documents",
+                    side: "top"
+                  }}
+                  variant={useRag ? 'default' : 'ghost'}
+                >
+                  <Sparkles size={16} />
+                  <span>RAG</span>
+                </PromptInputButton>
                 <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>
