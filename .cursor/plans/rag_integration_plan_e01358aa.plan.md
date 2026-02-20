@@ -25,10 +25,10 @@ todos:
     status: pending
   - id: config-updates
     content: Add RagConfig to src/config.rs with embedding settings
-    status: in_progress
+    status: completed
   - id: db-extension
     content: Update src/db.rs to load sqlite-vec extension and add RAG helpers
-    status: pending
+    status: completed
   - id: cli-commands
     content: "Add 'squid rag' CLI commands: init, list, rebuild, stats"
     status: pending

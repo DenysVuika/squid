@@ -1,6 +1,6 @@
 use log::{debug, info};
-use rusqlite::{params, Connection, Result as SqliteResult};
-use std::path::Path;
+use rusqlite::{params, Connection, Result as SqliteResult, LoadExtensionGuard};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::io::{Read, Write};
 use flate2::Compression;
@@ -28,10 +28,59 @@ impl Database {
             conn: Arc::new(Mutex::new(conn)),
         };
 
+        // Try to load sqlite-vec extension for RAG features
+        db.load_vec_extension()?;
+
         // Run migrations
         db.migrate()?;
 
         Ok(db)
+    }
+
+    /// Load the sqlite-vec extension for vector operations
+    /// Looks for the extension in:
+    /// 1. ~/.squid/extensions/vec0.{dylib,so,dll}
+    /// 2. SQUID_VEC_EXTENSION_PATH environment variable
+    fn load_vec_extension(&self) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Determine extension path
+        let extension_name = if cfg!(target_os = "macos") {
+            "vec0.dylib"
+        } else if cfg!(target_os = "windows") {
+            "vec0.dll"
+        } else {
+            "vec0.so"
+        };
+
+        // Try SQUID_VEC_EXTENSION_PATH environment variable first
+        let extension_path = if let Ok(path) = std::env::var("SQUID_VEC_EXTENSION_PATH") {
+            PathBuf::from(path)
+        } else {
+            // Default: ~/.squid/extensions/vec0.{ext}
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home).join(".squid").join("extensions").join(extension_name)
+        };
+
+        // Try to load the extension
+        unsafe {
+            let _guard = LoadExtensionGuard::new(&conn)?;
+            
+            match conn.load_extension(&extension_path, None::<&str>) {
+                Ok(_) => {
+                    info!("Loaded sqlite-vec extension from: {:?}", extension_path);
+                    Ok(())
+                }
+                Err(e) => {
+                    debug!("Could not load sqlite-vec extension from {:?}: {}", extension_path, e);
+                    debug!("RAG features will not be available. See docs/SQLITE_VEC_SETUP.md for installation instructions.");
+                    // Don't fail - RAG is optional
+                    Ok(())
+                }
+            }
+        }
     }
 
     /// Run database migrations
@@ -122,6 +171,9 @@ impl Database {
 
         // Migration 010: Content split markers
         run_migration(10, "Content split markers", include_str!("../migrations/010_content_split_markers.sql"))?;
+
+        // Migration 011: RAG vectors
+        run_migration(11, "RAG vectors", include_str!("../migrations/011_rag_vectors.sql"))?;
 
         info!("Database migrations completed successfully");
         Ok(())
@@ -509,6 +561,210 @@ impl Database {
         )?;
 
         Ok(count > 0)
+    }
+
+    // RAG (Retrieval-Augmented Generation) helper methods
+
+    /// Insert or update a RAG document
+    pub fn upsert_rag_document(
+        &self,
+        filename: &str,
+        content: &str,
+        content_hash: &str,
+        file_size: i64,
+    ) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        let now = chrono::Utc::now().timestamp();
+
+        // Try to update existing document first
+        let updated = conn.execute(
+            "UPDATE rag_documents SET content = ?1, content_hash = ?2, file_size = ?3, updated_at = ?4 WHERE filename = ?5",
+            params![content, content_hash, file_size, now, filename],
+        )?;
+
+        if updated == 0 {
+            // Insert new document
+            conn.execute(
+                "INSERT INTO rag_documents (filename, content, content_hash, file_size, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![filename, content, content_hash, file_size, now, now],
+            )?;
+            Ok(conn.last_insert_rowid())
+        } else {
+            // Get existing document ID
+            let doc_id: i64 = conn.query_row(
+                "SELECT id FROM rag_documents WHERE filename = ?1",
+                params![filename],
+                |row| row.get(0),
+            )?;
+            Ok(doc_id)
+        }
+    }
+
+    /// Insert a document chunk
+    pub fn insert_rag_chunk(
+        &self,
+        document_id: i64,
+        chunk_index: i32,
+        chunk_text: &str,
+        chunk_tokens: i32,
+    ) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "INSERT INTO rag_chunks (document_id, chunk_index, chunk_text, chunk_tokens) 
+             VALUES (?1, ?2, ?3, ?4)",
+            params![document_id, chunk_index, chunk_text, chunk_tokens],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Insert a vector embedding for a chunk
+    /// Note: Uses raw SQL as vec0 virtual table has specific syntax
+    pub fn insert_rag_embedding(&self, chunk_id: i64, embedding: &[f32]) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Convert embedding to format expected by vec0
+        let embedding_json = serde_json::to_string(embedding)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+        conn.execute(
+            "INSERT INTO rag_embeddings (chunk_id, embedding) VALUES (?1, ?2)",
+            params![chunk_id, embedding_json],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete all chunks and embeddings for a document
+    pub fn delete_rag_document_chunks(&self, document_id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Get all chunk IDs for this document
+        let chunk_ids: Vec<i64> = {
+            let mut stmt = conn.prepare("SELECT id FROM rag_chunks WHERE document_id = ?1")?;
+            stmt.query_map(params![document_id], |row| row.get(0))?
+                .collect::<SqliteResult<Vec<i64>>>()?
+        };
+
+        // Delete embeddings for these chunks
+        for chunk_id in chunk_ids {
+            conn.execute("DELETE FROM rag_embeddings WHERE chunk_id = ?1", params![chunk_id])?;
+        }
+
+        // Delete chunks
+        conn.execute("DELETE FROM rag_chunks WHERE document_id = ?1", params![document_id])?;
+
+        Ok(())
+    }
+
+    /// Delete a RAG document and all its chunks/embeddings
+    pub fn delete_rag_document(&self, document_id: i64) -> SqliteResult<bool> {
+        let conn = self.conn.lock().unwrap();
+
+        // Chunks will be deleted by CASCADE, but embeddings need manual deletion
+        // Get all chunk IDs first
+        let chunk_ids: Vec<i64> = {
+            let mut stmt = conn.prepare("SELECT id FROM rag_chunks WHERE document_id = ?1")?;
+            stmt.query_map(params![document_id], |row| row.get(0))?
+                .collect::<SqliteResult<Vec<i64>>>()?
+        };
+
+        // Delete embeddings
+        for chunk_id in chunk_ids {
+            conn.execute("DELETE FROM rag_embeddings WHERE chunk_id = ?1", params![chunk_id])?;
+        }
+
+        // Delete document (will CASCADE delete chunks)
+        let deleted = conn.execute("DELETE FROM rag_documents WHERE id = ?1", params![document_id])?;
+
+        Ok(deleted > 0)
+    }
+
+    /// Get RAG document by filename
+    pub fn get_rag_document_by_filename(&self, filename: &str) -> SqliteResult<Option<(i64, String, i64)>> {
+        let conn = self.conn.lock().unwrap();
+
+        match conn.query_row(
+            "SELECT id, content_hash, updated_at FROM rag_documents WHERE filename = ?1",
+            params![filename],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ) {
+            Ok(result) => Ok(Some(result)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// List all RAG documents
+    pub fn list_rag_documents(&self) -> SqliteResult<Vec<(i64, String, i64, i64, i64)>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, filename, file_size, created_at, updated_at FROM rag_documents ORDER BY filename"
+        )?;
+
+        let docs = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })?
+        .collect::<SqliteResult<Vec<_>>>()?;
+
+        Ok(docs)
+    }
+
+    /// Get RAG statistics
+    pub fn get_rag_stats(&self) -> SqliteResult<(i64, i64, i64)> {
+        let conn = self.conn.lock().unwrap();
+
+        let doc_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_documents", [], |row| row.get(0))?;
+        let chunk_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_chunks", [], |row| row.get(0))?;
+        let embedding_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))?;
+
+        Ok((doc_count, chunk_count, embedding_count))
+    }
+
+    /// Query similar chunks using vector similarity
+    /// Returns (chunk_id, chunk_text, filename, distance)
+    pub fn query_similar_chunks(
+        &self,
+        query_embedding: &[f32],
+        limit: i32,
+    ) -> SqliteResult<Vec<(i64, String, String, f32)>> {
+        let conn = self.conn.lock().unwrap();
+
+        // Convert embedding to JSON format
+        let embedding_json = serde_json::to_string(query_embedding)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+        // Query using vec0 distance function
+        let mut stmt = conn.prepare(
+            "SELECT c.id, c.chunk_text, d.filename, vec_distance_L2(e.embedding, ?1) as distance
+             FROM rag_embeddings e
+             JOIN rag_chunks c ON e.chunk_id = c.id
+             JOIN rag_documents d ON c.document_id = d.id
+             ORDER BY distance
+             LIMIT ?2"
+        )?;
+
+        let results = stmt.query_map(params![embedding_json, limit], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+            ))
+        })?
+        .collect::<SqliteResult<Vec<_>>>()?;
+
+        Ok(results)
     }
 }
 
