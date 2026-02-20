@@ -1525,3 +1525,266 @@ pub async fn handle_tool_approval(
         }))
     }
 }
+
+// ========================================
+// RAG (Retrieval-Augmented Generation) Endpoints
+// ========================================
+
+use crate::rag::{RagSystem, DocumentInfo};
+
+#[derive(Debug, Deserialize)]
+pub struct RagQueryRequest {
+    pub query: String,
+    #[serde(default)]
+    pub top_k: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagQueryResponse {
+    pub context: String,
+    pub sources: Vec<RagSource>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagSource {
+    pub filename: String,
+    pub text: String,
+    pub relevance: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentListResponse {
+    pub documents: Vec<DocumentSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentSummary {
+    pub id: i64,
+    pub filename: String,
+    pub file_size: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagStatsResponse {
+    pub doc_count: i64,
+    pub chunk_count: i64,
+    pub embedding_count: i64,
+    pub avg_chunks_per_doc: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Query RAG index for relevant context
+pub async fn rag_query(
+    body: web::Json<RagQueryRequest>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("RAG query request: {}", body.query);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+    
+    match rag_system.query.execute_structured(&body.query).await {
+        Ok(results) => {
+            let mut context = String::from("# Retrieved Context\n\n");
+            let mut sources = Vec::new();
+
+            for (idx, result) in results.iter().enumerate() {
+                context.push_str(&format!(
+                    "## Source {}: {} (relevance: {:.3})\n\n{}\n\n",
+                    idx + 1,
+                    result.filename,
+                    1.0 - result.distance.min(1.0),
+                    result.chunk_text
+                ));
+
+                sources.push(RagSource {
+                    filename: result.filename.clone(),
+                    text: result.chunk_text.clone(),
+                    relevance: 1.0 - result.distance.min(1.0),
+                });
+            }
+
+            Ok(HttpResponse::Ok().json(RagQueryResponse { context, sources }))
+        }
+        Err(e) => {
+            warn!("Failed to execute RAG query: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to execute query: {}", e)
+            })))
+        }
+    }
+}
+
+/// List all indexed documents
+pub async fn rag_list_documents(
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Listing RAG documents");
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+
+    match rag_system.indexer.list_documents() {
+        Ok(docs) => {
+            let documents: Vec<DocumentSummary> = docs
+                .into_iter()
+                .map(|doc| DocumentSummary {
+                    id: doc.id,
+                    filename: doc.filename,
+                    file_size: doc.file_size,
+                    updated_at: doc.updated_at,
+                })
+                .collect();
+
+            Ok(HttpResponse::Ok().json(DocumentListResponse { documents }))
+        }
+        Err(e) => {
+            warn!("Failed to list documents: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to list documents: {}", e)
+            })))
+        }
+    }
+}
+
+/// Delete a document from the RAG index
+pub async fn rag_delete_document(
+    path: web::Path<String>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    let filename = path.into_inner();
+    debug!("Deleting RAG document: {}", filename);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
+            success: false,
+            message: "RAG system is not enabled".to_string(),
+        }));
+    };
+
+    match rag_system.indexer.remove_document(&filename) {
+        Ok(_) => {
+            Ok(HttpResponse::Ok().json(RagResponse {
+                success: true,
+                message: format!("Document {} deleted successfully", filename),
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to delete document: {}", e);
+            Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("Failed to delete document: {}", e),
+            }))
+        }
+    }
+}
+
+/// Get RAG statistics
+pub async fn rag_stats(
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Getting RAG statistics");
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+
+    match rag_system.indexer.get_stats() {
+        Ok((doc_count, chunk_count, embedding_count)) => {
+            let avg_chunks_per_doc = if doc_count > 0 {
+                chunk_count as f64 / doc_count as f64
+            } else {
+                0.0
+            };
+
+            Ok(HttpResponse::Ok().json(RagStatsResponse {
+                doc_count,
+                chunk_count,
+                embedding_count,
+                avg_chunks_per_doc,
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to get RAG stats: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to get statistics: {}", e)
+            })))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UploadDocumentRequest {
+    pub filename: String,
+    pub content: String,
+}
+
+/// Upload and index a document
+pub async fn rag_upload_document(
+    body: web::Json<UploadDocumentRequest>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Uploading document: {}", body.filename);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
+            success: false,
+            message: "RAG system is not enabled".to_string(),
+        }));
+    };
+
+    use std::path::PathBuf;
+    use tokio::fs;
+
+    let documents_path = PathBuf::from(&app_config.rag.documents_path);
+    
+    if !documents_path.exists() {
+        if let Err(e) = fs::create_dir_all(&documents_path).await {
+            return Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("Failed to create documents directory: {}", e),
+            }));
+        }
+    }
+
+    let file_path = documents_path.join(&body.filename);
+
+    if let Err(e) = fs::write(&file_path, &body.content).await {
+        return Ok(HttpResponse::InternalServerError().json(RagResponse {
+            success: false,
+            message: format!("Failed to write file: {}", e),
+        }));
+    }
+
+    match rag_system.indexer.index_single_file(&file_path).await {
+        Ok(_) => {
+            Ok(HttpResponse::Ok().json(RagResponse {
+                success: true,
+                message: format!("Document {} uploaded and indexed successfully", body.filename),
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to index uploaded document: {}", e);
+            Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("File uploaded but indexing failed: {}", e),
+            }))
+        }
+    }
+}
+

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **RAG (Retrieval-Augmented Generation)**: Semantic search over your documents for context-aware AI responses
+  - Index your documentation, code, and notes for AI to reference
+  - Automatic chunking and embedding generation using `nomic-embed-text` or custom models
+  - Vector storage using `sqlite-vec` extension for fast similarity search
+  - New `squid rag` commands: `init`, `list`, `rebuild`, `stats`
+  - REST API endpoints for RAG operations (`/api/rag/*`)
+  - Configurable chunk size, overlap, and top-k results
+  - Supports common file types: Markdown, code files (Rust, Python, JS, TS, etc.), config files
+  - Real-time document watching and auto-indexing (coming in web UI)
+  - Embedding models via OpenAI-compatible APIs (LM Studio, Ollama, etc.)
+
 ### Changed
 
 - **Simplified Reasoning Display**: Improved reasoning UI for cleaner, more focused presentation

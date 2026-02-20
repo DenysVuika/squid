@@ -7,6 +7,7 @@ An AI-powered command-line tool for code reviews and suggestions. Privacy-focuse
 - 🤖 Chat with LLMs via OpenAI-compatible APIs
 - 📄 Provide file context for AI analysis
 - 🔍 AI-powered code reviews with language-specific prompts
+- 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
 - 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
 - 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
 - 🌐 **Web UI** - Built-in web interface for interacting with Squid
@@ -645,6 +646,168 @@ cd web && npm run dev
 Then open `http://localhost:5173` in your browser. Changes to frontend code will appear instantly. The Vite dev server proxies API requests to the Rust backend.
 
 To build for production: `cd web && npm run build` (outputs to `static/` directory).
+
+### RAG (Retrieval-Augmented Generation)
+
+Squid includes RAG capabilities for semantic search over your documents, enabling context-aware AI responses using your own documentation.
+
+**What is RAG?**
+
+RAG (Retrieval-Augmented Generation) enhances AI responses by searching through your documents to find relevant context before generating answers. This allows the AI to provide accurate, project-specific information based on your own documentation, code comments, guides, and notes.
+
+#### Prerequisites
+
+RAG requires an embedding model for generating vector representations of your documents. The recommended setup uses LM Studio:
+
+1. **Start LM Studio** with an embedding model:
+   - Download an embedding model like `nomic-embed-text`
+   - Start LM Studio's local server (default: `http://127.0.0.1:11434/v1`)
+
+2. **Configure RAG** in `squid.config.json`:
+
+```json
+{
+  "rag": {
+    "enabled": true,
+    "embedding_model": "nomic-embed-text",
+    "embedding_url": "http://127.0.0.1:11434/v1",
+    "chunk_size": 512,
+    "chunk_overlap": 50,
+    "top_k": 5,
+    "documents_path": "documents"
+  }
+}
+```
+
+#### Quick Start
+
+1. **Create a documents directory** and add your documentation:
+
+```bash
+mkdir documents
+# Add your markdown files, code docs, guides, etc.
+cp docs/*.md documents/
+```
+
+2. **Index your documents**:
+
+```bash
+squid rag init
+```
+
+3. **Query with RAG**:
+
+```bash
+squid serve
+# Then use the web UI to ask questions about your docs
+```
+
+#### RAG Commands
+
+**Initialize and index documents:**
+
+```bash
+# Index documents from default directory (./documents)
+squid rag init
+
+# Index from custom directory
+squid rag init --dir /path/to/docs
+```
+
+**List indexed documents:**
+
+```bash
+squid rag list
+# Shows all indexed files with metadata
+```
+
+**View RAG statistics:**
+
+```bash
+squid rag stats
+# Displays document count, chunks, embeddings, and averages
+```
+
+**Rebuild the entire index:**
+
+```bash
+# Clear and re-index everything (useful after config changes)
+squid rag rebuild
+
+# Rebuild from custom directory
+squid rag rebuild --dir /path/to/docs
+```
+
+#### Supported File Types
+
+RAG supports indexing of common development file formats:
+
+- **Documentation**: `.md`, `.txt`
+- **Code**: `.rs`, `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.go`, `.rb`, `.php`
+- **Scripts**: `.sh`, `.bash`
+- **Config**: `.json`, `.toml`, `.yml`, `.yaml`, `.xml`
+- **Web**: `.html`, `.css`, `.scss`
+
+#### How It Works
+
+1. **Document Chunking**: Files are split into manageable chunks (default: 512 tokens) with overlap for context preservation
+2. **Embedding Generation**: Each chunk is converted to a vector embedding using the configured model
+3. **Vector Storage**: Embeddings are stored in SQLite using `sqlite-vec` extension
+4. **Semantic Search**: Queries are embedded and compared against stored vectors using L2 distance
+5. **Context Retrieval**: Top-k most relevant chunks are retrieved and formatted for the LLM
+
+#### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `true` | Enable/disable RAG features |
+| `embedding_model` | `"nomic-embed-text"` | Model name for embeddings |
+| `embedding_url` | `"http://127.0.0.1:11434/v1"` | OpenAI-compatible embedding API URL |
+| `chunk_size` | `512` | Size of document chunks in tokens |
+| `chunk_overlap` | `50` | Overlap between chunks in tokens |
+| `top_k` | `5` | Number of results to retrieve |
+| `documents_path` | `"documents"` | Path to documents directory (relative to working directory) |
+
+#### Web UI Integration
+
+The web UI includes RAG query capabilities:
+
+- **Automatic Context**: RAG automatically enhances queries with relevant document context
+- **Source Attribution**: Responses show which documents were used
+- **Document Management**: Upload, list, and delete documents via the UI
+- **Real-time Indexing**: File watcher automatically re-indexes changed documents
+
+#### API Endpoints
+
+The RAG system exposes REST API endpoints:
+
+- `POST /api/rag/query` - Query for relevant context
+- `GET /api/rag/documents` - List indexed documents
+- `DELETE /api/rag/documents/{filename}` - Delete a document
+- `GET /api/rag/stats` - Get RAG statistics
+- `POST /api/rag/upload` - Upload and index a new document
+
+#### Best Practices
+
+**Document Organization:**
+- Keep documents focused and well-structured
+- Use clear headings and sections
+- Include relevant keywords in your documentation
+- Organize docs by topic or module
+
+**Performance:**
+- Start with a smaller `chunk_size` (256-512) for faster indexing
+- Increase `top_k` (5-10) for more comprehensive context
+- Use `chunk_overlap` (50-100) to maintain context across boundaries
+- Rebuild the index after changing chunk size or overlap
+
+**Workflow:**
+- Run `squid rag init` after adding new documentation
+- Use `squid rag stats` to monitor index size
+- Rebuild periodically with `squid rag rebuild` to refresh embeddings
+- Keep the embedding service running when using RAG features
+
+
 
 **Database & Persistence:**
 - All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)
