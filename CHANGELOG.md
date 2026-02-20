@@ -330,7 +330,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Color-coded information (cyan headers, green files, yellow actions, magenta patterns)
   - Multi-line formatted prompts with clear visual hierarchy
   - Styled help text with bold Y/N indicators
-  - See `docs/TUI_OPTIONS.md` for more UI enhancement options
 
 - **Custom System Prompts**: New `-p`/`--prompt` flag for `ask` command
   - Override the default system prompt with a custom prompt from a file

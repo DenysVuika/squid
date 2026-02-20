@@ -162,7 +162,7 @@ Check that:
 
 Install the extension:
 ```bash
-# See docs/SQLITE_VEC_SETUP.md for installation
+# Follow installation instructions from the sqlite-vec repository
 ```
 
 ### Poor search results
