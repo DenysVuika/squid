@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { FileUIPart } from 'ai';
 import { streamChat, loadSession, sendToolApproval, type Source } from '@/lib/chat-api';
 import { toast } from 'sonner';
@@ -83,19 +84,21 @@ interface ChatStore {
   clearApproval: (approval_id: string) => void;
 }
 
-export const useChatStore = create<ChatStore>((set, get) => ({
-  // Initial state
-  messages: [],
-  status: 'ready',
-  streamingMessageId: null,
-  streamingContentRef: '',
-  streamingReasoningRef: '',
-  isReasoningStreaming: false,
-  abortController: null,
-  useWebSearch: false,
-  useRag: false,
-  pendingApprovals: new Map(),
-  toolApprovalDecisions: new Map(),
+export const useChatStore = create<ChatStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      messages: [],
+      status: 'ready',
+      streamingMessageId: null,
+      streamingContentRef: '',
+      streamingReasoningRef: '',
+      isReasoningStreaming: false,
+      abortController: null,
+      useWebSearch: false,
+      useRag: false,
+      pendingApprovals: new Map(),
+      toolApprovalDecisions: new Map(),
 
   // Add user message and trigger streaming
   addUserMessage: (content: string, files?: FileUIPart[]) => {
@@ -717,4 +720,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       };
     });
   },
-}));
+    }),
+    {
+      name: 'chat-storage',
+      partialize: (state) => ({
+        useWebSearch: state.useWebSearch,
+        useRag: state.useRag,
+      }),
+    }
+  )
+);

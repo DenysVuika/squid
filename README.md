@@ -770,8 +770,14 @@ RAG supports indexing of common development file formats:
 
 #### Web UI Integration
 
+![RAG in Web UI](docs/assets/rag.png)
+
+*Native RAG toggle button in the prompt input toolbar - enable/disable document search with one click*
+
 The web UI includes RAG query capabilities:
 
+- **Native Toggle Button**: Enable/disable RAG with a single click in the prompt input toolbar
+- **Persistent State**: RAG toggle state is saved and restored between sessions
 - **Automatic Context**: RAG automatically enhances queries with relevant document context
 - **Source Attribution**: Responses show which documents were used
 - **Document Management**: Upload, list, and delete documents via the UI
