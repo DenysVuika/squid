@@ -461,7 +461,7 @@ mod tests {
         assert_eq!(config.database_path, "squid.db");
         assert_eq!(config.enable_env_context, true);
         assert_eq!(config.rag.enabled, true);
-        assert_eq!(config.rag.embedding_model, "nomic-embed-text");
+        assert_eq!(config.rag.embedding_model, "text-embedding-nomic-embed-text-v1.5");
         assert_eq!(config.rag.chunk_size, 512);
     }
 
