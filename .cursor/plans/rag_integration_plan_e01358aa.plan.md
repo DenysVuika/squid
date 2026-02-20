@@ -4,13 +4,13 @@ overview: Integrate RAG (Retrieval-Augmented Generation) support using Rig for e
 todos:
   - id: setup-dependencies
     content: Add rig-core, notify to Cargo.toml, download sqlite-vec extension
-    status: pending
+    status: completed
   - id: database-schema
     content: Create migration 011_rag_vectors.sql with documents and vec0 tables
-    status: pending
+    status: completed
   - id: demo-content
     content: Create demo documents for development and user templates for squid init
-    status: pending
+    status: completed
   - id: rag-module-core
     content: "Implement src/rag.rs: RagEmbedder, DocumentManager, chunking logic"
     status: pending
@@ -25,7 +25,7 @@ todos:
     status: pending
   - id: config-updates
     content: Add RagConfig to src/config.rs with embedding settings
-    status: pending
+    status: in_progress
   - id: db-extension
     content: Update src/db.rs to load sqlite-vec extension and add RAG helpers
     status: pending

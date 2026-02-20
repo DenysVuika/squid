@@ -316,6 +316,7 @@ async fn main() {
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
+                rag: config::Config::default().rag,
             };
 
             match config.save_to_dir(dir) {
