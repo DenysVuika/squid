@@ -74,6 +74,12 @@ enum Commands {
         /// Optional custom system prompt file
         #[arg(short, long)]
         prompt: Option<PathBuf>,
+        /// Enable RAG (overrides config setting)
+        #[arg(long)]
+        rag: bool,
+        /// Disable RAG (overrides config setting)
+        #[arg(long, conflicts_with = "rag")]
+        no_rag: bool,
     },
     /// Review code from a file
     Review {
@@ -85,6 +91,12 @@ enum Commands {
         /// Disable streaming (return complete response at once)
         #[arg(long)]
         no_stream: bool,
+        /// Enable RAG (overrides config setting)
+        #[arg(long)]
+        rag: bool,
+        /// Disable RAG (overrides config setting)
+        #[arg(long, conflicts_with = "rag")]
+        no_rag: bool,
     },
     /// Start a web server for the Squid Web UI
     Serve {
@@ -135,6 +147,44 @@ enum RagCommands {
     },
     /// Show RAG statistics
     Stats,
+}
+
+/// Initialize RAG system if needed based on config and CLI flags
+async fn initialize_rag_if_needed(
+    config_enabled: bool,
+    rag_flag: bool,
+    no_rag_flag: bool,
+    app_config: &config::Config,
+) -> Option<Arc<rag::RagSystem>> {
+    // Determine if RAG should be enabled
+    let should_enable = if no_rag_flag {
+        false
+    } else if rag_flag {
+        true
+    } else {
+        config_enabled
+    };
+    
+    if !should_enable {
+        return None;
+    }
+    
+    // Initialize RAG system
+    match db::Database::new(&app_config.database_path) {
+        Ok(db) => {
+            match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
+                Ok(system) => Some(Arc::new(system)),
+                Err(e) => {
+                    warn!("RAG initialization failed: {}", e);
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to open database for RAG: {}", e);
+            None
+        }
+    }
 }
 
 #[tokio::main]
@@ -424,6 +474,8 @@ async fn main() {
             no_stream,
             file,
             prompt,
+            rag,
+            no_rag,
         } => {
             let full_question = if let Some(m) = message {
                 format!("{} {}", question, m)
@@ -506,10 +558,47 @@ async fn main() {
                 None
             };
 
+            // Initialize RAG if needed
+            let rag_system = initialize_rag_if_needed(
+                app_config.rag.enabled,
+                *rag,
+                *no_rag,
+                &app_config,
+            ).await;
+
+            // Query RAG if available
+            let rag_context = if let Some(ref system) = rag_system {
+                println!("🦑: Using RAG for enhanced context...");
+                match system.query.execute(&full_question).await {
+                    Ok(context) if !context.is_empty() => {
+                        debug!("RAG retrieved {} bytes of context", context.len());
+                        Some(context)
+                    }
+                    Ok(_) => {
+                        debug!("RAG returned empty context");
+                        None
+                    }
+                    Err(e) => {
+                        warn!("RAG query failed: {}", e);
+                        println!("🦑: RAG query failed, continuing without RAG context");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            // Compose enhanced file content with RAG context
+            let enhanced_file_content = match (rag_context, file_content) {
+                (Some(rag), Some(file)) => Some(format!("{}\n\n# Provided File:\n\n{}", rag, file)),
+                (Some(rag), None) => Some(rag),
+                (None, file_opt) => file_opt,
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &full_question,
-                    file_content.as_deref(),
+                    enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
@@ -526,7 +615,7 @@ async fn main() {
             } else {
                 if let Err(e) = llm::ask_llm_streaming(
                     &full_question,
-                    file_content.as_deref(),
+                    enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
@@ -541,6 +630,8 @@ async fn main() {
             file,
             message,
             no_stream,
+            rag,
+            no_rag,
         } => {
             info!("Reviewing file: {:?}", file);
 
@@ -595,10 +686,54 @@ async fn main() {
                 "Please review this code.".to_string()
             };
 
+            // Initialize RAG if needed
+            let rag_system = initialize_rag_if_needed(
+                app_config.rag.enabled,
+                *rag,
+                *no_rag,
+                &app_config,
+            ).await;
+
+            // Query RAG with review-specific context
+            let rag_context = if let Some(ref system) = rag_system {
+                println!("🦑: Using RAG for enhanced context...");
+                let file_extension = file.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+                let review_query = format!(
+                    "code review best practices and common issues for {} files{}",
+                    file_extension,
+                    message.as_ref().map(|m| format!(": {}", m)).unwrap_or_default()
+                );
+                
+                match system.query.execute(&review_query).await {
+                    Ok(context) if !context.is_empty() => {
+                        debug!("RAG retrieved {} bytes of context for review", context.len());
+                        Some(context)
+                    }
+                    Ok(_) => {
+                        debug!("RAG returned empty context");
+                        None
+                    }
+                    Err(e) => {
+                        warn!("RAG query failed: {}", e);
+                        println!("🦑: RAG query failed, continuing without RAG context");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            // Compose enhanced content with RAG context
+            let enhanced_content = if let Some(rag) = rag_context {
+                format!("{}\n\n# Code to Review:\n\n{}", rag, file_content)
+            } else {
+                file_content
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &question,
-                    Some(&file_content),
+                    Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
@@ -615,7 +750,7 @@ async fn main() {
             } else {
                 if let Err(e) = llm::ask_llm_streaming(
                     &question,
-                    Some(&file_content),
+                    Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
