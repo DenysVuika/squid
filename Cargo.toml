@@ -51,8 +51,12 @@ thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 walkdir = "2.5"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
+rusqlite = { version = "0.38.0", features = ["bundled", "load_extension"] }
 tiktoken-rs = "0.9.1"
 flate2 = "1.0"
 sha2 = "0.10"
 reqwest = { version = "0.12", features = ["json"] }
+rig-core = "0.2"
+notify = "6.0"
+anyhow = "1.0"
+sqlite-vec = "0.1"

@@ -27,6 +27,75 @@ impl Default for Permissions {
     }
 }
 
+/// RAG (Retrieval-Augmented Generation) configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagConfig {
+    /// Enable RAG features
+    #[serde(default = "default_rag_enabled")]
+    pub enabled: bool,
+    /// Embedding model name (e.g., "nomic-embed-text")
+    #[serde(default = "default_embedding_model")]
+    pub embedding_model: String,
+    /// Embedding API URL (typically same as api_url)
+    #[serde(default = "default_embedding_url")]
+    pub embedding_url: String,
+    /// Chunk size in tokens for document splitting
+    #[serde(default = "default_chunk_size")]
+    pub chunk_size: usize,
+    /// Overlap between chunks in tokens
+    #[serde(default = "default_chunk_overlap")]
+    pub chunk_overlap: usize,
+    /// Number of top results to retrieve
+    #[serde(default = "default_top_k")]
+    pub top_k: usize,
+    /// Documents directory path (relative to current working directory)
+    #[serde(default = "default_documents_path")]
+    pub documents_path: String,
+}
+
+fn default_rag_enabled() -> bool {
+    true
+}
+
+fn default_embedding_model() -> String {
+    "text-embedding-nomic-embed-text-v1.5".to_string()
+}
+
+fn default_embedding_url() -> String {
+    "http://127.0.0.1:11434".to_string()
+}
+
+fn default_chunk_size() -> usize {
+    512
+}
+
+fn default_chunk_overlap() -> usize {
+    50
+}
+
+fn default_top_k() -> usize {
+    5
+}
+
+fn default_documents_path() -> String {
+    "documents".to_string()
+}
+
+impl Default for RagConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_rag_enabled(),
+            embedding_model: default_embedding_model(),
+            embedding_url: default_embedding_url(),
+            chunk_size: default_chunk_size(),
+            chunk_overlap: default_chunk_overlap(),
+            top_k: default_top_k(),
+            documents_path: default_documents_path(),
+        }
+    }
+}
+
+
 /// Configuration for squid CLI
 ///
 /// This configuration is typically stored in `squid.config.json` in the project directory.
@@ -68,6 +137,8 @@ pub struct Config {
     pub database_path: String,
     #[serde(default = "default_enable_env_context")]
     pub enable_env_context: bool,
+    #[serde(default)]
+    pub rag: RagConfig,
 }
 
 fn default_context_window() -> u32 {
@@ -100,6 +171,7 @@ impl Default for Config {
             version: None,
             database_path: default_database_path(),
             enable_env_context: default_enable_env_context(),
+            rag: RagConfig::default(),
         }
     }
 }
@@ -175,6 +247,7 @@ impl Config {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_else(default_enable_env_context),
+            rag: RagConfig::default(),
         }
     }
 
@@ -387,6 +460,9 @@ mod tests {
         assert_eq!(config.version, None);
         assert_eq!(config.database_path, "squid.db");
         assert_eq!(config.enable_env_context, true);
+        assert_eq!(config.rag.enabled, true);
+        assert_eq!(config.rag.embedding_model, "text-embedding-nomic-embed-text-v1.5");
+        assert_eq!(config.rag.chunk_size, 512);
     }
 
     #[test]

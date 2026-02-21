@@ -13,6 +13,7 @@ mod db;
 mod envinfo;
 mod llm;
 mod logger;
+mod rag;
 mod session;
 mod tokens;
 mod tools;
@@ -73,6 +74,12 @@ enum Commands {
         /// Optional custom system prompt file
         #[arg(short, long)]
         prompt: Option<PathBuf>,
+        /// Enable RAG (overrides config setting)
+        #[arg(long)]
+        rag: bool,
+        /// Disable RAG (overrides config setting)
+        #[arg(long, conflicts_with = "rag")]
+        no_rag: bool,
     },
     /// Review code from a file
     Review {
@@ -84,6 +91,12 @@ enum Commands {
         /// Disable streaming (return complete response at once)
         #[arg(long)]
         no_stream: bool,
+        /// Enable RAG (overrides config setting)
+        #[arg(long)]
+        rag: bool,
+        /// Disable RAG (overrides config setting)
+        #[arg(long, conflicts_with = "rag")]
+        no_rag: bool,
     },
     /// Start a web server for the Squid Web UI
     Serve {
@@ -109,6 +122,69 @@ enum Commands {
         #[arg(short, long)]
         session_id: Option<String>,
     },
+    /// RAG (Retrieval-Augmented Generation) operations
+    Rag {
+        #[command(subcommand)]
+        command: RagCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum RagCommands {
+    /// Initialize RAG index by scanning and embedding documents
+    Init {
+        /// Custom documents directory (defaults to ./documents)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// List indexed documents
+    List,
+    /// Rebuild the entire RAG index
+    Rebuild {
+        /// Custom documents directory (defaults to ./documents)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// Show RAG statistics
+    Stats,
+}
+
+/// Initialize RAG system if needed based on config and CLI flags
+async fn initialize_rag_if_needed(
+    config_enabled: bool,
+    rag_flag: bool,
+    no_rag_flag: bool,
+    app_config: &config::Config,
+) -> Option<Arc<rag::RagSystem>> {
+    // Determine if RAG should be enabled
+    let should_enable = if no_rag_flag {
+        false
+    } else if rag_flag {
+        true
+    } else {
+        config_enabled
+    };
+    
+    if !should_enable {
+        return None;
+    }
+    
+    // Initialize RAG system
+    match db::Database::new(&app_config.database_path) {
+        Ok(db) => {
+            match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
+                Ok(system) => Some(Arc::new(system)),
+                Err(e) => {
+                    warn!("RAG initialization failed: {}", e);
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to open database for RAG: {}", e);
+            None
+        }
+    }
 }
 
 #[tokio::main]
@@ -316,6 +392,7 @@ async fn main() {
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
+                rag: config::Config::default().rag,
             };
 
             match config.save_to_dir(dir) {
@@ -397,6 +474,8 @@ async fn main() {
             no_stream,
             file,
             prompt,
+            rag,
+            no_rag,
         } => {
             let full_question = if let Some(m) = message {
                 format!("{} {}", question, m)
@@ -479,10 +558,47 @@ async fn main() {
                 None
             };
 
+            // Initialize RAG if needed
+            let rag_system = initialize_rag_if_needed(
+                app_config.rag.enabled,
+                *rag,
+                *no_rag,
+                &app_config,
+            ).await;
+
+            // Query RAG if available
+            let rag_context = if let Some(ref system) = rag_system {
+                println!("🦑: Using RAG for enhanced context...");
+                match system.query.execute(&full_question).await {
+                    Ok(context) if !context.is_empty() => {
+                        debug!("RAG retrieved {} bytes of context", context.len());
+                        Some(context)
+                    }
+                    Ok(_) => {
+                        debug!("RAG returned empty context");
+                        None
+                    }
+                    Err(e) => {
+                        warn!("RAG query failed: {}", e);
+                        println!("🦑: RAG query failed, continuing without RAG context");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            // Compose enhanced file content with RAG context
+            let enhanced_file_content = match (rag_context, file_content) {
+                (Some(rag), Some(file)) => Some(format!("{}\n\n# Provided File:\n\n{}", rag, file)),
+                (Some(rag), None) => Some(rag),
+                (None, file_opt) => file_opt,
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &full_question,
-                    file_content.as_deref(),
+                    enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
@@ -499,7 +615,7 @@ async fn main() {
             } else {
                 if let Err(e) = llm::ask_llm_streaming(
                     &full_question,
-                    file_content.as_deref(),
+                    enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
                     &app_config,
@@ -514,6 +630,8 @@ async fn main() {
             file,
             message,
             no_stream,
+            rag,
+            no_rag,
         } => {
             info!("Reviewing file: {:?}", file);
 
@@ -568,10 +686,54 @@ async fn main() {
                 "Please review this code.".to_string()
             };
 
+            // Initialize RAG if needed
+            let rag_system = initialize_rag_if_needed(
+                app_config.rag.enabled,
+                *rag,
+                *no_rag,
+                &app_config,
+            ).await;
+
+            // Query RAG with review-specific context
+            let rag_context = if let Some(ref system) = rag_system {
+                println!("🦑: Using RAG for enhanced context...");
+                let file_extension = file.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+                let review_query = format!(
+                    "code review best practices and common issues for {} files{}",
+                    file_extension,
+                    message.as_ref().map(|m| format!(": {}", m)).unwrap_or_default()
+                );
+                
+                match system.query.execute(&review_query).await {
+                    Ok(context) if !context.is_empty() => {
+                        debug!("RAG retrieved {} bytes of context for review", context.len());
+                        Some(context)
+                    }
+                    Ok(_) => {
+                        debug!("RAG returned empty context");
+                        None
+                    }
+                    Err(e) => {
+                        warn!("RAG query failed: {}", e);
+                        println!("🦑: RAG query failed, continuing without RAG context");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            // Compose enhanced content with RAG context
+            let enhanced_content = if let Some(rag) = rag_context {
+                format!("{}\n\n# Code to Review:\n\n{}", rag, file_content)
+            } else {
+                file_content
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &question,
-                    Some(&file_content),
+                    Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
@@ -588,7 +750,7 @@ async fn main() {
             } else {
                 if let Err(e) = llm::ask_llm_streaming(
                     &question,
-                    Some(&file_content),
+                    Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
                     &app_config,
@@ -644,6 +806,35 @@ async fn main() {
 
             let session_manager = Arc::new(session::SessionManager::new(database));
             
+            // Initialize RAG system if enabled
+            let rag_system = if app_config.rag.enabled {
+                info!("Initializing RAG system...");
+                match db::Database::new(db_path) {
+                    Ok(db) => {
+                        match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
+                            Ok(system) => {
+                                info!("RAG system initialized successfully");
+                                Some(Arc::new(system))
+                            }
+                            Err(e) => {
+                                warn!("Failed to initialize RAG system: {}", e);
+                                println!("🦑: RAG initialization failed - {}", e);
+                                println!("    RAG features will be disabled");
+                                None
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to open database for RAG: {}", e);
+                        println!("🦑: RAG initialization failed - {}", e);
+                        None
+                    }
+                }
+            } else {
+                info!("RAG is disabled in configuration");
+                None
+            };
+            
             // Create approval state map for tool approval workflow
             let approval_map: api::ApprovalStateMap = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 
@@ -683,6 +874,7 @@ async fn main() {
                     .app_data(web::Data::new(app_config.clone()))
                     .app_data(web::Data::new(session_manager.clone()))
                     .app_data(web::Data::new(approval_map.clone()))
+                    .app_data(web::Data::new(rag_system.clone()))
                     .wrap(cors)
                     .wrap(middleware::Logger::default())
                     .service(
@@ -698,6 +890,11 @@ async fn main() {
                             .route("/tool-approval", web::post().to(api::handle_tool_approval))
                             .route("/workspace/files", web::get().to(workspace::get_workspace_files))
                             .route("/workspace/files/{path:.*}", web::get().to(workspace::get_workspace_file))
+                            .route("/rag/query", web::post().to(api::rag_query))
+                            .route("/rag/documents", web::get().to(api::rag_list_documents))
+                            .route("/rag/documents/{filename:.*}", web::delete().to(api::rag_delete_document))
+                            .route("/rag/stats", web::get().to(api::rag_stats))
+                            .route("/rag/upload", web::post().to(api::rag_upload_document))
                     )
                     .route("/", web::get().to(serve_index))
                     .route("/{filename:.*}", web::get().to(serve_static))
@@ -762,6 +959,152 @@ async fn main() {
                     println!("🦑: Failed to read logs from database - {}", e);
                     println!("    Database path: {}", db_path);
                     println!("    Make sure the database exists and is not corrupted.");
+                }
+            }
+        }
+        Commands::Rag { command } => {
+            let db_path = &app_config.database_path;
+            let db = match db::Database::new(db_path) {
+                Ok(db) => Arc::new(db),
+                Err(e) => {
+                    error!("Failed to open database: {}", e);
+                    println!("🦑: Failed to open database - {}", e);
+                    return;
+                }
+            };
+
+            let rag_config = &app_config.rag;
+
+            if !rag_config.enabled {
+                println!("🦑: RAG is disabled in configuration");
+                println!("    Set 'rag.enabled = true' in squid.config.json to enable RAG features");
+                return;
+            }
+
+            let rag_system = match rag::RagSystem::new(db.clone(), rag_config).await {
+                Ok(system) => system,
+                Err(e) => {
+                    error!("Failed to initialize RAG system: {}", e);
+                    println!("🦑: Failed to initialize RAG system - {}", e);
+                    return;
+                }
+            };
+
+            match command {
+                RagCommands::Init { dir } => {
+                    let documents_path = dir
+                        .clone()
+                        .unwrap_or_else(|| PathBuf::from(&rag_config.documents_path));
+
+                    if !documents_path.exists() {
+                        println!("🦑: Documents directory not found: {}", documents_path.display());
+                        println!("    Create the directory and add documents to index");
+                        return;
+                    }
+
+                    println!("🦑: Scanning documents directory: {}", documents_path.display());
+
+                    let pb = indicatif::ProgressBar::new_spinner();
+                    pb.set_message("Indexing documents...");
+                    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+                    match rag_system.indexer.scan_and_index(&documents_path).await {
+                        Ok(stats) => {
+                            pb.finish_and_clear();
+                            println!("🦑: Indexing complete!");
+                            println!("    Files found: {}", stats.files_found);
+                            println!("    Files processed: {}", stats.files_processed);
+                            if stats.files_failed > 0 {
+                                println!("    Files failed: {}", stats.files_failed);
+                            }
+                            println!("    Total chunks: {}", stats.total_chunks);
+                            println!("    Total embeddings: {}", stats.total_embeddings);
+                        }
+                        Err(e) => {
+                            pb.finish_and_clear();
+                            error!("Failed to index documents: {}", e);
+                            println!("🦑: Failed to index documents - {}", e);
+                        }
+                    }
+                }
+                RagCommands::List => {
+                    match rag_system.indexer.list_documents() {
+                        Ok(docs) => {
+                            if docs.is_empty() {
+                                println!("🦑: No documents indexed");
+                                println!("    Run 'squid rag init' to index documents");
+                            } else {
+                                println!("🦑: Indexed documents:\n");
+                                for doc in &docs {
+                                    let updated = chrono::DateTime::from_timestamp(doc.updated_at, 0)
+                                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                        .unwrap_or_else(|| "unknown".to_string());
+                                    println!(
+                                        "  {} ({} bytes, updated: {})",
+                                        doc.filename, doc.file_size, updated
+                                    );
+                                }
+                                println!("\nTotal: {} documents", docs.len());
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to list documents: {}", e);
+                            println!("🦑: Failed to list documents - {}", e);
+                        }
+                    }
+                }
+                RagCommands::Rebuild { dir } => {
+                    let documents_path = dir
+                        .clone()
+                        .unwrap_or_else(|| PathBuf::from(&rag_config.documents_path));
+
+                    if !documents_path.exists() {
+                        println!("🦑: Documents directory not found: {}", documents_path.display());
+                        return;
+                    }
+
+                    println!("🦑: Rebuilding RAG index...");
+
+                    let pb = indicatif::ProgressBar::new_spinner();
+                    pb.set_message("Rebuilding index...");
+                    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+                    match rag_system.indexer.rebuild(&documents_path).await {
+                        Ok(stats) => {
+                            pb.finish_and_clear();
+                            println!("🦑: Rebuild complete!");
+                            println!("    Files found: {}", stats.files_found);
+                            println!("    Files processed: {}", stats.files_processed);
+                            if stats.files_failed > 0 {
+                                println!("    Files failed: {}", stats.files_failed);
+                            }
+                            println!("    Total chunks: {}", stats.total_chunks);
+                            println!("    Total embeddings: {}", stats.total_embeddings);
+                        }
+                        Err(e) => {
+                            pb.finish_and_clear();
+                            error!("Failed to rebuild index: {}", e);
+                            println!("🦑: Failed to rebuild index - {}", e);
+                        }
+                    }
+                }
+                RagCommands::Stats => {
+                    match rag_system.indexer.get_stats() {
+                        Ok((doc_count, chunk_count, embedding_count)) => {
+                            println!("🦑: RAG Statistics:\n");
+                            println!("  Documents: {}", doc_count);
+                            println!("  Chunks: {}", chunk_count);
+                            println!("  Embeddings: {}", embedding_count);
+                            if doc_count > 0 {
+                                let avg_chunks = chunk_count as f64 / doc_count as f64;
+                                println!("  Average chunks per document: {:.1}", avg_chunks);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get stats: {}", e);
+                            println!("🦑: Failed to get statistics - {}", e);
+                        }
+                    }
                 }
             }
         }

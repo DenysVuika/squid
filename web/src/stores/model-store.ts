@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { fetchModels, fetchConfig, type ModelInfo, type TokenUsage } from '@/lib/chat-api';
 import { toast } from 'sonner';
 
@@ -32,15 +33,17 @@ const initialTokenUsage: TokenUsage = {
   context_utilization: 0,
 };
 
-export const useModelStore = create<ModelStore>((set, get) => ({
-  // Initial state
-  models: [],
-  modelGroups: [],
-  selectedModel: '',
-  sessionModelId: null,
-  tokenUsage: initialTokenUsage,
-  isLoading: false,
-  modelSelectorOpen: false,
+export const useModelStore = create<ModelStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      models: [],
+      modelGroups: [],
+      selectedModel: '',
+      sessionModelId: null,
+      tokenUsage: initialTokenUsage,
+      isLoading: false,
+      modelSelectorOpen: false,
 
   // Load available models from API
   loadModels: async () => {
@@ -60,7 +63,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         // Check if current selection is still valid
         const isCurrentModelValid = currentSelectedModel && fetchedModels.some((m) => m.id === currentSelectedModel);
 
-        // Use the backend's default model, or fallback to first available
+        // Use persisted model if valid, else backend's default model, or fallback to first available
         const modelToSelect = isCurrentModelValid
           ? currentSelectedModel
           : (fetchedModels.find((m) => m.id === config.api_model) || fetchedModels[0])?.id || '';
@@ -77,6 +80,8 @@ export const useModelStore = create<ModelStore>((set, get) => ({
           if (defaultModel) {
             console.log(`🤖 Default model: ${defaultModel.name} (${defaultModel.id})`);
           }
+        } else if (isCurrentModelValid) {
+          console.log(`🤖 Restored persisted model: ${currentSelectedModel}`);
         }
       } else {
         // No models available - show warning
@@ -155,4 +160,12 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const modelData = models.find((m) => m.id === currentModelId);
     return modelData?.pricing_model || currentModelId;
   },
-}));
+    }),
+    {
+      name: 'model-storage',
+      partialize: (state) => ({
+        selectedModel: state.selectedModel,
+      }),
+    }
+  )
+);

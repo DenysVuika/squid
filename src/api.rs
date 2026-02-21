@@ -62,6 +62,8 @@ pub struct ChatRequest {
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub use_rag: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -365,10 +367,12 @@ pub async fn chat_stream(
     app_config: web::Data<Arc<config::Config>>,
     session_manager: web::Data<Arc<session::SessionManager>>,
     approval_map: web::Data<ApprovalStateMap>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
     debug!("Received chat request: {:?}", body);
 
     let question = body.message.clone();
+    let use_rag = body.use_rag.unwrap_or(false);
 
     // Validate file sizes (10MB limit per file)
     const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
@@ -408,7 +412,43 @@ pub async fn chat_stream(
             web::Bytes::from(format!("data: {}\n\n", json))
         );
 
-        // Add user message to session and get sources
+        // Query RAG if enabled
+        let mut rag_sources = Vec::new();
+        if use_rag {
+            if let Some(rag_sys) = rag_system.as_ref() {
+                debug!("🔍 RAG enabled - querying for context: {}", question);
+                match rag_sys.query.execute_structured(&question).await {
+                    Ok(results) => {
+                        debug!("✅ RAG returned {} results", results.len());
+                        for result in results.iter() {
+                            debug!("  📄 {} (relevance: {:.3})", result.filename, 1.0 - result.distance.min(1.0));
+                            rag_sources.push(Source {
+                                title: result.filename.clone(),
+                                content: result.chunk_text.clone(),
+                            });
+                        }
+                        
+                        // Send RAG sources as sources event
+                        if !rag_sources.is_empty() {
+                            let sources_event = StreamEvent::Sources {
+                                sources: rag_sources.clone(),
+                            };
+                            let json = serde_json::to_string(&sources_event).unwrap_or_default();
+                            yield Ok::<_, actix_web::Error>(
+                                web::Bytes::from(format!("data: {}\n\n", json))
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!("⚠️  RAG query failed: {}", e);
+                    }
+                }
+            } else {
+                warn!("⚠️  RAG requested but system not available");
+            }
+        }
+
+        // Add user message to session and get file sources
         let sources = match session_manager_clone.add_user_message(
             &session_id,
             question.clone(),
@@ -427,7 +467,7 @@ pub async fn chat_stream(
             }
         };
 
-        // Send sources if any
+        // Send file sources if any (these are from attached files, not RAG)
         if !sources.is_empty() {
             let sources_event = StreamEvent::Sources {
                 sources: sources.iter().map(|s| Source {
@@ -450,6 +490,7 @@ pub async fn chat_stream(
             &app_config_clone,
             &session_manager_clone,
             approval_map.get_ref(),
+            if use_rag && !rag_sources.is_empty() { Some(rag_sources.clone()) } else { None },
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
@@ -621,15 +662,23 @@ pub async fn chat_stream(
                 // Trim whitespace and check if we have actual content
                 let final_content_trimmed = final_content.trim();
 
+                // Save assistant message to session with both file sources and RAG sources
+                let mut all_sources = sources.clone();
+                all_sources.extend(rag_sources.iter().map(|s| session::Source {
+                    title: s.title.clone(),
+                    content: s.content.clone(),
+                }));
+                
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
-                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {})",
+                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
                         session_id, final_content_trimmed.len(),
-                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0));
+                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
+                        sources.len(), rag_sources.len(), all_sources.len());
                     
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
-                        sources,
+                        all_sources,
                         thinking_steps_opt,
                     ) {
                         Ok(_) => debug!("Assistant message saved successfully"),
@@ -761,6 +810,7 @@ async fn create_chat_stream(
     app_config: &config::Config,
     session_manager: &session::SessionManager,
     approval_map: &ApprovalStateMap,
+    rag_sources: Option<Vec<Source>>,
 ) -> Result<
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
@@ -777,23 +827,38 @@ async fn create_chat_stream(
     // Get environment context
     let env_context = envinfo::get_env_context();
 
-    // Build user message with file contents if present
-    let user_message = if !files.is_empty() {
-        let mut message = env_context.clone();
-        message.push_str("\n\n");
-
+    // Build user message with RAG context if provided
+    let mut user_message = env_context.clone();
+    user_message.push_str("\n\n");
+    
+    // Add RAG context first if available
+    if let Some(ref sources) = rag_sources {
+        if !sources.is_empty() {
+            user_message.push_str("# Retrieved Context from Documents\n\n");
+            for (idx, source) in sources.iter().enumerate() {
+                user_message.push_str(&format!(
+                    "## Document {}: {}\n\n{}\n\n",
+                    idx + 1,
+                    source.title,
+                    source.content
+                ));
+            }
+            user_message.push_str("---\n\n");
+            debug!("✅ Added {} RAG sources to context", sources.len());
+        }
+    }
+    
+    // Add file contents if present
+    if !files.is_empty() {
         for file in files {
-            message.push_str(&format!(
+            user_message.push_str(&format!(
                 "Here is the content of '{}':\n\n```\n{}\n```\n\n",
                 file.filename, file.content
             ));
         }
+    }
 
-        message.push_str(&format!("User query: {}", question));
-        message
-    } else {
-        format!("{}\n\nUser query: {}", env_context, question)
-    };
+    user_message.push_str(&format!("User query: {}", question));
 
     let default_prompt = llm::combine_prompts(llm::get_ask_prompt());
     let system_message = system_prompt.unwrap_or(&default_prompt);
@@ -1525,3 +1590,266 @@ pub async fn handle_tool_approval(
         }))
     }
 }
+
+// ========================================
+// RAG (Retrieval-Augmented Generation) Endpoints
+// ========================================
+
+use crate::rag::{RagSystem, DocumentInfo};
+
+#[derive(Debug, Deserialize)]
+pub struct RagQueryRequest {
+    pub query: String,
+    #[serde(default)]
+    pub top_k: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagQueryResponse {
+    pub context: String,
+    pub sources: Vec<RagSource>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagSource {
+    pub filename: String,
+    pub text: String,
+    pub relevance: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentListResponse {
+    pub documents: Vec<DocumentSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentSummary {
+    pub id: i64,
+    pub filename: String,
+    pub file_size: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagStatsResponse {
+    pub doc_count: i64,
+    pub chunk_count: i64,
+    pub embedding_count: i64,
+    pub avg_chunks_per_doc: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RagResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Query RAG index for relevant context
+pub async fn rag_query(
+    body: web::Json<RagQueryRequest>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("RAG query request: {}", body.query);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+    
+    match rag_system.query.execute_structured(&body.query).await {
+        Ok(results) => {
+            let mut context = String::from("# Retrieved Context\n\n");
+            let mut sources = Vec::new();
+
+            for (idx, result) in results.iter().enumerate() {
+                context.push_str(&format!(
+                    "## Source {}: {} (relevance: {:.3})\n\n{}\n\n",
+                    idx + 1,
+                    result.filename,
+                    1.0 - result.distance.min(1.0),
+                    result.chunk_text
+                ));
+
+                sources.push(RagSource {
+                    filename: result.filename.clone(),
+                    text: result.chunk_text.clone(),
+                    relevance: 1.0 - result.distance.min(1.0),
+                });
+            }
+
+            Ok(HttpResponse::Ok().json(RagQueryResponse { context, sources }))
+        }
+        Err(e) => {
+            warn!("Failed to execute RAG query: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to execute query: {}", e)
+            })))
+        }
+    }
+}
+
+/// List all indexed documents
+pub async fn rag_list_documents(
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Listing RAG documents");
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+
+    match rag_system.indexer.list_documents() {
+        Ok(docs) => {
+            let documents: Vec<DocumentSummary> = docs
+                .into_iter()
+                .map(|doc| DocumentSummary {
+                    id: doc.id,
+                    filename: doc.filename,
+                    file_size: doc.file_size,
+                    updated_at: doc.updated_at,
+                })
+                .collect();
+
+            Ok(HttpResponse::Ok().json(DocumentListResponse { documents }))
+        }
+        Err(e) => {
+            warn!("Failed to list documents: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to list documents: {}", e)
+            })))
+        }
+    }
+}
+
+/// Delete a document from the RAG index
+pub async fn rag_delete_document(
+    path: web::Path<String>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    let filename = path.into_inner();
+    debug!("Deleting RAG document: {}", filename);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
+            success: false,
+            message: "RAG system is not enabled".to_string(),
+        }));
+    };
+
+    match rag_system.indexer.remove_document(&filename) {
+        Ok(_) => {
+            Ok(HttpResponse::Ok().json(RagResponse {
+                success: true,
+                message: format!("Document {} deleted successfully", filename),
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to delete document: {}", e);
+            Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("Failed to delete document: {}", e),
+            }))
+        }
+    }
+}
+
+/// Get RAG statistics
+pub async fn rag_stats(
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Getting RAG statistics");
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(json!({
+            "error": "RAG system is not enabled"
+        })));
+    };
+
+    match rag_system.indexer.get_stats() {
+        Ok((doc_count, chunk_count, embedding_count)) => {
+            let avg_chunks_per_doc = if doc_count > 0 {
+                chunk_count as f64 / doc_count as f64
+            } else {
+                0.0
+            };
+
+            Ok(HttpResponse::Ok().json(RagStatsResponse {
+                doc_count,
+                chunk_count,
+                embedding_count,
+                avg_chunks_per_doc,
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to get RAG stats: {}", e);
+            Ok(HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to get statistics: {}", e)
+            })))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UploadDocumentRequest {
+    pub filename: String,
+    pub content: String,
+}
+
+/// Upload and index a document
+pub async fn rag_upload_document(
+    body: web::Json<UploadDocumentRequest>,
+    rag_system: web::Data<Option<Arc<RagSystem>>>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Uploading document: {}", body.filename);
+
+    let Some(rag_system) = rag_system.as_ref() else {
+        return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
+            success: false,
+            message: "RAG system is not enabled".to_string(),
+        }));
+    };
+
+    use std::path::PathBuf;
+    use tokio::fs;
+
+    let documents_path = PathBuf::from(&app_config.rag.documents_path);
+    
+    if !documents_path.exists() {
+        if let Err(e) = fs::create_dir_all(&documents_path).await {
+            return Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("Failed to create documents directory: {}", e),
+            }));
+        }
+    }
+
+    let file_path = documents_path.join(&body.filename);
+
+    if let Err(e) = fs::write(&file_path, &body.content).await {
+        return Ok(HttpResponse::InternalServerError().json(RagResponse {
+            success: false,
+            message: format!("Failed to write file: {}", e),
+        }));
+    }
+
+    match rag_system.indexer.index_single_file(&file_path).await {
+        Ok(_) => {
+            Ok(HttpResponse::Ok().json(RagResponse {
+                success: true,
+                message: format!("Document {} uploaded and indexed successfully", body.filename),
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to index uploaded document: {}", e);
+            Ok(HttpResponse::InternalServerError().json(RagResponse {
+                success: false,
+                message: format!("File uploaded but indexing failed: {}", e),
+            }))
+        }
+    }
+}
+

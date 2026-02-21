@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **RAG (Retrieval-Augmented Generation)**: Semantic search over your documents for context-aware AI responses
+  - Index your documentation, code, and notes for AI to reference
+  - Automatic chunking and embedding generation using `nomic-embed-text` or custom models
+  - Vector storage using `sqlite-vec` extension for fast similarity search
+  - New `squid rag` commands: `init`, `list`, `rebuild`, `stats`
+  - REST API endpoints for RAG operations (`/api/rag/*`)
+  - Configurable chunk size, overlap, and top-k results
+  - Supports common file types: Markdown, code files (Rust, Python, JS, TS, etc.), config files
+  - Real-time document watching and auto-indexing (coming in web UI)
+  - Embedding models via OpenAI-compatible APIs (LM Studio, Ollama, etc.)
+  - **Web UI**: Toggle RAG on/off with a single button click in the chat interface
+    - Button shows current state with visual feedback
+    - Your RAG preference is saved and restored between sessions
+
 ### Changed
 
 - **Simplified Reasoning Display**: Improved reasoning UI for cleaner, more focused presentation
@@ -15,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All reasoning blocks collapsed by default when streaming completes or when loading sessions
   - Users can expand to review the thinking process if interested
 - **Optimized Token Usage**: Reasoning blocks (`<think>` tags) are now filtered from conversation history when sending to the model, reducing context token usage by 10-30% in multi-turn conversations while preserving all reasoning in the database and UI display.
+- **Persistent UI Settings**: Your preferences are now saved between sessions
+  - Selected model is remembered across page reloads and browser restarts
+  - RAG toggle state is preserved for consistent experience
+  - Your chosen settings are restored automatically when you return
 
 ## [0.9.0] - 2026-02-16
 
@@ -310,7 +330,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Color-coded information (cyan headers, green files, yellow actions, magenta patterns)
   - Multi-line formatted prompts with clear visual hierarchy
   - Styled help text with bold Y/N indicators
-  - See `docs/TUI_OPTIONS.md` for more UI enhancement options
 
 - **Custom System Prompts**: New `-p`/`--prompt` flag for `ask` command
   - Override the default system prompt with a custom prompt from a file

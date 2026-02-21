@@ -16,6 +16,7 @@ export interface ChatMessage {
   files?: FileAttachment[];
   system_prompt?: string;
   model?: string;
+  use_rag?: boolean;
 }
 
 export type StreamEventType =
@@ -610,6 +611,163 @@ export async function fetchConfig(apiUrl: string): Promise<ConfigResponse> {
   }
 
   const data: ConfigResponse = await response.json();
+  return data;
+}
+
+/**
+ * RAG-related API functions
+ */
+
+export interface RagSource {
+  filename: string;
+  text: string;
+  relevance: number;
+}
+
+export interface RagQueryResponse {
+  context: string;
+  sources: RagSource[];
+}
+
+export interface DocumentSummary {
+  id: number;
+  filename: string;
+  file_size: number;
+  updated_at: number;
+}
+
+export interface DocumentListResponse {
+  documents: DocumentSummary[];
+}
+
+export interface RagStatsResponse {
+  doc_count: number;
+  chunk_count: number;
+  embedding_count: number;
+  avg_chunks_per_doc: number;
+}
+
+export interface RagResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Query RAG index for relevant context
+ *
+ * @param apiUrl - The base URL of the Squid API
+ * @param query - The query text to search for
+ * @param topK - Optional number of results to return
+ * @returns Promise with context and sources
+ */
+export async function queryRag(
+  apiUrl: string,
+  query: string,
+  topK?: number
+): Promise<RagQueryResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/rag/query` : '/api/rag/query';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, top_k: topK }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to query RAG: HTTP ${response.status}`);
+  }
+
+  const data: RagQueryResponse = await response.json();
+  return data;
+}
+
+/**
+ * List all indexed documents
+ *
+ * @param apiUrl - The base URL of the Squid API
+ * @returns Promise with list of documents
+ */
+export async function listRagDocuments(apiUrl: string): Promise<DocumentListResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/rag/documents` : '/api/rag/documents';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to list documents: HTTP ${response.status}`);
+  }
+
+  const data: DocumentListResponse = await response.json();
+  return data;
+}
+
+/**
+ * Delete a document from RAG index
+ *
+ * @param apiUrl - The base URL of the Squid API
+ * @param filename - The filename to delete
+ * @returns Promise with success status
+ */
+export async function deleteRagDocument(apiUrl: string, filename: string): Promise<RagResponse> {
+  const endpoint = apiUrl
+    ? `${apiUrl}/api/rag/documents/${encodeURIComponent(filename)}`
+    : `/api/rag/documents/${encodeURIComponent(filename)}`;
+  const response = await fetch(endpoint, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete document: HTTP ${response.status}`);
+  }
+
+  const data: RagResponse = await response.json();
+  return data;
+}
+
+/**
+ * Get RAG statistics
+ *
+ * @param apiUrl - The base URL of the Squid API
+ * @returns Promise with RAG statistics
+ */
+export async function getRagStats(apiUrl: string): Promise<RagStatsResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/rag/stats` : '/api/rag/stats';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to get RAG stats: HTTP ${response.status}`);
+  }
+
+  const data: RagStatsResponse = await response.json();
+  return data;
+}
+
+/**
+ * Upload a document to RAG index
+ *
+ * @param apiUrl - The base URL of the Squid API
+ * @param filename - The filename
+ * @param content - The document content
+ * @returns Promise with success status
+ */
+export async function uploadRagDocument(
+  apiUrl: string,
+  filename: string,
+  content: string
+): Promise<RagResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/rag/upload` : '/api/rag/upload';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ filename, content }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to upload document: HTTP ${response.status}`);
+  }
+
+  const data: RagResponse = await response.json();
   return data;
 }
 

@@ -76,7 +76,7 @@ import {
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { BrainIcon, WrenchIcon } from 'lucide-react';
+import { BrainIcon, WrenchIcon, Sparkles } from 'lucide-react';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
@@ -160,6 +160,7 @@ const Chatbot = () => {
     messages,
     status,
     streamingMessageId,
+    useRag,
     addUserMessage,
     setStatus,
     stopStreaming,
@@ -167,6 +168,7 @@ const Chatbot = () => {
     clearMessages,
     respondToApproval,
     toolApprovalDecisions,
+    toggleRag,
   } = useChatStore();
 
   // Local UI state
@@ -175,6 +177,41 @@ const Chatbot = () => {
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
   const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
+
+  // Deduplicate sources by filename and combine chunks
+  const deduplicateSources = useCallback((sources: Array<{ href: string; title: string; content: string }>) => {
+    if (!sources || sources.length === 0) {
+      return [];
+    }
+    
+    const sourceMap = new Map<string, { title: string; contents: string[]; href: string }>();
+    
+    for (const source of sources) {
+      if (!source.title || !source.content) {
+        continue;
+      }
+      
+      if (sourceMap.has(source.title)) {
+        sourceMap.get(source.title)!.contents.push(source.content);
+      } else {
+        sourceMap.set(source.title, {
+          title: source.title,
+          contents: [source.content],
+          href: source.href || '#',
+        });
+      }
+    }
+    
+    const result = Array.from(sourceMap.values()).map(item => ({
+      title: item.title,
+      content: item.contents.join('\n\n---\n\n'),
+      chunkCount: item.contents.length,
+      href: item.href,
+    }));
+    
+    console.log('[Sources] Deduplicated:', sources.length, 'chunks →', result.length, 'sources');
+    return result;
+  }, []);
 
   // Fetch available models on mount
   useEffect(() => {
@@ -251,6 +288,10 @@ const Chatbot = () => {
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
+
+  const handleRagToggle = useCallback(() => {
+    toggleRag();
+  }, [toggleRag]);
 
   const handleFileUploadError = useCallback((error: { code: string; message: string }) => {
     if (error.code === 'max_file_size') {
@@ -379,22 +420,26 @@ const Chatbot = () => {
           {messages.map(({ versions, ...message }) => (
             <MessageBranch defaultBranch={0} key={message.key}>
               <MessageBranchContent>
-                {versions.map((version) => (
+                {versions.map((version) => {
+                  // Memoize deduplicated sources for this message
+                  const dedupedSources = message.sources ? deduplicateSources(message.sources) : [];
+                  
+                  return (
                   <Message from={message.from} key={`${message.key}-${version.id}`}>
                     <div>
-                      {message.from === 'assistant' && message.sources?.length && (
+                      {message.from === 'assistant' && dedupedSources.length > 0 && (
                         <Sources>
-                          <SourcesTrigger count={message.sources.length} />
+                          <SourcesTrigger count={dedupedSources.length} />
                           <SourcesContent>
-                            {message.sources.map((source) => (
+                            {dedupedSources.map((source) => (
                               <button
-                                key={source.href}
-                                className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left"
+                                key={source.href + source.title}
+                                className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left w-full"
                                 onClick={() => handleViewSourceContent(source.title, source.content)}
                                 type="button"
                               >
                                 <svg
-                                  className="h-4 w-4"
+                                  className="h-4 w-4 shrink-0"
                                   fill="none"
                                   stroke="currentColor"
                                   viewBox="0 0 24 24"
@@ -407,7 +452,12 @@ const Chatbot = () => {
                                     d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                                   />
                                 </svg>
-                                <span className="block font-medium">{source.title}</span>
+                                <span className="block font-medium flex-1">{source.title}</span>
+                                {source.chunkCount > 1 && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {source.chunkCount} chunks
+                                  </span>
+                                )}
                               </button>
                             ))}
                           </SourcesContent>
@@ -709,7 +759,8 @@ const Chatbot = () => {
                       )}
                     </div>
                   </Message>
-                ))}
+                  );
+                })}
               </MessageBranchContent>
               {versions.length > 1 && (
                 <MessageBranchSelector>
@@ -752,16 +803,19 @@ const Chatbot = () => {
                     <PromptInputActionAddAttachments />
                   </PromptInputActionMenuContent>
                 </PromptInputActionMenu>
-                {/* <SpeechInput
-                  className="shrink-0"
-                  onTranscriptionChange={handleTranscriptionChange}
-                  size="icon-sm"
-                  variant="ghost"
-                /> */}
-                {/* <PromptInputButton onClick={toggleWebSearch} variant={useWebSearch ? 'default' : 'ghost'}>
-                  <GlobeIcon size={16} />
-                  <span>Search</span>
-                </PromptInputButton> */}
+                <PromptInputButton 
+                  onClick={handleRagToggle}
+                  tooltip={{ 
+                    content: useRag 
+                      ? "RAG enabled - queries enhanced with document context" 
+                      : "Enable RAG to search documents",
+                    side: "top"
+                  }}
+                  variant={useRag ? 'default' : 'ghost'}
+                >
+                  <Sparkles size={16} />
+                  <span>RAG</span>
+                </PromptInputButton>
                 <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>

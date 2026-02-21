@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { FileUIPart } from 'ai';
 import { streamChat, loadSession, sendToolApproval, type Source } from '@/lib/chat-api';
 import { toast } from 'sonner';
@@ -61,6 +62,7 @@ interface ChatStore {
   isReasoningStreaming: boolean;
   abortController: AbortController | null;
   useWebSearch: boolean;
+  useRag: boolean;
   pendingApprovals: Map<string, ToolApproval>;
   toolApprovalDecisions: Map<string, ToolApprovalDecision>;
 
@@ -74,6 +76,7 @@ interface ChatStore {
   loadSessionHistory: (sessionId: string) => Promise<void>;
   clearMessages: () => void;
   toggleWebSearch: () => void;
+  toggleRag: () => void;
   updateStreamingContent: (content: string) => void;
   setIsReasoningStreaming: (isStreaming: boolean) => void;
   addPendingApproval: (approval: ToolApproval) => void;
@@ -81,18 +84,21 @@ interface ChatStore {
   clearApproval: (approval_id: string) => void;
 }
 
-export const useChatStore = create<ChatStore>((set, get) => ({
-  // Initial state
-  messages: [],
-  status: 'ready',
-  streamingMessageId: null,
-  streamingContentRef: '',
-  streamingReasoningRef: '',
-  isReasoningStreaming: false,
-  abortController: null,
-  useWebSearch: false,
-  pendingApprovals: new Map(),
-  toolApprovalDecisions: new Map(),
+export const useChatStore = create<ChatStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      messages: [],
+      status: 'ready',
+      streamingMessageId: null,
+      streamingContentRef: '',
+      streamingReasoningRef: '',
+      isReasoningStreaming: false,
+      abortController: null,
+      useWebSearch: false,
+      useRag: false,
+      pendingApprovals: new Map(),
+      toolApprovalDecisions: new Map(),
 
   // Add user message and trigger streaming
   addUserMessage: (content: string, files?: FileUIPart[]) => {
@@ -217,6 +223,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           session_id: sessionStore.activeSessionId || undefined,
           files: fileAttachments,
           model: modelStore.selectedModel || undefined,
+          use_rag: get().useRag || undefined,
         },
         {
           signal: abortController.signal,
@@ -621,6 +628,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => ({ useWebSearch: !state.useWebSearch }));
   },
 
+  // Toggle RAG
+  toggleRag: () => {
+    set((state) => ({ useRag: !state.useRag }));
+  },
+
   // Add pending tool approval
   addPendingApproval: (approval: ToolApproval) => {
     set((state) => {
@@ -708,4 +720,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       };
     });
   },
-}));
+    }),
+    {
+      name: 'chat-storage',
+      partialize: (state) => ({
+        useWebSearch: state.useWebSearch,
+        useRag: state.useRag,
+      }),
+    }
+  )
+);
