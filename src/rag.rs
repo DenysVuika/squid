@@ -46,7 +46,12 @@ impl RagEmbedder {
             .simple_document("doc", text)
             .build()
             .await
-            .context("Failed to generate embedding")?;
+            .with_context(|| {
+                format!(
+                    "Failed to generate embedding (model: {}, check if embedding service is running and the model is available)",
+                    self.model
+                )
+            })?;
 
         if let Some(doc_embedding) = embeddings.first() {
             if let Some(embedding) = doc_embedding.embeddings.first() {
@@ -394,9 +399,10 @@ impl DocumentWatcher {
 /// RAG indexer with progress reporting
 pub struct RagIndexer {
     db: Arc<Database>,
-    embedder: Arc<RagEmbedder>,
+    pub embedder: Arc<RagEmbedder>,
     vector_store: Arc<SqliteVecStore>,
     doc_manager: DocumentManager,
+    embedding_url: String,
 }
 
 impl RagIndexer {
@@ -411,6 +417,7 @@ impl RagIndexer {
             embedder,
             vector_store,
             doc_manager: DocumentManager::new(config.chunk_size, config.chunk_overlap),
+            embedding_url: config.embedding_url.clone(),
         }
     }
 
@@ -510,7 +517,12 @@ impl RagIndexer {
                 .embedder
                 .embed_text(&chunk.text)
                 .await
-                .context("Failed to generate embedding")?;
+                .with_context(|| {
+                    format!(
+                        "Failed to generate embedding for chunk {} (embedding service: {})",
+                        chunk.index, self.embedding_url
+                    )
+                })?;
 
             self.vector_store
                 .insert_embedding(chunk_id, &embedding)

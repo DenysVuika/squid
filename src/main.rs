@@ -24,6 +24,10 @@ mod workspace;
 #[folder = "static/"]
 struct Assets;
 
+#[derive(RustEmbed)]
+#[folder = "documents/"]
+struct DemoDocuments;
+
 const SQUIDIGNORE_TEMPLATE: &str = include_str!("../.squidignore.example");
 
 #[derive(Parser)]
@@ -369,9 +373,19 @@ async fn main() {
 
             let final_rag_config = if enable_rag {
                 // Prompt for RAG-specific settings
+                // Default embedding URL should match the API URL for services like LM Studio
+                let default_embedding_url = if default_config.rag.enabled {
+                    // If updating existing config, use existing embedding URL
+                    default_config.rag.embedding_url.clone()
+                } else {
+                    // For new configs, suggest the same URL as API URL but without /v1 suffix
+                    // LM Studio uses: http://host:port/v1 for API and http://host:port for embeddings
+                    final_url.strip_suffix("/v1").unwrap_or(&final_url).to_string()
+                };
+                
                 let embedding_url = match inquire::Text::new("Embedding API URL:")
-                    .with_default(&default_config.rag.embedding_url)
-                    .with_help_message("URL for the embedding service (e.g., http://127.0.0.1:11434 for Ollama)")
+                    .with_default(&default_embedding_url)
+                    .with_help_message("URL for the embedding service (for LM Studio use http://127.0.0.1:1234, for Ollama use http://127.0.0.1:11434)")
                     .prompt()
                 {
                     Ok(url) => url,
@@ -419,6 +433,23 @@ async fn main() {
                     enabled: false,
                     ..default_config.rag
                 }
+            };
+
+            // Ask about setting up demo documents
+            let setup_demo_docs = if enable_rag {
+                match inquire::Confirm::new("Setup demo documents for RAG?")
+                    .with_default(true)
+                    .with_help_message("Creates sample documents in the documents directory to get started with RAG")
+                    .prompt()
+                {
+                    Ok(setup) => setup,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                }
+            } else {
+                false
             };
 
             // Smart merge permissions: keep user's custom permissions + add new defaults
@@ -534,6 +565,57 @@ async fn main() {
                     } else {
                         info!(".squidignore already exists, skipping creation");
                         println!("\n✓ Using existing .squidignore file");
+                    }
+
+                    // Setup demo documents if requested
+                    if setup_demo_docs {
+                        let docs_dir = dir.join(&config.rag.documents_path);
+                        
+                        // Create documents directory if it doesn't exist
+                        if let Err(e) = std::fs::create_dir_all(&docs_dir) {
+                            warn!("Failed to create documents directory: {}", e);
+                            println!("\n⚠ Could not create documents directory: {}", e);
+                        } else {
+                            info!("Created documents directory at {:?}", docs_dir);
+                            
+                            let mut success_count = 0;
+                            let mut fail_count = 0;
+                            
+                            // Extract all embedded demo documents
+                            for filename in DemoDocuments::iter() {
+                                let file_path = docs_dir.join(filename.as_ref());
+                                
+                                // Skip if file already exists
+                                if file_path.exists() {
+                                    info!("Skipping existing file: {:?}", file_path);
+                                    continue;
+                                }
+                                
+                                if let Some(content) = DemoDocuments::get(filename.as_ref()) {
+                                    match std::fs::write(&file_path, content.data.as_ref()) {
+                                        Ok(_) => {
+                                            info!("Created demo document: {:?}", file_path);
+                                            success_count += 1;
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to write {}: {}", filename, e);
+                                            fail_count += 1;
+                                        }
+                                    }
+                                } else {
+                                    warn!("Could not read embedded file: {}", filename);
+                                    fail_count += 1;
+                                }
+                            }
+                            
+                            if success_count > 0 {
+                                println!("\n✓ Created {} demo document(s) in {:?}", success_count, docs_dir);
+                                println!("  Run 'squid rag init' to index these documents for RAG");
+                            }
+                            if fail_count > 0 {
+                                println!("⚠ Failed to create {} document(s)", fail_count);
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -1073,6 +1155,25 @@ async fn main() {
                         println!("🦑: Documents directory not found: {}", documents_path.display());
                         println!("    Create the directory and add documents to index");
                         return;
+                    }
+
+                    // Test embedding service connection with a simple request
+                    println!("🦑: Testing embedding service connection...");
+                    match rag_system.indexer.embedder.embed_text("test").await {
+                        Ok(_) => {
+                            println!("✓ Embedding service is accessible");
+                        }
+                        Err(e) => {
+                            println!("✗ Embedding service connection failed:");
+                            println!("    {}", e);
+                            println!("\nTroubleshooting:");
+                            println!("  1. Check if embedding service is running at: {}", rag_config.embedding_url);
+                            println!("  2. Verify the embedding model '{}' is loaded", rag_config.embedding_model);
+                            println!("  3. For Ollama: run 'ollama pull nomic-embed-text'");
+                            println!("  4. For LM Studio: ensure an embedding model is loaded");
+                            println!("\nUpdate config with: squid init");
+                            return;
+                        }
                     }
 
                     println!("🦑: Scanning documents directory: {}", documents_path.display());
