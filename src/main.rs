@@ -354,6 +354,73 @@ async fn main() {
                 }
             };
 
+            // Ask about RAG setup
+            let enable_rag = match inquire::Confirm::new("Enable RAG (Retrieval-Augmented Generation)?")
+                .with_default(default_config.rag.enabled)
+                .with_help_message("RAG allows the AI to use external documents for context")
+                .prompt()
+            {
+                Ok(enabled) => enabled,
+                Err(_) => {
+                    error!("Configuration initialization cancelled or failed");
+                    return;
+                }
+            };
+
+            let final_rag_config = if enable_rag {
+                // Prompt for RAG-specific settings
+                let embedding_url = match inquire::Text::new("Embedding API URL:")
+                    .with_default(&default_config.rag.embedding_url)
+                    .with_help_message("URL for the embedding service (e.g., http://127.0.0.1:11434 for Ollama)")
+                    .prompt()
+                {
+                    Ok(url) => url,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                };
+
+                let embedding_model = match inquire::Text::new("Embedding Model:")
+                    .with_default(&default_config.rag.embedding_model)
+                    .with_help_message("Model name for embeddings (e.g., text-embedding-nomic-embed-text-v1.5)")
+                    .prompt()
+                {
+                    Ok(model) => model,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                };
+
+                let documents_path = match inquire::Text::new("Documents Directory:")
+                    .with_default(&default_config.rag.documents_path)
+                    .with_help_message("Path where RAG documents will be stored (relative to project root)")
+                    .prompt()
+                {
+                    Ok(path) => path,
+                    Err(_) => {
+                        error!("Configuration initialization cancelled or failed");
+                        return;
+                    }
+                };
+
+                config::RagConfig {
+                    enabled: true,
+                    embedding_url,
+                    embedding_model,
+                    documents_path,
+                    chunk_size: default_config.rag.chunk_size,
+                    chunk_overlap: default_config.rag.chunk_overlap,
+                    top_k: default_config.rag.top_k,
+                }
+            } else {
+                config::RagConfig {
+                    enabled: false,
+                    ..default_config.rag
+                }
+            };
+
             // Smart merge permissions: keep user's custom permissions + add new defaults
             let (merged_permissions, old_permissions) = if config_existed {
                 let old_perms = default_config.permissions.clone();
@@ -392,7 +459,7 @@ async fn main() {
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
-                rag: config::Config::default().rag,
+                rag: final_rag_config,
             };
 
             match config.save_to_dir(dir) {
@@ -409,6 +476,12 @@ async fn main() {
                     }
                     println!("  Context Window: {} tokens", config.context_window);
                     println!("  Log Level: {}", config.log_level);
+                    println!("  RAG Enabled: {}", if config.rag.enabled { "yes" } else { "no" });
+                    if config.rag.enabled {
+                        println!("    Embedding URL: {}", config.rag.embedding_url);
+                        println!("    Embedding Model: {}", config.rag.embedding_model);
+                        println!("    Documents path: {}", config.rag.documents_path);
+                    }
 
                     // Show info about permissions
                     if let Some(old_perms) = old_permissions {
