@@ -190,7 +190,7 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="space-y-3">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5" />
@@ -199,13 +199,13 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
             <CardDescription>Manage your indexed documents for semantic search</CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => { void loadDocuments(); void loadStats(); }}>
+            <Button variant="outline" size="sm" onClick={() => { void loadDocuments(); void loadStats(); }} className="flex-1">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button size="sm" className="flex-1">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload
                 </Button>
@@ -272,21 +272,21 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
       </CardHeader>
       <CardContent>
         {stats && (
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-muted rounded-lg p-3">
-              <div className="text-2xl font-bold">{stats.doc_count}</div>
+              <div className="text-xl font-bold">{stats.doc_count}</div>
               <div className="text-xs text-muted-foreground">Documents</div>
             </div>
             <div className="bg-muted rounded-lg p-3">
-              <div className="text-2xl font-bold">{stats.chunk_count}</div>
+              <div className="text-xl font-bold">{stats.chunk_count}</div>
               <div className="text-xs text-muted-foreground">Chunks</div>
             </div>
             <div className="bg-muted rounded-lg p-3">
-              <div className="text-2xl font-bold">{stats.embedding_count}</div>
+              <div className="text-xl font-bold">{stats.embedding_count}</div>
               <div className="text-xs text-muted-foreground">Embeddings</div>
             </div>
             <div className="bg-muted rounded-lg p-3">
-              <div className="text-2xl font-bold">{stats.avg_chunks_per_doc.toFixed(1)}</div>
+              <div className="text-xl font-bold">{stats.avg_chunks_per_doc.toFixed(1)}</div>
               <div className="text-xs text-muted-foreground">Avg Chunks/Doc</div>
             </div>
           </div>
@@ -309,11 +309,11 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
                 key={doc.id}
                 className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center gap-3 flex-1">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{doc.filename}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground truncate">
                       {formatFileSize(doc.file_size)} • Updated {formatDate(doc.updated_at)}
                     </div>
                   </div>
@@ -322,7 +322,7 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
                   variant="ghost"
                   size="icon"
                   onClick={() => { void handleDelete(doc.filename); }}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
