@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-02-21
+
 ### Added
 
 - **RAG (Retrieval-Augmented Generation)**: Semantic search over your documents for context-aware AI responses
