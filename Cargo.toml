@@ -13,6 +13,7 @@ include = [
     "/src",
     "/static",
     "/migrations",
+    "/documents",
     "/.squidignore.example",
     "/squid.config.json.example",
     "/Cargo.toml",
