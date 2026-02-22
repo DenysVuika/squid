@@ -1,6 +1,13 @@
 # squid 🦑
 
-An AI-powered command-line tool for code reviews and suggestions. Privacy-focused and local-first - your code never leaves your hardware when using local models.
+<div align="center">
+  <img src="docs/squid.JPG" alt="Squid Logo" width="300" />
+</div>
+
+An AI-powered assistant for code reviews and improvement suggestions. Privacy-focused and local-first - your code never leaves your hardware when using local models.
+
+> [!WARNING]
+> This is an ongoing research project under active development. Features and APIs may change without notice, and breaking changes may occur between versions. Use in production at your own risk.
 
 ## Features
 
