@@ -4,7 +4,18 @@
  */
 export const playNotificationSound = (): void => {
   try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Type definition for webkit prefixed AudioContext (Safari support)
+    interface WindowWithWebkit extends Window {
+      webkitAudioContext?: typeof AudioContext;
+    }
+    
+    const AudioContextClass = window.AudioContext || (window as unknown as WindowWithWebkit).webkitAudioContext;
+    if (!AudioContextClass) {
+      console.warn('AudioContext not supported in this browser');
+      return;
+    }
+    
+    const audioContext = new AudioContextClass();
     
     // Create two oscillators for a pleasant two-tone chime
     const oscillator1 = audioContext.createOscillator();
