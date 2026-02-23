@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Audio Notification**: The web UI now plays a pleasant chime sound when the assistant finishes responding
+  - Helps users know when to return to the page if they've switched tabs or windows
+  - Uses Web Audio API to generate a non-intrusive two-tone notification sound
+  - Automatically triggers when the assistant completes streaming a response
+
 ## [0.10.0] - 2026-02-21
 
 ### Added
