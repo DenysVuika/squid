@@ -77,6 +77,7 @@ import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { BrainIcon, WrenchIcon, Sparkles } from 'lucide-react';
+import { playNotificationSound } from '@/lib/notification-sound';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
@@ -245,6 +246,24 @@ const Chatbot = () => {
     // Load session history
     void loadSessionHistory(activeSessionId);
   }, [activeSessionId, status, loadSessionHistory, clearMessages]);
+
+  // Track previous status to detect when streaming finishes
+  const prevStatusRef = useRef<typeof status>('ready');
+  
+  // Play notification sound when assistant finishes responding
+  useEffect(() => {
+    const prevStatus = prevStatusRef.current;
+    prevStatusRef.current = status;
+    
+    // Play sound when transitioning from streaming to ready (assistant finished)
+    if (prevStatus === 'streaming' && status === 'ready' && messages.length > 0) {
+      // Check if the last message is from assistant
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.from === 'assistant') {
+        playNotificationSound();
+      }
+    }
+  }, [status, messages]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
