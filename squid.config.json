@@ -1,6 +1,6 @@
 {
-  "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder",
+  "api_url": "http://localhost:12434/engines/v1",
+  "api_model": "huggingface.co/bartowski/qwen2.5-coder-7b-instruct-gguf:Q4_K_M",
   "context_window": 32768,
   "log_level": "info",
   "database_path": "squid.db",
@@ -10,8 +10,8 @@
   },
   "rag": {
     "enabled": true,
-    "embedding_model": "text-embedding-nomic-embed-text-v1.5",
-    "embedding_url": "http://127.0.0.1:1234",
+    "embedding_model": "huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest",
+    "embedding_url": "http://localhost:12434/engines/v1",
     "chunk_size": 512,
     "chunk_overlap": 50,
     "top_k": 5,

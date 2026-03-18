@@ -82,7 +82,83 @@ Before you begin, you'll need:
 </details>
 
 <details>
-<summary><b>Option B: Ollama (Lightweight CLI Option)</b></summary>
+<summary><b>Option B: Docker Model Runner (Docker Desktop/Engine)</b></summary>
+
+[Docker Model Runner](https://docs.docker.com/ai/model-runner/get-started/) lets you run and manage AI models locally using Docker.
+
+1. **Enable Docker Model Runner**:
+   - **Docker Desktop**: Go to Settings → AI tab → Enable "Docker Model Runner"
+   - **Docker Engine**: Install the plugin:
+     ```bash
+     # Ubuntu/Debian
+     sudo apt-get update && sudo apt-get install docker-model-plugin
+     
+     # RPM-based (Fedora, CentOS, RHEL)
+     sudo dnf update && sudo dnf install docker-model-plugin
+     ```
+
+2. **Pull a model** - We recommend **Qwen2.5-Coder** (bartowski version) for code-related tasks:
+   ```bash
+   # Bartowski Qwen2.5-Coder 7B Q4_K_M (recommended - single file, no split issues)
+   docker model pull hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
+   
+   # Or lighter alternative for quick testing
+   docker model pull ai/smollm2:360M-Q4_K_M
+   
+   # Or smaller Qwen2.5-Coder variant
+   docker model pull hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M
+   ```
+   - **Note**: Avoid official Qwen GGUF models (split files cause loading errors in Docker Model Runner)
+   - Search for models: `docker model search qwen2.5-coder`
+   - Browse Docker Hub: https://hub.docker.com/search?q=ai%2F
+   - Browse HuggingFace: Use `hf.co/` prefix for any HuggingFace model
+
+3. **Verify it's running**:
+   ```bash
+   docker model ls  # Should show your pulled models
+   
+   # Test with the model (interactive chat)
+   docker model run hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
+   
+   # Or test the API endpoint
+   curl http://localhost:12434/engines/v1/models
+   ```
+
+4. **Configure endpoint**:
+   - **Docker Desktop**: Default port with OpenAI compatibility: `http://localhost:12434/engines/v1`
+   - **Docker Engine**: Default is `http://localhost:12434/engines/v1`
+   - Note: The `/engines/v1` path is required for OpenAI SDK compatibility
+
+5. **Pull embedding model (for RAG features)**:
+   ```bash
+   # Required for RAG (Retrieval-Augmented Generation) document search
+   docker model pull hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+   ```
+   - This model is used to create embeddings for document search
+   - Only needed if you plan to use RAG features
+   - Size: ~80MB
+
+**Recommended models for coding:**
+- `hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M` - **Best for code** (32K context, ~4.4GB, single file)
+- `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` - Smaller, faster (32K context, ~1GB)
+- `ai/qwen3-coder` - Latest Qwen3 Coder from Docker Hub
+- `ai/smollm2` - Lightweight alternative (4K context, ~256MB)
+
+**Recommended embedding models (for RAG):**
+- `hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF` - **Best for embeddings** (768 dimensions, ~80MB)
+- `ai/nomic-embed-text-v1.5` - Docker Hub version (alternative)
+
+**Important**: 
+- Use bartowski's GGUF models for chat/completion (single-file format)
+- Official Qwen GGUF models are split into multiple files which cause loading errors
+- Embedding models are separate from chat models - you need both for RAG features
+
+**Note**: Use `docker model search <query>` to find more models. HuggingFace models use the `hf.co/` prefix.
+
+</details>
+
+<details>
+<summary><b>Option C: Ollama (Lightweight CLI Option)</b></summary>
 
 [Ollama](https://ollama.com/) is a lightweight, command-line tool for running LLMs.
 
@@ -125,7 +201,7 @@ Before you begin, you'll need:
 </details>
 
 <details>
-<summary><b>Option C: OpenAI API</b></summary>
+<summary><b>Option D: OpenAI API</b></summary>
 
 Use OpenAI's cloud API for access to GPT models:
 
@@ -136,7 +212,7 @@ Use OpenAI's cloud API for access to GPT models:
 </details>
 
 <details>
-<summary><b>Option D: Mistral API</b></summary>
+<summary><b>Option E: Mistral API</b></summary>
 
 Use Mistral's cloud API for access to their powerful models:
 
@@ -147,7 +223,7 @@ Use Mistral's cloud API for access to their powerful models:
 </details>
 
 <details>
-<summary><b>Option E: Other OpenAI-Compatible Services</b></summary>
+<summary><b>Option F: Other OpenAI-Compatible Services</b></summary>
 
 Squid works with any OpenAI-compatible REST API:
 - **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
