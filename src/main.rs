@@ -964,6 +964,10 @@ async fn main() {
             // Initialize RAG system if enabled
             let rag_system = if app_config.rag.enabled {
                 info!("Initializing RAG system...");
+                info!("RAG Configuration:");
+                info!("  Embedding URL: {}", app_config.rag.embedding_url);
+                info!("  Embedding Model: {}", app_config.rag.embedding_model);
+                info!("  Documents Path: {}", app_config.rag.documents_path);
                 match db::Database::new(db_path) {
                     Ok(db) => {
                         match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {

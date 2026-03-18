@@ -4,6 +4,12 @@
 # - Qwen2.5-Coder 7B LLM (bartowski/Q4_K_M quantization)
 # - Nomic Embed Text v1.5 (embedding model for RAG)
 #
+# WORKSPACE DIRECTORY:
+# - Set WORKSPACE_DIR environment variable to bind a specific project directory
+# - Default: current directory (.)
+# - Example: WORKSPACE_DIR=/path/to/your/project docker compose up -d
+# - See README.md "Configuration > Workspace Directory" for details
+#
 # APPLE SILICON USERS (M1/M2/M3/M4):
 # - The default config uses CPU-only inference (n-gpu-layers: 0)
 # - This works great on Apple Silicon with good performance
@@ -17,17 +23,34 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: squid-server
+    command:
+      [
+        "/app/squid",
+        "serve",
+        "--port",
+        "3000",
+        "--db",
+        "/data/squid.db",
+        "--dir",
+        "/workspace",
+      ]
     ports:
       - "3000:3000"
     volumes:
       - squid-data:/data
-      - ./workspace:/data/workspace
+      # Workspace directory - set WORKSPACE_DIR to bind your project directory
+      # Default: current directory (.)
+      # Example: WORKSPACE_DIR=/path/to/project docker compose up
+      - ${WORKSPACE_DIR:-.}:/workspace
     environment:
       - RUST_LOG=info
       - RUST_BACKTRACE=1
       - CONTEXT_WINDOW=32768
       - LOG_LEVEL=info
       - DATABASE_PATH=/data/squid.db
+      - RAG_ENABLED=true
+      - RAG_DOCUMENTS_PATH=documents
+      - RAG_CHUNK_SIZE=512
     # Model bindings - Docker AI automatically injects these environment variables
     models:
       llm:
@@ -70,6 +93,8 @@ models:
       - "4" # CPU threads for embedding generation
       - "--n-gpu-layers"
       - "0" # CPU-only (works on all platforms including Apple Silicon)
+      - "--ubatch-size"
+      - "1024" # Physical batch size for embeddings (must be >= chunk size)
 
 volumes:
   squid-data:

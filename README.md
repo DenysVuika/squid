@@ -230,7 +230,44 @@ The `.env` file configures:
 - Use external LLM services (OpenAI, Mistral, LM Studio on host) by modifying `API_URL`, `API_MODEL`, and adding `API_KEY`
 - Adjust context window, log level, or database path by editing `docker-compose.yml` environment section
 
+**Important**: Environment variables defined in `docker-compose.yml` always override any `squid.config.json` file in the workspace. This ensures Docker configuration takes precedence.
+
 See `.env.docker.example` for all available options and examples, and `docker-compose.yml` for model configuration.
+
+#### Workspace Directory
+
+By default, Docker mounts the current directory (`.`) as the workspace. You can bind a specific project directory by setting the `WORKSPACE_DIR` environment variable:
+
+```bash
+# Option 1: Set in .env file
+echo "WORKSPACE_DIR=/path/to/your/project" >> .env
+
+# Option 2: Set inline when starting
+WORKSPACE_DIR=/path/to/your/project docker compose up -d
+
+# Option 3: Modify docker-compose.yml volumes section
+# Change: - ${WORKSPACE_DIR:-.}:/workspace
+# To:     - /absolute/path/to/project:/workspace
+```
+
+The workspace directory is where Squid will:
+- Browse and display files in the Web UI file explorer
+- Execute tool operations (read_file, write_file, etc.)
+- Search for code patterns
+- Run bash commands (when approved)
+
+**Security Note:** All file operations are restricted to the workspace directory and respect `.squidignore` patterns.
+
+**Example - Work with a specific project:**
+```bash
+# Navigate to squid directory
+cd squid
+
+# Set workspace to a different project
+WORKSPACE_DIR=~/Projects/my-app docker compose up -d
+
+# Now the Web UI will show files from ~/Projects/my-app
+```
 
 ### Using Manual Installation
 
@@ -396,6 +433,31 @@ Squid provides both a modern Web UI and a command-line interface. **We recommend
 
 *Modern chat interface with session management, token usage tracking, and real-time cost estimates*
 
+#### Using Docker (Recommended)
+
+```bash
+# Start with default workspace (current directory)
+docker compose up -d
+
+# Work with a specific project directory
+WORKSPACE_DIR=/path/to/your/project docker compose up -d
+
+# Example: Analyze a React app
+WORKSPACE_DIR=~/Projects/my-react-app docker compose up -d
+
+# View logs
+docker compose logs -f squid
+
+# Stop services
+docker compose down
+```
+
+Access the Web UI at http://localhost:3000
+
+The workspace directory determines what files the AI can see and work with. All file operations, code search, and bash commands operate within this directory.
+
+#### Using Manual Installation
+
 Start the built-in web interface for Squid:
 
 ```bash
@@ -417,19 +479,19 @@ squid serve --port 3000 --db=custom.db --dir=/path/to/project
 ```
 
 The web server will:
-- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
+- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port, Docker uses 3000)
 - Provide a browser-based interface for interacting with Squid
 - Expose REST API endpoints for chat, sessions, and logs
 - Display the server URL and API endpoint on startup
 
-**Server Options:**
-- `--port` / `-p`: Port number to run the server (default: `8080`)
+**Server Options (Manual Installation):**
+- `--port` / `-p`: Port number to run the server (default: `8080`, Docker uses `3000`)
 - `--db`: Path to custom database file (default: `squid.db` in current/config directory)
 - `--dir`: Working directory for the server (changes to this directory before starting)
 
 **Use Cases:**
 - Use `--db` to specify a different database file for separate projects or testing
-- Use `--dir` to run the server in a specific project directory without navigating there first
+- Use `--dir` (or `WORKSPACE_DIR` in Docker) to work with a specific project directory
 - The database path is relative to the working directory (after `--dir` is applied)
 
 **Web UI Features:**

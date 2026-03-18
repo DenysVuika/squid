@@ -68,7 +68,8 @@ USER squid
 EXPOSE 3000
 
 # Volume for database and workspace
-VOLUME ["/data"]
+VOLUME ["/data", "/workspace"]
 
 # Default command - run in serve mode
-CMD ["/app/squid", "serve", "--port", "3000", "--db", "/data/squid.db", "--dir", "/data/workspace"]
+# Note: --dir points to /workspace which is mounted via docker-compose.yml
+CMD ["/app/squid", "serve", "--port", "3000", "--db", "/data/squid.db", "--dir", "/workspace"]

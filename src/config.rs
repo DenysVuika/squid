@@ -182,7 +182,7 @@ impl Config {
         // Search for config file in current directory and parent directories
         let config_path = Self::find_config_file().unwrap_or_else(|| PathBuf::from("squid.config.json"));
 
-        if config_path.exists() {
+        let mut config = if config_path.exists() {
             debug!("Loading configuration from squid.config.json");
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_json::from_str::<Config>(&content) {
@@ -210,45 +210,110 @@ impl Config {
                             }
                         }
 
-                        return config;
+                        config
                     }
                     Err(e) => {
                         debug!("Failed to parse squid.config.json: {}", e);
+                        Self::default()
                     }
                 },
                 Err(e) => {
                     debug!("Failed to read squid.config.json: {}", e);
+                    Self::default()
                 }
+            }
+        } else {
+            debug!("No squid.config.json found, using defaults");
+            Self::default()
+        };
+
+        // Environment variables override config file settings
+        debug!("Applying environment variable overrides");
+
+        if let Ok(api_url) = std::env::var("API_URL") {
+            debug!("Overriding API_URL from environment");
+            config.api_url = api_url;
+        }
+
+        if let Ok(api_model) = std::env::var("API_MODEL") {
+            debug!("Overriding API_MODEL from environment");
+            config.api_model = api_model;
+        }
+
+        if let Ok(api_key) = std::env::var("API_KEY") {
+            debug!("Overriding API_KEY from environment");
+            config.api_key = Some(api_key);
+        }
+
+        if let Ok(context_window) = std::env::var("CONTEXT_WINDOW") {
+            if let Ok(window) = context_window.parse() {
+                debug!("Overriding CONTEXT_WINDOW from environment");
+                config.context_window = window;
             }
         }
 
-        // Fallback to environment variables
-        debug!("Loading configuration from environment variables");
-
-        // Try to find existing database in parent directories
-        let db_path = std::env::var("DATABASE_PATH")
-            .ok()
-            .or_else(|| Self::find_database_file().and_then(|p| p.to_str().map(String::from)))
-            .unwrap_or_else(|| Self::default().database_path);
-
-        Self {
-            api_url: std::env::var("API_URL").unwrap_or_else(|_| Self::default().api_url),
-            api_model: std::env::var("API_MODEL").unwrap_or_else(|_| Self::default().api_model),
-            api_key: std::env::var("API_KEY").ok(),
-            context_window: std::env::var("CONTEXT_WINDOW")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(default_context_window),
-            log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| Self::default().log_level),
-            permissions: Permissions::default(),
-            version: None,
-            database_path: db_path,
-            enable_env_context: std::env::var("ENABLE_ENV_CONTEXT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(default_enable_env_context),
-            rag: RagConfig::default(),
+        if let Ok(log_level) = std::env::var("LOG_LEVEL") {
+            debug!("Overriding LOG_LEVEL from environment");
+            config.log_level = log_level;
         }
+
+        if let Ok(db_path) = std::env::var("DATABASE_PATH") {
+            debug!("Overriding DATABASE_PATH from environment");
+            config.database_path = db_path;
+        }
+
+        if let Ok(enable_env) = std::env::var("ENABLE_ENV_CONTEXT") {
+            if let Ok(enabled) = enable_env.parse() {
+                debug!("Overriding ENABLE_ENV_CONTEXT from environment");
+                config.enable_env_context = enabled;
+            }
+        }
+
+        // RAG configuration overrides
+        if let Ok(rag_enabled) = std::env::var("RAG_ENABLED") {
+            if let Ok(enabled) = rag_enabled.parse() {
+                debug!("Overriding RAG_ENABLED from environment");
+                config.rag.enabled = enabled;
+            }
+        }
+
+        if let Ok(embedding_model) = std::env::var("EMBEDDING_MODEL") {
+            debug!("Overriding EMBEDDING_MODEL from environment");
+            config.rag.embedding_model = embedding_model;
+        }
+
+        if let Ok(embedding_url) = std::env::var("EMBEDDING_URL") {
+            debug!("Overriding EMBEDDING_URL from environment");
+            config.rag.embedding_url = embedding_url;
+        }
+
+        if let Ok(chunk_size) = std::env::var("RAG_CHUNK_SIZE") {
+            if let Ok(size) = chunk_size.parse() {
+                debug!("Overriding RAG_CHUNK_SIZE from environment");
+                config.rag.chunk_size = size;
+            }
+        }
+
+        if let Ok(chunk_overlap) = std::env::var("RAG_CHUNK_OVERLAP") {
+            if let Ok(overlap) = chunk_overlap.parse() {
+                debug!("Overriding RAG_CHUNK_OVERLAP from environment");
+                config.rag.chunk_overlap = overlap;
+            }
+        }
+
+        if let Ok(top_k) = std::env::var("RAG_TOP_K") {
+            if let Ok(k) = top_k.parse() {
+                debug!("Overriding RAG_TOP_K from environment");
+                config.rag.top_k = k;
+            }
+        }
+
+        if let Ok(docs_path) = std::env::var("RAG_DOCUMENTS_PATH") {
+            debug!("Overriding RAG_DOCUMENTS_PATH from environment");
+            config.rag.documents_path = docs_path;
+        }
+
+        config
     }
 
     /// Search for squid.config.json in current directory and parent directories

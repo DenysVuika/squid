@@ -15,12 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Interactive setup script (`docker-setup.sh`) with automatic configuration
   - Optimized for Apple Silicon (M1/M2/M3/M4) with CPU inference
   - Web UI and API accessible at http://localhost:3000
-  - Workspace directory for easy file sharing with container
+- **Workspace Directory Configuration**: Bind specific project directories in Docker
+  - Set `WORKSPACE_DIR` environment variable to work with any project
+  - All file operations, code search, and bash commands operate within workspace
+  - Web UI file explorer displays workspace contents
+  - Security: operations restricted to workspace directory and `.squidignore` patterns
 - **Documentation Reorganization**: Comprehensive docs split into focused guides
   - `docs/CLI.md` - Complete command-line reference
   - `docs/RAG.md` - Retrieval-Augmented Generation guide
   - README focuses on Docker + Web UI (recommended workflow)
 - **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
+
+### Fixed
+
+- **RAG Embedding Configuration in Docker**: Fixed RAG not using Docker AI embedding service
+  - Environment variables now override `squid.config.json` settings
+  - Prevents config file in workspace from interfering with Docker configuration
+  - Docker Compose sets `RAG_ENABLED=true` and `RAG_DOCUMENTS_PATH=documents` by default
+  - Added debug logging to display RAG configuration and overrides on server startup
+  - Resolves "Failed to generate embedding for chunk" errors when uploading documents
+  - All config values (API URLs, models, RAG settings) respect environment variable overrides
 
 ## [0.10.0] - 2026-02-21
 

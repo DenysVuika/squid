@@ -29,7 +29,11 @@ impl RagEmbedder {
     pub fn new(embedding_url: &str, model: &str) -> Result<Self> {
         // For local services (LM Studio, Ollama), use a dummy API key
         // The from_url method accepts: (api_key, base_url)
-        let client = rig::providers::openai::Client::from_url("not-needed", embedding_url);
+        // Strip /v1 suffix and trailing slash since rig adds /v1/embeddings automatically
+        let normalized_url = embedding_url
+            .trim_end_matches('/')
+            .trim_end_matches("/v1");
+        let client = rig::providers::openai::Client::from_url("not-needed", normalized_url);
         Ok(Self {
             client,
             model: model.to_string(),
@@ -39,19 +43,31 @@ impl RagEmbedder {
     /// Generate embeddings for a single text
     pub async fn embed_text(&self, text: &str) -> Result<Vec<f32>> {
         use rig::embeddings::EmbeddingsBuilder;
-        
+
+        debug!("Generating embedding using model: {}", self.model);
+        debug!("Text length: {} characters", text.len());
+
         let model = self.client.embedding_model(&self.model);
-        
-        let embeddings = EmbeddingsBuilder::new(model)
+
+        let embeddings = match EmbeddingsBuilder::new(model)
             .simple_document("doc", text)
             .build()
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to generate embedding (model: {}, check if embedding service is running and the model is available)",
-                    self.model
-                )
-            })?;
+        {
+            Ok(embeddings) => embeddings,
+            Err(e) => {
+                error!("Failed to call embedding API");
+                error!("  Error details: {:?}", e);
+                error!("  Model: {}", self.model);
+                return Err(anyhow::anyhow!(
+                    "Failed to generate embedding (model: {}, error: {}). Check if embedding service is running and the model is available",
+                    self.model,
+                    e
+                ));
+            }
+        };
+
+        debug!("Successfully generated embeddings");
 
         if let Some(doc_embedding) = embeddings.first() {
             if let Some(embedding) = doc_embedding.embeddings.first() {
@@ -513,16 +529,21 @@ impl RagIndexer {
                 chunk.tokens as i32,
             )?;
 
+            debug!("Generating embedding for chunk {} (length: {} chars)", chunk.index, chunk.text.len());
             let embedding = self
                 .embedder
                 .embed_text(&chunk.text)
                 .await
                 .with_context(|| {
+                    error!("Embedding generation failed for chunk {}", chunk.index);
+                    error!("  Embedding URL: {}", self.embedding_url);
+                    error!("  Chunk text preview: {}...", &chunk.text.chars().take(100).collect::<String>());
                     format!(
                         "Failed to generate embedding for chunk {} (embedding service: {})",
                         chunk.index, self.embedding_url
                     )
                 })?;
+            debug!("Successfully generated embedding for chunk {}", chunk.index);
 
             self.vector_store
                 .insert_embedding(chunk_id, &embedding)

@@ -13,7 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Configuration
-WORKSPACE_DIR="./workspace"
+# Note: WORKSPACE_DIR can be overridden by setting it as an environment variable
+WORKSPACE_DIR="${WORKSPACE_DIR:-.}"
 REQUIRED_DOCKER_VERSION="24.0.0"
 REQUIRED_COMPOSE_VERSION="2.38.0"
 
@@ -181,34 +182,30 @@ setup_env() {
 setup_workspace() {
     print_header "Setting Up Workspace"
 
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        mkdir -p "$WORKSPACE_DIR"
-        print_success "Created workspace directory"
+    print_info "Workspace directory: $WORKSPACE_DIR"
+
+    if [ "$WORKSPACE_DIR" = "." ]; then
+        print_success "Using current directory as workspace (default)"
+        print_info "Files in this directory will be accessible to Squid"
     else
-        print_success "Workspace directory already exists"
+        if [ ! -d "$WORKSPACE_DIR" ]; then
+            print_warning "Workspace directory does not exist: $WORKSPACE_DIR"
+            read -p "Create it? (Y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                mkdir -p "$WORKSPACE_DIR"
+                print_success "Created workspace directory"
+            else
+                print_error "Workspace directory required. Exiting."
+                exit 1
+            fi
+        else
+            print_success "Workspace directory exists"
+        fi
     fi
 
-    # Set proper permissions
-    chmod 755 "$WORKSPACE_DIR"
-
-    # Create a sample README if empty
-    if [ -z "$(ls -A $WORKSPACE_DIR)" ]; then
-        cat > "$WORKSPACE_DIR/README.md" << 'EOF'
-# Squid Workspace
-
-Place your code files here for analysis with Squid.
-
-## Usage
-
-Files in this directory are accessible to Squid at `/data/workspace/` inside the container.
-
-Example:
-```bash
-docker compose exec squid /app/squid review --file /data/workspace/myproject/src/main.rs
-```
-EOF
-        print_info "Created sample README in workspace"
-    fi
+    print_info "To use a different project directory, set WORKSPACE_DIR:"
+    echo "  WORKSPACE_DIR=/path/to/project docker compose up -d"
 }
 
 # Build Docker images
@@ -383,11 +380,13 @@ clean_all() {
 
     print_success "Containers and volumes removed"
 
-    read -p "Remove workspace directory? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$WORKSPACE_DIR"
-        print_success "Workspace removed"
+    if [ "$WORKSPACE_DIR" != "." ] && [ -d "$WORKSPACE_DIR" ]; then
+        read -p "Remove workspace directory $WORKSPACE_DIR? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$WORKSPACE_DIR"
+            print_success "Workspace removed"
+        fi
     fi
 
     print_info "Docker images are retained. Remove manually with:"
@@ -451,8 +450,9 @@ full_setup() {
     echo ""
     print_info "Next Steps:"
     echo "  1. Open http://localhost:3000 in your browser"
-    echo "  2. Place your code in the ./workspace directory"
-    echo "  3. Try: docker compose exec squid /app/squid ask 'How do I use Rust?'"
+    echo "  2. Your workspace: $WORKSPACE_DIR"
+    echo "  3. Change workspace: WORKSPACE_DIR=/path/to/project docker compose up -d"
+    echo "  4. View logs: ./docker-setup.sh logs"
     echo ""
     print_info "Useful Commands:"
     echo "  • View logs:    ./docker-setup.sh logs"
