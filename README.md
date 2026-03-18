@@ -82,7 +82,47 @@ Before you begin, you'll need:
 </details>
 
 <details>
-<summary><b>Option B: Ollama (Lightweight CLI Option)</b></summary>
+<summary><b>Option B: Docker Model Runner (Docker Desktop/Engine)</b></summary>
+
+[Docker Model Runner](https://docs.docker.com/ai/model-runner/get-started/) lets you run and manage AI models locally using Docker.
+
+1. **Enable Docker Model Runner**:
+   - **Docker Desktop**: Go to Settings → AI tab → Enable "Docker Model Runner"
+   - **Docker Engine**: Install the plugin:
+     ```bash
+     # Ubuntu/Debian
+     sudo apt-get update && sudo apt-get install docker-model-plugin
+     
+     # RPM-based (Fedora, CentOS, RHEL)
+     sudo dnf update && sudo dnf install docker-model-plugin
+     ```
+
+2. **Pull a model** - We recommend **SmolLM2** for getting started:
+   ```bash
+   docker model pull ai/smollm2:360M-Q4_K_M
+   ```
+   - Or browse available models: https://hub.docker.com/search?q=ai%2F
+
+3. **Verify it's running**:
+   ```bash
+   docker model ls  # Should show your pulled models
+   docker model run ai/smollm2  # Test the model
+   ```
+
+4. **Configure endpoint**:
+   - **Docker Desktop**: Default is configurable port (e.g., `http://localhost:8080/v1`)
+   - **Docker Engine**: Default is `http://localhost:12434/v1`
+
+**Available models in Docker Hub:**
+- `ai/smollm2` - Lightweight, fast (135M-1.7B parameters)
+- `ai/llama-3.2` - Meta's latest (1B-3B parameters)
+- `ai/qwen2.5-coder` - Code-specialized
+- Or pull from HuggingFace: `docker model pull hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF`
+
+</details>
+
+<details>
+<summary><b>Option C: Ollama (Lightweight CLI Option)</b></summary>
 
 [Ollama](https://ollama.com/) is a lightweight, command-line tool for running LLMs.
 
@@ -125,7 +165,7 @@ Before you begin, you'll need:
 </details>
 
 <details>
-<summary><b>Option C: OpenAI API</b></summary>
+<summary><b>Option D: OpenAI API</b></summary>
 
 Use OpenAI's cloud API for access to GPT models:
 
@@ -136,7 +176,7 @@ Use OpenAI's cloud API for access to GPT models:
 </details>
 
 <details>
-<summary><b>Option D: Mistral API</b></summary>
+<summary><b>Option E: Mistral API</b></summary>
 
 Use Mistral's cloud API for access to their powerful models:
 
@@ -147,7 +187,7 @@ Use Mistral's cloud API for access to their powerful models:
 </details>
 
 <details>
-<summary><b>Option E: Other OpenAI-Compatible Services</b></summary>
+<summary><b>Option F: Other OpenAI-Compatible Services</b></summary>
 
 Squid works with any OpenAI-compatible REST API:
 - **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
