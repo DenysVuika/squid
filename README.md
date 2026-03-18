@@ -97,27 +97,47 @@ Before you begin, you'll need:
      sudo dnf update && sudo dnf install docker-model-plugin
      ```
 
-2. **Pull a model** - We recommend **SmolLM2** for getting started:
+2. **Pull a model** - We recommend **Qwen2.5-Coder** (bartowski version) for code-related tasks:
    ```bash
+   # Bartowski Qwen2.5-Coder 7B Q4_K_M (recommended - single file, no split issues)
+   docker model pull hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
+   
+   # Or lighter alternative for quick testing
    docker model pull ai/smollm2:360M-Q4_K_M
+   
+   # Or smaller Qwen2.5-Coder variant
+   docker model pull hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M
    ```
-   - Or browse available models: https://hub.docker.com/search?q=ai%2F
+   - **Note**: Avoid official Qwen GGUF models (split files cause loading errors in Docker Model Runner)
+   - Search for models: `docker model search qwen2.5-coder`
+   - Browse Docker Hub: https://hub.docker.com/search?q=ai%2F
+   - Browse HuggingFace: Use `hf.co/` prefix for any HuggingFace model
 
 3. **Verify it's running**:
    ```bash
    docker model ls  # Should show your pulled models
-   docker model run ai/smollm2  # Test the model
+   
+   # Test with the model (interactive chat)
+   docker model run hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
+   
+   # Or test the API endpoint
+   curl http://localhost:12434/engines/v1/models
    ```
 
 4. **Configure endpoint**:
-   - **Docker Desktop**: Default is configurable port (e.g., `http://localhost:8080/v1`)
-   - **Docker Engine**: Default is `http://localhost:12434/v1`
+   - **Docker Desktop**: Default port with OpenAI compatibility: `http://localhost:12434/engines/v1`
+   - **Docker Engine**: Default is `http://localhost:12434/engines/v1`
+   - Note: The `/engines/v1` path is required for OpenAI SDK compatibility
 
-**Available models in Docker Hub:**
-- `ai/smollm2` - Lightweight, fast (135M-1.7B parameters)
-- `ai/llama-3.2` - Meta's latest (1B-3B parameters)
-- `ai/qwen2.5-coder` - Code-specialized
-- Or pull from HuggingFace: `docker model pull hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF`
+**Recommended models for coding:**
+- `hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M` - **Best for code** (32K context, ~4.4GB, single file)
+- `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` - Smaller, faster (32K context, ~1GB)
+- `ai/qwen3-coder` - Latest Qwen3 Coder from Docker Hub
+- `ai/smollm2` - Lightweight alternative (4K context, ~256MB)
+
+**Important**: Use bartowski's GGUF models (single-file format). Official Qwen GGUF models are split into multiple files which cause loading errors in Docker Model Runner.
+
+**Note**: Use `docker model search <query>` to find more models. HuggingFace models use the `hf.co/` prefix.
 
 </details>
 
