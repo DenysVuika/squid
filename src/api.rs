@@ -11,7 +11,7 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -427,7 +427,7 @@ pub async fn chat_stream(
                                 content: result.chunk_text.clone(),
                             });
                         }
-                        
+
                         // Send RAG sources as sources event
                         if !rag_sources.is_empty() {
                             let sources_event = StreamEvent::Sources {
@@ -504,7 +504,7 @@ pub async fn chat_stream(
                 // Track thinking steps in order as they occur during streaming
                 let mut thinking_steps_ordered: Vec<session::ThinkingStep> = Vec::new();
                 let mut step_order = 0i32;
-                
+
                 // Track reasoning blocks separately - don't merge them
                 let mut last_closed_think_pos = 0;
 
@@ -516,7 +516,7 @@ pub async fn chat_stream(
                             // Accumulate content chunks
                             if let StreamEvent::Content { ref text } = chunk {
                                 accumulated_content.push_str(text);
-                                
+
                                 // Check if we completed any <think>...</think> blocks
                                 // Process each closed block as a separate reasoning step
                                 loop {
@@ -569,7 +569,7 @@ pub async fn chat_stream(
                             if let StreamEvent::ToolInvocationCompleted { name, arguments, result, error } = &chunk {
                                 // Capture content accumulated before this tool
                                 let content_snapshot = accumulated_content.trim().to_string();
-                                
+
                                 // Add tool as thinking step immediately (preserves order)
                                 thinking_steps_ordered.push(session::ThinkingStep {
                                     step_type: "tool".to_string(),
@@ -610,7 +610,7 @@ pub async fn chat_stream(
                 // Parse out ALL <think> tags from accumulated content for final display
                 let mut final_content = accumulated_content.clone();
                 let mut reasoning_parts = Vec::new();
-                
+
                 // Remove all <think>...</think> tags
                 while let Some(think_start) = final_content.find("<think>") {
                     if let Some(think_end) = final_content.find("</think>") {
@@ -633,7 +633,7 @@ pub async fn chat_stream(
                         break;
                     }
                 }
-                
+
                 // Remove all <tool_call>...</tool_call> tags (model's way of indicating tool calls)
                 while let Some(tool_start) = final_content.find("<tool_call>") {
                     if let Some(tool_end) = final_content.find("</tool_call>") {
@@ -668,13 +668,13 @@ pub async fn chat_stream(
                     title: s.title.clone(),
                     content: s.content.clone(),
                 }));
-                
+
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
                     debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
                         session_id, final_content_trimmed.len(),
                         thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
                         sources.len(), rag_sources.len(), all_sources.len());
-                    
+
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
@@ -830,7 +830,7 @@ async fn create_chat_stream(
     // Build user message with RAG context if provided
     let mut user_message = env_context.clone();
     user_message.push_str("\n\n");
-    
+
     // Add RAG context first if available
     if let Some(ref sources) = rag_sources {
         if !sources.is_empty() {
@@ -847,7 +847,7 @@ async fn create_chat_stream(
             debug!("✅ Added {} RAG sources to context", sources.len());
         }
     }
-    
+
     // Add file contents if present
     if !files.is_empty() {
         for file in files {
@@ -899,7 +899,7 @@ async fn create_chat_stream(
                 let tool_steps: Vec<_> = thinking_steps.iter()
                     .filter(|s| s.step_type == "tool")
                     .collect();
-                
+
                 if !tool_steps.is_empty() {
                     // Reconstruct tool calls from thinking steps
                     let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps.iter()
@@ -919,15 +919,15 @@ async fn create_chat_stream(
                     // Strip reasoning blocks when sending back to model
                     let filtered_content = llm::strip_reasoning_blocks(&msg.content);
                     if filtered_content.len() != msg.content.len() {
-                        debug!("Filtered reasoning from assistant message: {} chars -> {} chars", 
+                        debug!("Filtered reasoning from assistant message: {} chars -> {} chars",
                                msg.content.len(), filtered_content.len());
                     }
                     messages.push(
                         ChatCompletionRequestAssistantMessage {
-                            content: if filtered_content.is_empty() { 
-                                None 
-                            } else { 
-                                Some(filtered_content.into()) 
+                            content: if filtered_content.is_empty() {
+                                None
+                            } else {
+                                Some(filtered_content.into())
                             },
                             tool_calls: Some(assistant_tool_calls),
                             ..Default::default()
@@ -1130,7 +1130,7 @@ async fn create_chat_stream(
 
                                 // Check permission status
                                 let permission_status = tools::check_tool_permission(name, &args_value, app_config);
-                                
+
                                 debug!("Tool '{}' permission status: {:?}", name, permission_status);
 
                                 match permission_status {
@@ -1151,7 +1151,7 @@ async fn create_chat_stream(
                                     tools::ToolPermissionStatus::Allowed => {
                                         // Tool is auto-allowed, execute directly
                                         let result = tools::execute_tool_direct(name, &args_value, app_config).await;
-                                        
+
                                         // Emit tool invocation completed event
                                         yield Ok(StreamEvent::ToolInvocationCompleted {
                                             name: name.clone(),
@@ -1159,7 +1159,7 @@ async fn create_chat_stream(
                                             result: Some(result.to_string()),
                                             error: None,
                                         });
-                                        
+
                                         messages.push(
                                             ChatCompletionRequestToolMessage {
                                                 content: result.to_string().into(),
@@ -1171,15 +1171,15 @@ async fn create_chat_stream(
                                     tools::ToolPermissionStatus::NeedsApproval => {
                                         use uuid::Uuid;
                                         use std::time::Duration;
-                                        
+
                                         // Generate unique approval ID
                                         let approval_id = Uuid::new_v4().to_string();
-                                        
+
                                         info!("Tool '{}' needs approval, generated approval_id: {}", name, approval_id);
-                                        
+
                                         // Create oneshot channel for approval response
                                         let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
-                                        
+
                                         // Store approval state in map
                                         {
                                             let mut approvals = approval_map.lock().await;
@@ -1191,7 +1191,7 @@ async fn create_chat_stream(
                                                 created_at: Instant::now(),
                                             });
                                         }
-                                        
+
                                         // Yield approval request event
                                         yield Ok(StreamEvent::ToolApprovalRequest {
                                             approval_id: approval_id.clone(),
@@ -1199,9 +1199,9 @@ async fn create_chat_stream(
                                             tool_args: args_value.clone(),
                                             tool_description: get_tool_description(name),
                                         });
-                                        
+
                                         info!("Emitted ToolApprovalRequest event for approval_id: {}", approval_id);
-                                        
+
                                         // Wait for approval with 5 minute timeout
                                         let approved = match tokio::time::timeout(
                                             Duration::from_secs(300),
@@ -1220,23 +1220,23 @@ async fn create_chat_stream(
                                                 false
                                             }
                                         };
-                                        
+
                                         // Clean up from map
                                         {
                                             let mut approvals = approval_map.lock().await;
                                             approvals.remove(&approval_id);
                                         }
-                                        
+
                                         // Yield approval response event
                                         yield Ok(StreamEvent::ToolApprovalResponse {
                                             approval_id: approval_id.clone(),
                                             approved,
                                         });
-                                        
+
                                         // Execute based on approval
                                         if approved {
                                             let result = tools::execute_tool_direct(name, &args_value, app_config).await;
-                                            
+
                                             // Emit tool invocation completed event
                                             yield Ok(StreamEvent::ToolInvocationCompleted {
                                                 name: name.clone(),
@@ -1244,7 +1244,7 @@ async fn create_chat_stream(
                                                 result: Some(result.to_string()),
                                                 error: None,
                                             });
-                                            
+
                                             messages.push(
                                                 ChatCompletionRequestToolMessage {
                                                     content: result.to_string().into(),
@@ -1257,7 +1257,7 @@ async fn create_chat_stream(
                                                 "message": format!("Tool '{}' was not executed because you rejected it.", name),
                                                 "skipped": true
                                             });
-                                            
+
                                             // Emit tool invocation completed event for rejection to record in thinking steps
                                             yield Ok(StreamEvent::ToolInvocationCompleted {
                                                 name: name.clone(),
@@ -1265,7 +1265,7 @@ async fn create_chat_stream(
                                                 result: None,
                                                 error: Some("Tool execution rejected by user".to_string()),
                                             });
-                                            
+
                                             messages.push(
                                                 ChatCompletionRequestToolMessage {
                                                     content: reject_result.to_string().into(),
@@ -1545,7 +1545,7 @@ pub async fn handle_tool_approval(
 
     // Find the pending approval
     let mut approvals = approval_map.lock().await;
-    
+
     if let Some(approval_state) = approvals.remove(&body.approval_id) {
         // Send the approval decision through the channel
         if approval_state.sender.send(body.approved).is_err() {
@@ -1656,7 +1656,7 @@ pub async fn rag_query(
             "error": "RAG system is not enabled"
         })));
     };
-    
+
     match rag_system.query.execute_structured(&body.query).await {
         Ok(results) => {
             let mut context = String::from("# Retrieved Context\n\n");
@@ -1817,7 +1817,7 @@ pub async fn rag_upload_document(
     use tokio::fs;
 
     let documents_path = PathBuf::from(&app_config.rag.documents_path);
-    
+
     if !documents_path.exists() {
         if let Err(e) = fs::create_dir_all(&documents_path).await {
             return Ok(HttpResponse::InternalServerError().json(RagResponse {
@@ -1844,12 +1844,14 @@ pub async fn rag_upload_document(
             }))
         }
         Err(e) => {
-            warn!("Failed to index uploaded document: {}", e);
+            error!("Failed to index uploaded document '{}': {}", body.filename, e);
+            error!("  Embedding URL: {}", app_config.rag.embedding_url);
+            error!("  Embedding Model: {}", app_config.rag.embedding_model);
+            error!("  Documents Path: {}", app_config.rag.documents_path);
             Ok(HttpResponse::InternalServerError().json(RagResponse {
                 success: false,
-                message: format!("File uploaded but indexing failed: {}", e),
+                message: format!("File uploaded but indexing failed: {}. Check server logs for details.", e),
             }))
         }
     }
 }
-

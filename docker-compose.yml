@@ -1,0 +1,105 @@
+# Squid AI-Powered Code Assistant with Docker AI Model Runner
+# This compose file sets up:
+# - Squid server (web UI + API)
+# - Qwen2.5-Coder 7B LLM (bartowski/Q4_K_M quantization)
+# - Nomic Embed Text v1.5 (embedding model for RAG)
+#
+# WORKSPACE DIRECTORY:
+# - Set WORKSPACE_DIR environment variable to bind a specific project directory
+# - Default: current directory (.)
+# - Example: WORKSPACE_DIR=/path/to/your/project docker compose up -d
+# - See README.md "Configuration > Workspace Directory" for details
+#
+# APPLE SILICON USERS (M1/M2/M3/M4):
+# - Metal GPU acceleration is ENABLED by default (n-gpu-layers: 35)
+# - This provides fast inference using your Mac's GPU
+# - Ensure Docker Desktop has 10GB+ RAM allocated
+# - To use CPU-only instead, set n-gpu-layers to 0 in the runtime_flags below
+
+services:
+  # Squid server - Main application
+  squid:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: squid-server
+    command:
+      [
+        "/app/squid",
+        "serve",
+        "--port",
+        "3000",
+        "--db",
+        "/data/squid.db",
+        "--dir",
+        "/workspace",
+      ]
+    ports:
+      - "3000:3000"
+    volumes:
+      - squid-data:/data
+      # Workspace directory - set WORKSPACE_DIR to bind your project directory
+      # Default: current directory (.)
+      # Example: WORKSPACE_DIR=/path/to/project docker compose up
+      - ${WORKSPACE_DIR:-.}:/workspace
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+      - CONTEXT_WINDOW=32768
+      - LOG_LEVEL=info
+      - DATABASE_PATH=/data/squid.db
+      - RAG_ENABLED=true
+      - RAG_DOCUMENTS_PATH=documents
+      - RAG_CHUNK_SIZE=512
+    # Model bindings - Docker AI automatically injects these environment variables
+    models:
+      llm:
+        endpoint_var: API_URL # OpenAI-compatible LLM endpoint
+        model_var: API_MODEL # Model identifier for LLM
+      embedding:
+        endpoint_var: EMBEDDING_URL # OpenAI-compatible embedding endpoint
+        model_var: EMBEDDING_MODEL # Model identifier for embeddings
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# AI Models - Managed by Docker Model Runner
+models:
+  # Main LLM for code analysis and chat
+  llm:
+    model: huggingface.co/bartowski/qwen2.5-coder-7b-instruct-gguf:Q4_K_M
+    context_size: 32768 # 32K token context window
+    runtime_flags:
+      - "--threads"
+      - "8" # CPU threads (adjust based on your CPU cores)
+      - "--parallel"
+      - "4" # Parallel request slots
+      - "--n-gpu-layers"
+      - "35" # GPU acceleration (Metal on Apple Silicon, CUDA/ROCm on others; set to 0 for CPU-only)
+      - "--mlock" # Lock memory to prevent swapping
+
+  # Embedding model for RAG (semantic search)
+  embedding:
+    model: huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest
+    context_size: 2048 # 2K token context for embeddings
+    runtime_flags:
+      - "--embeddings" # REQUIRED for embedding models
+      - "--threads"
+      - "4" # CPU threads for embedding generation
+      - "--n-gpu-layers"
+      - "35" # GPU acceleration (Metal on Apple Silicon, CUDA/ROCm on others; set to 0 for CPU-only)
+      - "--ubatch-size"
+      - "1024" # Physical batch size for embeddings (must be >= chunk size)
+
+volumes:
+  squid-data:
+    driver: local
+
+networks:
+  default:
+    name: squid-network

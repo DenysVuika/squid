@@ -9,10 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Audio Notification**: The web UI now plays a pleasant chime sound when the assistant finishes responding
-  - Helps users know when to return to the page if they've switched tabs or windows
-  - Uses Web Audio API to generate a non-intrusive two-tone notification sound
-  - Automatically triggers when the assistant completes streaming a response
+- **Docker Support with AI Models**: One-command setup with built-in LLM and embedding models
+  - Qwen2.5-Coder 7B (Q4_K_M quantization) for code analysis and chat
+  - Nomic Embed Text v1.5 for RAG semantic search
+  - Interactive setup script (`docker-setup.sh`) with automatic configuration
+  - Optimized for Apple Silicon (M1/M2/M3/M4) with CPU inference
+  - Web UI and API accessible at http://localhost:3000
+- **Workspace Directory Configuration**: Bind specific project directories in Docker
+  - Set `WORKSPACE_DIR` environment variable to work with any project
+  - All file operations, code search, and bash commands operate within workspace
+  - Web UI file explorer displays workspace contents
+  - Security: operations restricted to workspace directory and `.squidignore` patterns
+- **Documentation Reorganization**: Comprehensive docs split into focused guides
+  - `docs/CLI.md` - Complete command-line reference
+  - `docs/RAG.md` - Retrieval-Augmented Generation guide
+  - README focuses on Docker + Web UI (recommended workflow)
+- **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
+
+### Changed
+
+- **Metal GPU Acceleration Enabled by Default**: Docker AI models now use Metal GPU acceleration on Apple Silicon
+  - Changed `--n-gpu-layers` from `0` to `35` for both LLM and embedding models
+  - Provides significantly faster inference on M1/M2/M3/M4 Macs (comparable to LM Studio/Ollama speeds)
+  - CPU-only mode still available by setting `--n-gpu-layers` to `0`
+
+### Fixed
+
+- **RAG Embedding Configuration in Docker**: Fixed RAG not using Docker AI embedding service
+  - Environment variables now override `squid.config.json` settings
+  - Prevents config file in workspace from interfering with Docker configuration
+  - Docker Compose sets `RAG_ENABLED=true` and `RAG_DOCUMENTS_PATH=documents` by default
+  - Added debug logging to display RAG configuration and overrides on server startup
+  - Fixed trailing slash in embedding URL causing double `/v1/` in API paths
+  - Increased embedding model batch size to 1024 tokens (via `--ubatch-size`)
+  - Set default chunk size to 512 tokens to stay within batch limits
+  - Resolves "Failed to generate embedding for chunk" and "batch size too large" errors
+  - All config values (API URLs, models, RAG settings) respect environment variable overrides
 
 ## [0.10.0] - 2026-02-21
 

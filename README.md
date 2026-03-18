@@ -11,24 +11,13 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 
 ## Features
 
-- 🤖 Chat with LLMs via OpenAI-compatible APIs
-- 📄 Provide file context for AI analysis
-- 🔍 AI-powered code reviews with language-specific prompts
+- 🌐 **Web UI** - Modern chat interface with persistent sessions and conversation management
 - 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
-- 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
-- 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
-- 🌐 **Web UI** - Built-in web interface for interacting with Squid
-- 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
-- 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
-- 🧠 **Reasoning Mode** - View LLM's thinking process with collapsible reasoning sections (supports `<think>` tags)
-- 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
-- 🔒 Path validation (whitelist/blacklist) and .squidignore support
-- 🛡️ User approval required for all tool executions (read/write files)
-- 🌊 Streaming support for real-time responses
-- 🎨 **Enhanced UI** with styled prompts, emoji icons, color-coded information
-- 🦑 Friendly squid assistant personality with professional responses
-- ⚙️ Configurable via environment variables
-- 🔌 Works with LM Studio, OpenAI, Ollama, Mistral, and other compatible services
+- 🔧 **Tool Calling** - File operations, code search, and bash commands with built-in security
+- 🔍 **AI Code Reviews** - Language-specific analysis and suggestions
+- 🌍 **Environment Awareness** - LLM receives system context for smarter responses
+- 🔒 **Security First** - Path validation, .squidignore support, and user approval for all operations
+- 🔌 **Universal Compatibility** - Works with LM Studio, OpenAI, Ollama, Mistral, and other OpenAI-compatible APIs
 
 ## Privacy & Local-First
 
@@ -48,7 +37,9 @@ All file operations require your explicit approval, regardless of which LLM serv
 
 ## Prerequisites
 
-Before you begin, you'll need:
+**For Docker installation (recommended):** Only Docker Desktop 4.34+ or Docker Engine with Docker Compose v2.38+ is required. All AI models are automatically managed.
+
+**For manual installation:** You'll need:
 
 1. **Rust toolchain** (for building squid)
    ```bash
@@ -58,190 +49,117 @@ Before you begin, you'll need:
 2. **An OpenAI-compatible LLM service** (choose one):
 
 <details open>
-<summary><b>Option A: LM Studio (Recommended for Local Development)</b></summary>
+<summary><b>Local LLM Options</b></summary>
 
-[LM Studio](https://lmstudio.ai/) provides a user-friendly interface for running local LLMs.
+Run AI models locally with these tools:
 
-1. **Download and install** LM Studio from https://lmstudio.ai/
-2. **Download a model** - We recommend **Qwen2.5-Coder** for code-related tasks:
-   - In LM Studio, search for: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
-   - Or browse: https://huggingface.co/lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit
-   - Click download and wait for it to complete
-3. **Load the model** - Select the downloaded model in LM Studio
-4. **Start the local server**:
-   - Click the "Local Server" tab (↔️ icon on the left)
-   - Click "Start Server"
-   - Default endpoint: `http://127.0.0.1:1234/v1`
-   - Note: No API key required for local server
+**LM Studio** (Recommended for GUI)
+- User-friendly interface for running local LLMs
+- Download from https://lmstudio.ai/
+- Recommended model: `lmstudio-community/Qwen2.5-Coder-7B-Instruct-MLX-4bit`
+- Default endpoint: `http://127.0.0.1:1234/v1`
+- No API key required
 
-**Alternative models in LM Studio:**
-- `Meta-Llama-3.1-8B-Instruct` - General purpose
-- `deepseek-coder` - Code-focused
-- Any other model compatible with your hardware
+**Ollama** (Lightweight CLI)
+- Command-line tool for running LLMs
+- Install: `brew install ollama` (macOS) or https://ollama.com/
+- Recommended model: `ollama pull qwen2.5-coder`
+- Default endpoint: `http://localhost:11434/v1`
+- No API key required
 
-</details>
-
-<details>
-<summary><b>Option B: Docker Model Runner (Docker Desktop/Engine)</b></summary>
-
-[Docker Model Runner](https://docs.docker.com/ai/model-runner/get-started/) lets you run and manage AI models locally using Docker.
-
-1. **Enable Docker Model Runner**:
-   - **Docker Desktop**: Go to Settings → AI tab → Enable "Docker Model Runner"
-   - **Docker Engine**: Install the plugin:
-     ```bash
-     # Ubuntu/Debian
-     sudo apt-get update && sudo apt-get install docker-model-plugin
-     
-     # RPM-based (Fedora, CentOS, RHEL)
-     sudo dnf update && sudo dnf install docker-model-plugin
-     ```
-
-2. **Pull a model** - We recommend **Qwen2.5-Coder** (bartowski version) for code-related tasks:
-   ```bash
-   # Bartowski Qwen2.5-Coder 7B Q4_K_M (recommended - single file, no split issues)
-   docker model pull hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
-   
-   # Or lighter alternative for quick testing
-   docker model pull ai/smollm2:360M-Q4_K_M
-   
-   # Or smaller Qwen2.5-Coder variant
-   docker model pull hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M
-   ```
-   - **Note**: Avoid official Qwen GGUF models (split files cause loading errors in Docker Model Runner)
-   - Search for models: `docker model search qwen2.5-coder`
-   - Browse Docker Hub: https://hub.docker.com/search?q=ai%2F
-   - Browse HuggingFace: Use `hf.co/` prefix for any HuggingFace model
-
-3. **Verify it's running**:
-   ```bash
-   docker model ls  # Should show your pulled models
-   
-   # Test with the model (interactive chat)
-   docker model run hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M
-   
-   # Or test the API endpoint
-   curl http://localhost:12434/engines/v1/models
-   ```
-
-4. **Configure endpoint**:
-   - **Docker Desktop**: Default port with OpenAI compatibility: `http://localhost:12434/engines/v1`
-   - **Docker Engine**: Default is `http://localhost:12434/engines/v1`
-   - Note: The `/engines/v1` path is required for OpenAI SDK compatibility
-
-5. **Pull embedding model (for RAG features)**:
-   ```bash
-   # Required for RAG (Retrieval-Augmented Generation) document search
-   docker model pull hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF
-   ```
-   - This model is used to create embeddings for document search
-   - Only needed if you plan to use RAG features
-   - Size: ~80MB
-
-**Recommended models for coding:**
-- `hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M` - **Best for code** (32K context, ~4.4GB, single file)
-- `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` - Smaller, faster (32K context, ~1GB)
-- `ai/qwen3-coder` - Latest Qwen3 Coder from Docker Hub
-- `ai/smollm2` - Lightweight alternative (4K context, ~256MB)
-
-**Recommended embedding models (for RAG):**
-- `hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF` - **Best for embeddings** (768 dimensions, ~80MB)
-- `ai/nomic-embed-text-v1.5` - Docker Hub version (alternative)
-
-**Important**: 
-- Use bartowski's GGUF models for chat/completion (single-file format)
-- Official Qwen GGUF models are split into multiple files which cause loading errors
-- Embedding models are separate from chat models - you need both for RAG features
-
-**Note**: Use `docker model search <query>` to find more models. HuggingFace models use the `hf.co/` prefix.
+**Docker Model Runner**
+- Manage AI models through Docker
+- Enable in Docker Desktop Settings → AI tab
+- Pull models: `docker model pull hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M`
+- Default endpoint: `http://localhost:12434/engines/v1`
+- No API key required
 
 </details>
 
 <details>
-<summary><b>Option C: Ollama (Lightweight CLI Option)</b></summary>
+<summary><b>Cloud API Services (OpenAI-Compatible)</b></summary>
 
-[Ollama](https://ollama.com/) is a lightweight, command-line tool for running LLMs.
+All these services use the standard OpenAI API format - just change the endpoint URL and API key:
 
-1. **Install Ollama**:
-   ```bash
-   # macOS
-   brew install ollama
-   
-   # Linux
-   curl -fsSL https://ollama.com/install.sh | sh
-   
-   # Or download from https://ollama.com/
-   ```
+**OpenAI**
+- Endpoint: `https://api.openai.com/v1`
+- API Key: https://platform.openai.com/api-keys
+- Models: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
 
-2. **Start Ollama service**:
-   ```bash
-   ollama serve
-   ```
+**Mistral AI**
+- Endpoint: `https://api.mistral.ai/v1`
+- API Key: https://console.mistral.ai/
+- Models: `devstral-2512`, `mistral-large-latest`, `mistral-small-latest`, etc.
 
-3. **Pull the recommended model** - **Qwen2.5-Coder**:
-   ```bash
-   ollama pull qwen2.5-coder
-   ```
-   - Model page: https://ollama.com/library/qwen2.5-coder
-   - Available sizes: 0.5B, 1.5B, 3B, 7B, 14B, 32B
-   - Default (7B) is recommended for most use cases
-
-4. **Verify it's running**:
-   ```bash
-   ollama list  # Should show qwen2.5-coder
-   curl http://localhost:11434/api/tags  # API check
-   ```
-
-**Alternative models in Ollama:**
-- `codellama` - Code generation
-- `deepseek-coder` - Code understanding
-- `llama3.1` - General purpose
-- See all at https://ollama.com/library
-
-</details>
-
-<details>
-<summary><b>Option D: OpenAI API</b></summary>
-
-Use OpenAI's cloud API for access to GPT models:
-
-1. **Get an API key** from https://platform.openai.com/api-keys
-2. **Add credits** to your OpenAI account
-3. **Choose a model**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
-
-</details>
-
-<details>
-<summary><b>Option E: Mistral API</b></summary>
-
-Use Mistral's cloud API for access to their powerful models:
-
-1. **Get an API key** from https://console.mistral.ai/
-2. **Choose a model**: `devstral-2512`, `mistral-large-latest`, `mistral-small-latest`, etc.
-3. **Configure**: Mistral API is OpenAI-compatible, so it works seamlessly with Squid
-
-</details>
-
-<details>
-<summary><b>Option F: Other OpenAI-Compatible Services</b></summary>
-
-Squid works with any OpenAI-compatible REST API:
+**Other Compatible Services**
 - **OpenRouter** (https://openrouter.ai/) - Access to multiple LLM providers
 - **Together AI** (https://together.ai/) - Fast inference
 - **Anyscale** (https://anyscale.com/) - Enterprise solutions
-- **Local APIs** - Any custom OpenAI-compatible endpoint
+- **Groq** (https://groq.com/) - Ultra-fast inference
+- Any custom OpenAI-compatible endpoint
 
 </details>
 
 ## Installation
 
-### From crates.io (Recommended)
+### Docker with AI Models (Recommended)
+
+The easiest way to get started - automated setup with helpful checks:
+
+```bash
+# Clone the repository
+git clone https://github.com/DenysVuika/squid.git
+cd squid
+
+# Setup environment configuration
+cp .env.docker.example .env
+
+# Run the setup script (recommended)
+chmod +x docker-setup.sh
+./docker-setup.sh setup
+
+# Or use Docker Compose directly
+docker compose up -d
+```
+
+The setup script will:
+- ✓ Verify Docker and Docker Compose versions
+- ✓ Check Docker AI features are enabled
+- ✓ Check available disk space (10GB+ recommended)
+- ✓ Build Squid server image
+- ✓ Pull AI models (~4.3GB total)
+- ✓ Start all services with health checks
+
+This automatically pulls and runs:
+- **Squid server** (web UI + API) on http://localhost:3000
+- **Qwen2.5-Coder 7B** (bartowski/Q4_K_M, ~4GB) - Main LLM
+- **Nomic Embed Text v1.5** (~270MB) - Embeddings for RAG
+
+**Requirements:**
+- Docker Desktop 4.34+ with AI features enabled, or
+- Docker Engine with Docker Compose v2.38+
+- 10GB RAM available for Docker
+
+**Apple Silicon:** Default config uses CPU inference (optimized for M1/M2/M3/M4). See `docker-compose.yml` for GPU options.
+
+**Useful commands:**
+```bash
+./docker-setup.sh status    # Check service status
+./docker-setup.sh logs      # View logs
+./docker-setup.sh stop      # Stop services
+./docker-setup.sh restart   # Restart services
+./docker-setup.sh update    # Update models and images
+```
+
+### From crates.io
+
+For manual installation with your own LLM service:
 
 ```bash
 cargo install squid-rs
 ```
 
-This installs the `squid` command globally from crates.io. You can then use `squid` from anywhere.
+This installs the `squid` command globally. You'll need to configure it to connect to your LLM service (see Configuration section).
 
 ### From Source
 
@@ -283,172 +201,152 @@ The `squid serve` command will then serve both the web UI and the API from the s
 
 ## Configuration
 
-You can configure squid in two ways:
+### Using Docker (Recommended)
 
-### Option 1: Interactive Setup (Recommended)
+Docker Compose automatically manages AI models and services, but requires a `.env` file for configuration.
 
-Use the `init` command to create a `squid.config.json` file:
-
-#### Interactive Mode (Default)
+**Setup Steps:**
 
 ```bash
-# Initialize in current directory
+# 1. Copy the Docker environment template
+cp .env.docker.example .env
+
+# 2. Start the services
+docker compose up -d
+```
+
+The `.env` file configures:
+- **Model endpoints**: `API_URL`, `EMBEDDING_URL` (connect to Docker AI models)
+- **Model identifiers**: `API_MODEL`, `EMBEDDING_MODEL` (which models to use)
+
+**Default configuration**:
+- LLM: Qwen2.5-Coder 7B via Docker AI at `http://llm:8080/v1`
+- Embeddings: Nomic Embed Text v1.5 via Docker AI at `http://embedding:8080/v1`
+- Context window: 32K tokens (set in docker-compose.yml)
+- Log level: info (set in docker-compose.yml)
+- RAG: Enabled with semantic search
+
+**⚡ Performance Note**: Docker AI models now use **Metal GPU acceleration by default** on Apple Silicon (M1/M2/M3/M4), providing fast inference comparable to LM Studio and Ollama!
+
+**Using External LLM Services** (optional):
+
+You can use external services (OpenAI, LM Studio, Ollama) instead of Docker AI models by modifying the `environment` section in `docker-compose.yml`:
+
+```yaml
+services:
+  squid:
+    environment:
+      # For LM Studio (running on host)
+      - API_URL=http://host.docker.internal:1234/v1
+      - API_MODEL=qwen2.5-coder
+      - EMBEDDING_URL=http://host.docker.internal:1234/v1
+      - EMBEDDING_MODEL=nomic-embed-text
+      
+      # For Ollama (running on host)
+      # - API_URL=http://host.docker.internal:11434/v1
+      # - API_MODEL=qwen2.5-coder
+      
+      # For OpenAI
+      # - API_URL=https://api.openai.com/v1
+      # - API_MODEL=gpt-4
+      # - API_KEY=your-api-key-here
+```
+
+**Note**: Use `host.docker.internal` to access services running on your Mac/PC from inside Docker containers.
+
+**Customization options:**
+- Adjust GPU layers, context window, log level, or database path by editing `docker-compose.yml`
+- Disable GPU acceleration by setting `--n-gpu-layers` to `0` for CPU-only inference
+
+**Important**: Environment variables defined in `docker-compose.yml` always override any `squid.config.json` file in the workspace. This ensures Docker configuration takes precedence.
+
+See `.env.docker.example` for all available options and examples, and `docker-compose.yml` for model configuration.
+
+#### Workspace Directory
+
+By default, Docker mounts the current directory (`.`) as the workspace. You can bind a specific project directory by setting the `WORKSPACE_DIR` environment variable:
+
+```bash
+# Option 1: Set in .env file
+echo "WORKSPACE_DIR=/path/to/your/project" >> .env
+
+# Option 2: Set inline when starting
+WORKSPACE_DIR=/path/to/your/project docker compose up -d
+
+# Option 3: Modify docker-compose.yml volumes section
+# Change: - ${WORKSPACE_DIR:-.}:/workspace
+# To:     - /absolute/path/to/project:/workspace
+```
+
+The workspace directory is where Squid will:
+- Browse and display files in the Web UI file explorer
+- Execute tool operations (read_file, write_file, etc.)
+- Search for code patterns
+- Run bash commands (when approved)
+
+**Security Note:** All file operations are restricted to the workspace directory and respect `.squidignore` patterns.
+
+**Example - Work with a specific project:**
+```bash
+# Navigate to squid directory
+cd squid
+
+# Set workspace to a different project
+WORKSPACE_DIR=~/Projects/my-app docker compose up -d
+
+# Now the Web UI will show files from ~/Projects/my-app
+```
+
+### Using Manual Installation
+
+For manual installations (cargo install, from source), you need to configure Squid to connect to your LLM service.
+
+**Quick Setup:**
+
+```bash
+# Interactive configuration (recommended)
 squid init
 
-# Initialize in a specific directory
-squid init ./my-project
-squid init /path/to/project
+# Or use command-line flags
+squid init --url http://127.0.0.1:1234/v1 --model qwen2.5-coder
 ```
 
-This will prompt you for:
-- **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
-- **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
-- **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+This creates a `squid.config.json` file with your LLM connection settings.
 
-**Example session:**
-```
-$ squid init
-INFO: Initializing squid configuration in "."...
-? API URL: http://127.0.0.1:1234/v1
-? API Model: local-model
-? API Key (optional, press Enter to skip): 
-? Context Window (tokens): 32768
-? Log Level: error
+**For complete configuration documentation**, including:
+- Interactive and non-interactive `squid init` usage
+- Configuration file format
+- Environment variables
+- All available options
 
-Configuration saved to: "squid.config.json"
-  API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
-  API Key: [not set]
-  Context Window: 32768 tokens
-  Log Level: error
+See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
 
-✓ Default permissions configured
-  Allowed: ["now"]
-
-✓ Created .squidignore with default patterns
-  Edit this file to customize which files squid should ignore
-```
-
-**Re-running init on existing config:**
-
-When you run `squid init` on a directory that already has a config file, it will:
-- Use existing values as defaults in prompts
-- **Smart merge permissions**: Preserve your custom permissions + add new defaults
-- Update version to match current app version
-
-```
-$ squid init --url http://127.0.0.1:1234/v1 --model local-model --api-key "" --log-level info
-Found existing configuration, using current values as defaults...
-
-Configuration saved to: "./squid.config.json"
-  API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
-  API Key: [configured]
-  Log Level: info
-
-✓ Added new default permissions: ["now"]
-
-✓ Current tool permissions:
-  Allowed: ["bash:git status", "bash:ls", "now"]
-  Denied: ["write_file"]
-
-✓ Using existing .squidignore file
-```
-
-In this example:
-- User's existing permissions (`bash:git status`, `bash:ls`, `write_file` denial) are preserved
-- New default permission (`now`) was automatically added
-- Config version updated from 0.4.0 to 0.5.0
-
-#### Non-Interactive Mode
-
-You can also provide configuration values via command-line arguments to skip the interactive prompts:
-
-```bash
-# Initialize with all parameters
-squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
-
-# Initialize in a specific directory with parameters
-squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level error
-
-# Partial parameters (will prompt for missing values)
-squid init --url http://127.0.0.1:1234/v1 --model gpt-4
-# Will still prompt for API Key and Log Level
-
-# Include API key for cloud services
-squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-here --log-level error
-```
-
-**Available options:**
-- `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
-- `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- `--key <KEY>` - API Key (optional for local models)
-- `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
-- `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
-
-The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
-
-**Example `squid.config.json`:**
-```json
-{
-  "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder",
-  "context_window": 32768,
-  "log_level": "error",
-  "enable_env_context": true,
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
-  "database_path": "squid.db",
-  "version": "0.7.0"
-}
-```
-
-### Option 2: Manual Configuration
-
-Create a `.env` file in the project root:
-
-```bash
-# OpenAI API Configuration (for LM Studio or OpenAI)
-API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
-API_KEY=not-needed
-CONTEXT_WINDOW=32768
-DATABASE_PATH=squid.db
-
-# Privacy Settings
-ENABLE_ENV_CONTEXT=true
-```
-
-**Important Notes:**
-- `squid.config.json` takes precedence over `.env` variables. If both exist, the config file will be used.
-- **Commit `squid.config.json`** to your repository to share project settings with your team
-- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
-- For cloud API services (OpenAI, etc.), store the actual API key in `.env` and omit `api_key` from `squid.config.json`
+**Quick reference:**
+- **LM Studio**: `http://127.0.0.1:1234/v1`
+- **Ollama**: `http://localhost:11434/v1`
+- **Docker Model Runner**: `http://localhost:12434/engines/v1`
+- **OpenAI**: `https://api.openai.com/v1`
+- **Mistral AI**: `https://api.mistral.ai/v1`
 
 ### Configuration Options
 
-- `API_URL`: The base URL for the API endpoint
-  - LM Studio: `http://127.0.0.1:1234/v1` (default)
+- `API_URL`: The base URL for the OpenAI-compatible API endpoint
+  - LM Studio: `http://127.0.0.1:1234/v1`
   - Ollama: `http://localhost:11434/v1`
+  - Docker Model Runner: `http://localhost:12434/engines/v1`
   - OpenAI: `https://api.openai.com/v1`
-  - Other: Your provider's base URL
+  - Mistral AI: `https://api.mistral.ai/v1`
+  - Other OpenAI-compatible services: Check provider's documentation
   
-- `API_MODEL`: The default model to use (can be overridden in Web UI)
-  - Default: `qwen2.5-coder-7b-instruct` (recommended)
-  - LM Studio: Any model loaded in LM Studio
-  - Ollama: `qwen2.5-coder`, `llama3.1`, or any pulled model
+- `API_MODEL`: The model identifier to use (can be overridden in Web UI)
+  - LM Studio/Ollama/Docker: Use the model name you loaded/pulled
   - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
-  - Other: Check your provider's model names
-  - **Note**: The Web UI can fetch and display all available models via the `/api/models` endpoint
+  - Mistral AI: `devstral-2512`, `mistral-large-latest`, etc.
+  - **Note**: The Web UI can fetch available models via the `/api/models` endpoint
   
 - `API_KEY`: Your API key
-  - LM Studio: `not-needed` (no authentication required)
-  - Ollama: `not-needed` (no authentication required)
-  - OpenAI: Your actual API key (e.g., `sk-...`)
-  - Other: Your provider's API key
+  - Local services (LM Studio, Ollama, Docker): `not-needed`
+  - Cloud services (OpenAI, Mistral, etc.): Your actual API key
 
 - `CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
   - Used to calculate context utilization and prevent exceeding limits
@@ -555,113 +453,38 @@ squid init --context-window 128000
 
 ## Usage
 
-> **Note:** The examples below use the `squid` command (after installation with `cargo install --path .`).  
-> For development, replace `squid` with `cargo run --` (e.g., `cargo run -- ask "question"`).
+Squid provides both a modern Web UI and a command-line interface. **We recommend the Web UI** for the best experience.
 
-### Ask a Question
-
-```bash
-# Basic question (streaming by default)
-squid ask "What is Rust?"
-
-# With additional context using -m
-squid ask "Explain Rust" -m "Focus on memory safety"
-
-# Use a custom system prompt
-squid ask "Explain Rust" -p custom-prompt.md
-
-# Disable streaming for complete response at once (useful for scripting)
-squid ask "Explain async/await in Rust" --no-stream
-```
-
-By default, responses are streamed in real-time, displaying tokens as they are generated. Use `--no-stream` to get the complete response at once (useful for piping or scripting).
-
-### Ask About a File
-
-```bash
-# Basic file question (streams by default)
-squid ask -f sample-files/sample.txt "What are the key features mentioned?"
-
-# With additional context using -m
-squid ask -f src/main.rs "What does this do?" -m "Focus on error handling"
-
-# Use a custom system prompt for specialized analysis
-squid ask -f src/main.rs "Review this" -p expert-reviewer-prompt.md
-
-# Disable streaming for complete response
-squid ask -f code.rs --no-stream "Explain what this code does"
-```
-
-This will read the file content and include it in the prompt, allowing the AI to answer questions based on the file's content.
-
-### Review Code
-
-```bash
-# Review a file with language-specific prompts (streams by default)
-squid review src/main.rs
-
-# Focus on specific aspects
-squid review styles.css -m "Focus on performance issues"
-
-# Get complete review at once (no streaming)
-squid review app.ts --no-stream
-
-# Review SQL files
-squid review schema.sql
-squid review migrations/001_create_users.ddl
-
-# Review shell scripts
-squid review deploy.sh
-squid review scripts/backup.bash
-
-# Review Docker files
-squid review Dockerfile
-squid review Dockerfile.prod
-
-# Review Go files
-squid review main.go
-squid review pkg/server.go
-
-# Review Java files
-squid review Application.java
-squid review controllers/UserController.java
-
-# Review configuration files
-squid review config.json
-squid review docker-compose.yaml
-squid review deployment.yml
-
-# Review Makefiles
-squid review Makefile
-squid review Makefile.dev
-
-# Review documentation
-squid review README.md
-squid review docs/API.markdown
-```
-
-The review command automatically selects the appropriate review prompt based on file type:
-- **Rust** (`.rs`) - Ownership, safety, idioms, error handling
-- **TypeScript/JavaScript** (`.ts`, `.js`, `.tsx`, `.jsx`) - Type safety, modern features, security
-- **HTML** (`.html`, `.htm`) - Semantics, accessibility, SEO
-- **CSS** (`.css`, `.scss`, `.sass`) - Performance, responsive design, maintainability
-- **Python** (`.py`, `.pyw`, `.pyi`) - PEP 8, security, performance, best practices
-- **SQL** (`.sql`, `.ddl`, `.dml`) - Performance, security, correctness, best practices
-- **Shell Scripts** (`.sh`, `.bash`, `.zsh`, `.fish`) - Security, robustness, performance, compliance
-- **Docker/Kubernetes** (`Dockerfile`, `Dockerfile.*`) - Security, performance, reliability, best practices
-- **Go** (`.go`) - Concurrency, performance, error handling, best practices
-- **Java** (`.java`) - Performance, best practices, JVM specifics, Spring framework
-- **JSON** (`.json`) - Security, correctness, performance, maintainability
-- **YAML** (`.yaml`, `.yml`) - Security, correctness, performance, maintainability
-- **Makefile** (`Makefile`, `Makefile.*`) - Correctness, portability, performance, security
-- **Markdown** (`.md`, `.markdown`) - Structure, accessibility, consistency, content
-- **Other files** - Generic code quality and best practices
-
-### Squid Web UI
+### Squid Web UI (Recommended)
 
 ![Squid Web UI](docs/assets/screenshot.png)
 
 *Modern chat interface with session management, token usage tracking, and real-time cost estimates*
+
+#### Using Docker (Recommended)
+
+```bash
+# Start with default workspace (current directory)
+docker compose up -d
+
+# Work with a specific project directory
+WORKSPACE_DIR=/path/to/your/project docker compose up -d
+
+# Example: Analyze a React app
+WORKSPACE_DIR=~/Projects/my-react-app docker compose up -d
+
+# View logs
+docker compose logs -f squid
+
+# Stop services
+docker compose down
+```
+
+Access the Web UI at http://localhost:3000
+
+The workspace directory determines what files the AI can see and work with. All file operations, code search, and bash commands operate within this directory.
+
+#### Using Manual Installation
 
 Start the built-in web interface for Squid:
 
@@ -684,19 +507,19 @@ squid serve --port 3000 --db=custom.db --dir=/path/to/project
 ```
 
 The web server will:
-- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port)
+- Launch the Squid Web UI at `http://127.0.0.1:8080` (or your specified port, Docker uses 3000)
 - Provide a browser-based interface for interacting with Squid
 - Expose REST API endpoints for chat, sessions, and logs
 - Display the server URL and API endpoint on startup
 
-**Server Options:**
-- `--port` / `-p`: Port number to run the server (default: `8080`)
+**Server Options (Manual Installation):**
+- `--port` / `-p`: Port number to run the server (default: `8080`, Docker uses `3000`)
 - `--db`: Path to custom database file (default: `squid.db` in current/config directory)
 - `--dir`: Working directory for the server (changes to this directory before starting)
 
 **Use Cases:**
 - Use `--db` to specify a different database file for separate projects or testing
-- Use `--dir` to run the server in a specific project directory without navigating there first
+- Use `--dir` (or `WORKSPACE_DIR` in Docker) to work with a specific project directory
 - The database path is relative to the working directory (after `--dir` is applied)
 
 **Web UI Features:**
@@ -730,171 +553,66 @@ Then open `http://localhost:5173` in your browser. Changes to frontend code will
 
 To build for production: `cd web && npm run build` (outputs to `static/` directory).
 
+### Command-Line Interface
+
+For advanced users and automation, Squid provides a full CLI. See the [CLI Reference](docs/CLI.md) for detailed documentation on:
+
+- **`squid ask`** - Ask questions with optional file context
+- **`squid review`** - Review code with language-specific analysis
+- **`squid rag`** - Manage RAG document indexing
+- **`squid logs`** - View application logs
+- **`squid init`** - Initialize project configuration
+
+**Quick Examples:**
+
+```bash
+# Ask a question
+squid ask "What is Rust?"
+
+# Review a file
+squid review src/main.rs
+
+# Initialize RAG for a project
+squid rag init
+
+# View application logs
+squid logs --level error
+```
+
+For complete CLI documentation, examples, and advanced usage, see [docs/CLI.md](docs/CLI.md).
+
 ### RAG (Retrieval-Augmented Generation)
 
 Squid includes RAG capabilities for semantic search over your documents, enabling context-aware AI responses using your own documentation.
 
-**What is RAG?**
-
-RAG (Retrieval-Augmented Generation) enhances AI responses by searching through your documents to find relevant context before generating answers. This allows the AI to provide accurate, project-specific information based on your own documentation, code comments, guides, and notes.
-
-#### Prerequisites
-
-RAG requires an embedding model for generating vector representations of your documents. The recommended setup uses LM Studio:
-
-1. **Start LM Studio** with an embedding model:
-   - Download an embedding model like `text-embedding-nomic-embed-text-v1.5`
-   - Start LM Studio's local server (default: `http://127.0.0.1:11434` - **note: no /v1 suffix**)
-
-2. **Configure RAG** in `squid.config.json`:
-
-```json
-{
-  "rag": {
-    "enabled": true,
-    "embedding_model": "text-embedding-nomic-embed-text-v1.5",
-    "embedding_url": "http://127.0.0.1:11434",
-    "chunk_size": 512,
-    "chunk_overlap": 50,
-    "top_k": 5,
-    "documents_path": "documents"
-  }
-}
-```
-
-#### Quick Start
-
-1. **Create a documents directory** and add your documentation:
+**Quick Start:**
 
 ```bash
+# Docker (already configured)
+docker compose up -d
+
+# Or manually setup
 mkdir documents
-# Add your markdown files, code docs, guides, etc.
 cp docs/*.md documents/
-```
-
-2. **Index your documents**:
-
-```bash
 squid rag init
-```
-
-3. **Query with RAG**:
-
-```bash
 squid serve
-# Then use the web UI to ask questions about your docs
+# Click the RAG toggle (🔍) in the Web UI
 ```
 
-#### RAG Commands
+**Features:**
+- 📚 **Semantic search** over your documentation
+- 🔍 **One-click toggle** in Web UI
+- 💾 **Persistent knowledge base** - index once, query many times
+- 📎 **Source attribution** - see which documents were used
+- 🔄 **Auto-indexing** - supports Markdown, code, configs, and more
 
-**Initialize and index documents:**
+**Using RAG:**
+1. Add documents to `./documents` directory
+2. Run `squid rag init` to index them
+3. Toggle RAG in the Web UI to enable semantic search
+4. Ask questions about your documentation
 
-```bash
-# Index documents from default directory (./documents)
-squid rag init
-
-# Index from custom directory
-squid rag init --dir /path/to/docs
-```
-
-**List indexed documents:**
-
-```bash
-squid rag list
-# Shows all indexed files with metadata
-```
-
-**View RAG statistics:**
-
-```bash
-squid rag stats
-# Displays document count, chunks, embeddings, and averages
-```
-
-**Rebuild the entire index:**
-
-```bash
-# Clear and re-index everything (useful after config changes)
-squid rag rebuild
-
-# Rebuild from custom directory
-squid rag rebuild --dir /path/to/docs
-```
-
-#### Supported File Types
-
-RAG supports indexing of common development file formats:
-
-- **Documentation**: `.md`, `.txt`
-- **Code**: `.rs`, `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.go`, `.rb`, `.php`
-- **Scripts**: `.sh`, `.bash`
-- **Config**: `.json`, `.toml`, `.yml`, `.yaml`, `.xml`
-- **Web**: `.html`, `.css`, `.scss`
-
-#### How It Works
-
-1. **Document Chunking**: Files are split into manageable chunks (default: 512 tokens) with overlap for context preservation
-2. **Embedding Generation**: Each chunk is converted to a vector embedding using the configured model
-3. **Vector Storage**: Embeddings are stored in SQLite using `sqlite-vec` extension
-4. **Semantic Search**: Queries are embedded and compared against stored vectors using L2 distance
-5. **Context Retrieval**: Top-k most relevant chunks are retrieved and formatted for the LLM
-
-#### Configuration Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `true` | Enable/disable RAG features |
-| `embedding_model` | `"text-embedding-nomic-embed-text-v1.5"` | Model name for embeddings |
-| `embedding_url` | `"http://127.0.0.1:11434"` | OpenAI-compatible embedding API URL (base URL without /v1) |
-| `chunk_size` | `512` | Size of document chunks in tokens |
-| `chunk_overlap` | `50` | Overlap between chunks in tokens |
-| `top_k` | `5` | Number of results to retrieve |
-| `documents_path` | `"documents"` | Path to documents directory (relative to working directory) |
-
-#### Web UI Integration
-
-![RAG in Web UI](docs/assets/rag.png)
-
-*Native RAG toggle button in the prompt input toolbar - enable/disable document search with one click*
-
-The web UI includes RAG query capabilities:
-
-- **Native Toggle Button**: Enable/disable RAG with a single click in the prompt input toolbar
-- **Persistent State**: RAG toggle state is saved and restored between sessions
-- **Automatic Context**: RAG automatically enhances queries with relevant document context
-- **Source Attribution**: Responses show which documents were used
-- **Document Management**: Upload, list, and delete documents via the UI
-- **Real-time Indexing**: File watcher automatically re-indexes changed documents
-
-#### API Endpoints
-
-The RAG system exposes REST API endpoints:
-
-- `POST /api/rag/query` - Query for relevant context
-- `GET /api/rag/documents` - List indexed documents
-- `DELETE /api/rag/documents/{filename}` - Delete a document
-- `GET /api/rag/stats` - Get RAG statistics
-- `POST /api/rag/upload` - Upload and index a new document
-
-#### Best Practices
-
-**Document Organization:**
-- Keep documents focused and well-structured
-- Use clear headings and sections
-- Include relevant keywords in your documentation
-- Organize docs by topic or module
-
-**Performance:**
-- Start with a smaller `chunk_size` (256-512) for faster indexing
-- Increase `top_k` (5-10) for more comprehensive context
-- Use `chunk_overlap` (50-100) to maintain context across boundaries
-- Rebuild the index after changing chunk size or overlap
-
-**Workflow:**
-- Run `squid rag init` after adding new documentation
-- Use `squid rag stats` to monitor index size
-- Rebuild periodically with `squid rag rebuild` to refresh embeddings
-- Keep the embedding service running when using RAG features
+For complete RAG documentation including configuration, API endpoints, best practices, and troubleshooting, see **[docs/RAG.md](docs/RAG.md)**.
 
 
 
@@ -1123,125 +841,32 @@ The web server also provides REST endpoints for managing chat sessions:
 - Toggle sidebar visibility
 - Sessions show title (or preview), message count, and last activity time
 
-### View Application Logs
+### Tool Calling & Security
 
-View logs stored in the database for debugging and troubleshooting:
+Squid's LLM can intelligently use tools (read files, write files, search code, execute safe commands) when needed. All tool operations are protected by multiple security layers and require user approval.
 
-```bash
-# View recent logs (last 50 by default)
-squid logs
-
-# View more logs
-squid logs --limit 100
-
-# Filter by log level
-squid logs --level error
-squid logs --level warn
-squid logs --level info
-
-# View logs for a specific session
-squid logs --session-id 72dd7601-7da4-4252-80f6-7012da923faf
-
-# Combine filters
-squid logs --limit 20 --level error
-```
-
-The logs are stored in the SQLite database (`squid.db`) alongside your chat sessions. This makes it easy to:
-- Debug issues by reviewing what happened during a session
-- Track errors and warnings across server restarts
-- Correlate logs with specific chat conversations
-- Monitor application behavior over time
-
-**Note:** The `logs` command reads from the database. Logs are automatically stored when running the `serve` command.
-
-### Tool Calling (with Multi-Layered Security)
-
-The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions. 
-
-**Security Layers:**
-1. **Path Validation** - Automatically blocks system directories (`/etc`, `/root`, `~/.ssh`, etc.)
-2. **Ignore Patterns** - `.squidignore` file blocks specified files/directories (like `.gitignore`)
-3. **User Approval** - Manual confirmation required for each operation
-
-For details, see [Security Features](docs/SECURITY.md).
-
-```bash
-# LLM intelligently reads files when you ask about them
-squid ask "Read the README.md file and summarize it"
-squid ask "What dependencies are in Cargo.toml?"
-squid ask "Analyze the main.rs file for me"
-# You'll be prompted: "Allow reading file: [filename]? (Y/n)"
-
-# LLM can write files
-squid ask "Create a hello.txt file with 'Hello, World!'"
-# You'll be prompted with a preview: "Allow writing to file: hello.txt?"
-
-# Use custom prompts with tool calling
-squid ask -p expert-coder.md "Read Cargo.toml and suggest optimizations"
-
-# LLM can search for patterns in files using grep
-squid ask "Search for all TODO comments in the src directory"
-squid ask "Find all function definitions in src/main.rs"
-squid ask "Search for 'API_URL' in the project"
-squid ask "Find all uses of 'unwrap' in the codebase"
-squid ask "Show me all error handling patterns in src/tools.rs"
-# You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
-# Results show file path, line number, and matched content
-
-# LLM can get current date and time
-squid ask "What time is it now?"
-squid ask "What's the current date?"
-# You'll be prompted: "Allow getting current date and time? (Y/n)"
-# Returns datetime in RFC 3339 format
-
-# LLM can execute safe bash commands
-squid ask "What files are in this directory?"
-squid ask "Show me the git status"
-squid ask "List all .rs files in src/"
-# You'll be prompted: "Allow executing bash command: [command]? (Y/n)"
-# Dangerous commands (rm, sudo, chmod, dd, curl, wget, kill) are automatically blocked
-
-# Use --no-stream for non-streaming mode
-squid ask --no-stream "Read Cargo.toml and list all dependencies"
-```
+**Security Features:**
+- 🛡️ **Path Validation** - Blocks system directories automatically
+- 📂 **Ignore Patterns** - `.squidignore` file (like `.gitignore`)
+- 🔒 **User Approval** - Manual confirmation for each operation
+- 💻 **Safe Bash** - Dangerous commands always blocked
 
 **Available Tools:**
-- 📖 **read_file** - Read file contents from the filesystem
-- 📝 **write_file** - Write content to files
-- 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
-- 🕐 **now** - Get current date and time in RFC 3339 format (UTC or local timezone)
-- 💻 **bash** - Execute safe, non-destructive bash commands (ls, git status, cat, etc.)
+- 📖 **read_file** - Read file contents
+- 📝 **write_file** - Write to files with preview
+- 🔍 **grep** - Search code with regex
+- 🕐 **now** - Get current date/time
+- 💻 **bash** - Execute safe commands (ls, git, cat, etc.)
 
-**Key Features:**
-- 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
-- 🛡️ **Path validation** - Automatic blocking of system and sensitive directories
-- 📂 **Ignore patterns** - `.squidignore` file for project-specific file blocking
-- 🔒 **Security approval** - All tool executions require user confirmation
-- 📋 **Content preview** - File write operations show what will be written
-- ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
-- 📝 **Full logging** - All tool calls are logged for transparency
-- 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
-- 💻 **Bash execution** - Run safe, read-only commands for system inspection (dangerous commands **always** blocked, even with permissions)
-- 🔐 **Privacy preserved** - With local models (LM Studio/Ollama), all file operations happen locally on your machine
-
-**Using .squidignore:**
-
-Create a `.squidignore` file in your project root to block specific files and directories:
-
-```bash
-# .squidignore - Works like .gitignore
-*.log
-.env
-target/
-node_modules/
-__pycache__/
-```
-
-Patterns are automatically enforced - the LLM cannot access ignored files even if approved.
+For complete security documentation and tool usage examples, see:
+- [Security Features](docs/SECURITY.md) - Detailed security layers and best practices
+- [CLI Reference](docs/CLI.md#tool-calling) - Tool calling examples and usage
 
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
+- **[CLI Reference](docs/CLI.md)** - Complete command-line interface documentation
+- **[RAG Guide](docs/RAG.md)** - Retrieval-Augmented Generation (semantic document search)
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows

@@ -1,0 +1,60 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE and editor files
+.vscode/
+.idea/
+.cursor/
+.zed/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+
+# Test files
+tests/
+sample-files/
+
+# Web development files
+web/
+node_modules/
+package.json
+package-lock.json
+
+# Database files (should be in volumes)
+*.db
+*.db-shm
+*.db-wal
+
+# Environment and config files
+.env
+.env.*
+squid.config.json
+
+# Logs
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# CI/CD
+.github/
+
+# Other
+*.tmp
+*.temp
+.cargo/

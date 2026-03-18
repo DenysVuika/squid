@@ -1,6 +1,6 @@
 # Squid Documentation
 
-Welcome to the squid CLI documentation! This directory contains comprehensive guides and references for using squid.
+Welcome to the squid documentation! This directory contains comprehensive guides and references for using squid.
 
 ## Getting Started
 
@@ -12,6 +12,18 @@ New to squid? Start here:
 ## Documentation
 
 ### User Guides
+
+- **[CLI.md](CLI.md)** - Complete command-line interface reference
+  - All CLI commands and options
+  - Tool calling and security
+  - Usage examples and patterns
+
+- **[RAG.md](RAG.md)** - RAG (Retrieval-Augmented Generation) guide
+  - Semantic search over your documents
+  - Setup and configuration
+  - CLI commands and Web UI integration
+  - API endpoints and best practices
+  - Troubleshooting
 
 - **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide for new users
   - Prerequisites and setup
@@ -25,6 +37,17 @@ New to squid? Start here:
   - Best practices
   - File type support
 
+- **[SECURITY.md](SECURITY.md)** - Security features and tool permissions
+  - Multi-layered security architecture
+  - Path validation and ignore patterns
+  - User approval workflows
+  - Configuration and best practices
+
+- **[PROMPTS.md](PROMPTS.md)** - System prompts reference
+  - Understanding the modular prompt system
+  - Customizing prompts for specific tasks
+  - Language-specific review prompts
+
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 
 ## Resources
@@ -33,91 +56,62 @@ New to squid? Start here:
 
 ## Quick Reference
 
-### Basic Commands
+### Web UI (Recommended)
 
 ```bash
-# Ask a question (required)
+# Start the web server (Docker)
+docker compose up -d
+# Access at http://localhost:3000
+
+# Or start manually
+squid serve --port 3000
+```
+
+The Web UI provides:
+- 💬 Interactive chat interface
+- 📊 Real-time token usage tracking
+- 💰 Cost estimates
+- 🗂️ Session management
+- 📎 Multi-file attachments
+- 🔍 RAG toggle for semantic search
+
+### CLI Commands
+
+For CLI usage, see the **[CLI Reference](CLI.md)** for complete documentation.
+
+Quick examples:
+
+```bash
+# Ask a question
 squid ask "What is Rust?"
-
-# With additional context using -m
-squid ask "Explain Rust" -m "Focus on memory safety"
-
-# Ask with file context
-squid ask -f sample-files/sample.txt "What is this about?"
-
-# Stream the response
-squid ask -s "Explain async/await"
-
-# File context + streaming
-squid ask -f src/main.rs -s "Explain this code"
-
-# File with additional context
-squid ask -f src/main.rs "Explain this" -m "Focus on error handling"
 
 # Review code
 squid review src/main.rs
 
-# Review with streaming
-squid review app.ts --stream
+# Initialize RAG
+squid rag init
 
-# Focused review
-squid review styles.css -m "Focus on performance"
+# View logs
+squid logs --level error
+
+# Start web server
+squid serve --port 3000
 ```
-
-### Help
-
-```bash
-# General help
-squid --help
-
-# Command-specific help
-squid ask --help
-squid review --help
-```
-
-## File Context Feature
-
-The file context feature allows you to provide files to the AI for analysis. Simply use the `--file` or `-f` flag:
-
-```bash
-squid ask --file path/to/file.txt "Your question about the file"
-```
-
-Supported file types:
-- Source code (.rs, .py, .js, .go, etc.)
-- Documentation (.md, .txt, .rst)
-- Configuration (.toml, .json, .yaml)
-- Data files (.csv, .tsv, .log)
-- Any text-based file
 
 ## Configuration
 
-Squid uses environment variables for configuration. Create a `.env` file in the project root:
+**Using Docker?** No configuration needed - everything is set up automatically!
 
-```env
-# For LM Studio (local)
-API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
-API_KEY=not-needed
-
-# For OpenAI
-API_URL=https://api.openai.com/v1
-API_MODEL=gpt-4
-API_KEY=sk-your-key-here
-
-# For Mistral API
-API_URL=https://api.mistral.ai/v1
-API_MODEL=devstral-2512
-API_KEY=your-mistral-api-key-here
-```
+**Manual installation?** Use `squid init` for interactive setup, or see the main [README](../README.md#configuration) for configuration options.
 
 ## Need Help?
 
 1. Check the [Quick Start Guide](QUICKSTART.md)
-2. Browse the [Examples](EXAMPLES.md)
-3. See code review examples in the main [README](../README.md) and [EXAMPLES.md](EXAMPLES.md)
-4. Try the [example files](../sample-files/README.md) for testing
-5. Enable debug logging: `RUST_LOG=debug squid ask ...`
+2. See the [CLI Reference](CLI.md) for command-line usage
+3. Review the [Security Features](SECURITY.md) documentation
+4. Browse the [Examples](EXAMPLES.md)
+5. Try the [example files](../sample-files/README.md) for testing
+6. Enable debug logging: `RUST_LOG=debug squid ask ...`
 
 ## Contributing
 
