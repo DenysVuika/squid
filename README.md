@@ -11,24 +11,13 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 
 ## Features
 
-- 🤖 Chat with LLMs via OpenAI-compatible APIs
-- 📄 Provide file context for AI analysis
-- 🔍 AI-powered code reviews with language-specific prompts
+- 🌐 **Web UI** - Modern chat interface with persistent sessions and conversation management
 - 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
-- 🔧 Tool calling support (file read/write/search/bash operations) with multi-layered security
-- 🌍 **Environment awareness** - LLM receives system context (OS, platform, timezone, timestamps) for smarter responses
-- 🌐 **Web UI** - Built-in web interface for interacting with Squid
-- 💾 **Persistent Sessions** - Chat history automatically saved and restored across page reloads and server restarts
-- 📁 **Session Management** - Browse, load, rename, and delete past conversations with visual sidebar
-- 🧠 **Reasoning Mode** - View LLM's thinking process with collapsible reasoning sections (supports `<think>` tags)
-- 📊 **Database Logging** - Application logs stored in SQLite for debugging and troubleshooting
-- 🔒 Path validation (whitelist/blacklist) and .squidignore support
-- 🛡️ User approval required for all tool executions (read/write files)
-- 🌊 Streaming support for real-time responses
-- 🎨 **Enhanced UI** with styled prompts, emoji icons, color-coded information
-- 🦑 Friendly squid assistant personality with professional responses
-- ⚙️ Configurable via environment variables
-- 🔌 Works with LM Studio, OpenAI, Ollama, Mistral, and other compatible services
+- 🔧 **Tool Calling** - File operations, code search, and bash commands with built-in security
+- 🔍 **AI Code Reviews** - Language-specific analysis and suggestions
+- 🌍 **Environment Awareness** - LLM receives system context for smarter responses
+- 🔒 **Security First** - Path validation, .squidignore support, and user approval for all operations
+- 🔌 **Universal Compatibility** - Works with LM Studio, OpenAI, Ollama, Mistral, and other OpenAI-compatible APIs
 
 ## Privacy & Local-First
 
