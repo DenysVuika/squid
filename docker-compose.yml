@@ -11,10 +11,10 @@
 # - See README.md "Configuration > Workspace Directory" for details
 #
 # APPLE SILICON USERS (M1/M2/M3/M4):
-# - The default config uses CPU-only inference (n-gpu-layers: 0)
-# - This works great on Apple Silicon with good performance
-# - For optimal performance, ensure Docker Desktop has 10GB+ RAM allocated
-# - See docs/DOCKER-APPLE-SILICON.md for detailed Apple Silicon optimization
+# - Metal GPU acceleration is ENABLED by default (n-gpu-layers: 35)
+# - This provides fast inference using your Mac's GPU
+# - Ensure Docker Desktop has 10GB+ RAM allocated
+# - To use CPU-only instead, set n-gpu-layers to 0 in the runtime_flags below
 
 services:
   # Squid server - Main application
@@ -80,7 +80,7 @@ models:
       - "--parallel"
       - "4" # Parallel request slots
       - "--n-gpu-layers"
-      - "0" # CPU-only (works on all platforms including Apple Silicon)
+      - "35" # GPU acceleration (Metal on Apple Silicon, CUDA/ROCm on others; set to 0 for CPU-only)
       - "--mlock" # Lock memory to prevent swapping
 
   # Embedding model for RAG (semantic search)
@@ -92,7 +92,7 @@ models:
       - "--threads"
       - "4" # CPU threads for embedding generation
       - "--n-gpu-layers"
-      - "0" # CPU-only (works on all platforms including Apple Silicon)
+      - "35" # GPU acceleration (Metal on Apple Silicon, CUDA/ROCm on others; set to 0 for CPU-only)
       - "--ubatch-size"
       - "1024" # Physical batch size for embeddings (must be >= chunk size)
 

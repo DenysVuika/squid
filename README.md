@@ -226,9 +226,37 @@ The `.env` file configures:
 - Log level: info (set in docker-compose.yml)
 - RAG: Enabled with semantic search
 
+**⚡ Performance Note**: Docker AI models now use **Metal GPU acceleration by default** on Apple Silicon (M1/M2/M3/M4), providing fast inference comparable to LM Studio and Ollama!
+
+**Using External LLM Services** (optional):
+
+You can use external services (OpenAI, LM Studio, Ollama) instead of Docker AI models by modifying the `environment` section in `docker-compose.yml`:
+
+```yaml
+services:
+  squid:
+    environment:
+      # For LM Studio (running on host)
+      - API_URL=http://host.docker.internal:1234/v1
+      - API_MODEL=qwen2.5-coder
+      - EMBEDDING_URL=http://host.docker.internal:1234/v1
+      - EMBEDDING_MODEL=nomic-embed-text
+      
+      # For Ollama (running on host)
+      # - API_URL=http://host.docker.internal:11434/v1
+      # - API_MODEL=qwen2.5-coder
+      
+      # For OpenAI
+      # - API_URL=https://api.openai.com/v1
+      # - API_MODEL=gpt-4
+      # - API_KEY=your-api-key-here
+```
+
+**Note**: Use `host.docker.internal` to access services running on your Mac/PC from inside Docker containers.
+
 **Customization options:**
-- Use external LLM services (OpenAI, Mistral, LM Studio on host) by modifying `API_URL`, `API_MODEL`, and adding `API_KEY`
-- Adjust context window, log level, or database path by editing `docker-compose.yml` environment section
+- Adjust GPU layers, context window, log level, or database path by editing `docker-compose.yml`
+- Disable GPU acceleration by setting `--n-gpu-layers` to `0` for CPU-only inference
 
 **Important**: Environment variables defined in `docker-compose.yml` always override any `squid.config.json` file in the workspace. This ensures Docker configuration takes precedence.
 
