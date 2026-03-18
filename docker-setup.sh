@@ -257,12 +257,11 @@ start_services() {
     print_info "Waiting for services to be ready..."
 
     # Wait for squid server to be healthy
-    local max_wait=60
+    local max_wait=30
     local wait_time=0
 
     while [ $wait_time -lt $max_wait ]; do
         if docker compose ps squid 2>/dev/null | grep -q "Up"; then
-            sleep 2
             if curl -sf http://localhost:3000/health > /dev/null 2>&1 || \
                docker compose ps squid | grep -q "healthy"; then
                 print_success "Squid server is ready"
