@@ -129,13 +129,29 @@ Before you begin, you'll need:
    - **Docker Engine**: Default is `http://localhost:12434/engines/v1`
    - Note: The `/engines/v1` path is required for OpenAI SDK compatibility
 
+5. **Pull embedding model (for RAG features)**:
+   ```bash
+   # Required for RAG (Retrieval-Augmented Generation) document search
+   docker model pull hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+   ```
+   - This model is used to create embeddings for document search
+   - Only needed if you plan to use RAG features
+   - Size: ~80MB
+
 **Recommended models for coding:**
 - `hf.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M` - **Best for code** (32K context, ~4.4GB, single file)
 - `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` - Smaller, faster (32K context, ~1GB)
 - `ai/qwen3-coder` - Latest Qwen3 Coder from Docker Hub
 - `ai/smollm2` - Lightweight alternative (4K context, ~256MB)
 
-**Important**: Use bartowski's GGUF models (single-file format). Official Qwen GGUF models are split into multiple files which cause loading errors in Docker Model Runner.
+**Recommended embedding models (for RAG):**
+- `hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF` - **Best for embeddings** (768 dimensions, ~80MB)
+- `ai/nomic-embed-text-v1.5` - Docker Hub version (alternative)
+
+**Important**: 
+- Use bartowski's GGUF models for chat/completion (single-file format)
+- Official Qwen GGUF models are split into multiple files which cause loading errors
+- Embedding models are separate from chat models - you need both for RAG features
 
 **Note**: Use `docker model search <query>` to find more models. HuggingFace models use the `hf.co/` prefix.
 

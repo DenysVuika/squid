@@ -10,7 +10,7 @@
   },
   "rag": {
     "enabled": true,
-    "embedding_model": "text-embedding-nomic-embed-text-v1.5",
+    "embedding_model": "huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest",
     "embedding_url": "http://localhost:12434/engines/v1",
     "chunk_size": 512,
     "chunk_overlap": 50,
