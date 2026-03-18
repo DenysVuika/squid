@@ -9,33 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Docker Support**: Complete Docker setup with Docker AI model runner
-  - Multi-stage Dockerfile for optimized Rust builds
-  - Docker Compose with bartowski/qwen2.5-coder-7b-instruct (Q4_K_M) and nomic-embed-text-v1.5
-  - Automatic model pulling via Docker AI model runner
-  - Interactive setup script (`docker-setup.sh`)
+- **Docker Support with AI Models**: One-command setup with built-in LLM and embedding models
+  - Qwen2.5-Coder 7B (Q4_K_M quantization) for code analysis and chat
+  - Nomic Embed Text v1.5 for RAG semantic search
+  - Interactive setup script (`docker-setup.sh`) with automatic configuration
   - Optimized for Apple Silicon (M1/M2/M3/M4) with CPU inference
-  - Health checks and volume support for persistent data
-- **Audio Notification**: The web UI now plays a pleasant chime sound when the assistant finishes responding
-  - Helps users know when to return to the page if they've switched tabs or windows
-  - Uses Web Audio API to generate a non-intrusive two-tone notification sound
-  - Automatically triggers when the assistant completes streaming a response
-
-### Changed
-
-- **Improved Documentation**: Reorganized README for better clarity and ease of use
-  - Docker installation with `docker-setup.sh` is now the recommended primary method (simplest setup with automated checks)
-  - Consolidated all OpenAI-compatible API services (Ollama, LM Studio, Docker Model Runner, OpenAI, Mistral, etc.) into unified sections
-  - Streamlined Prerequisites section - removed redundant provider-specific details
-  - Configuration section now clearly distinguishes Docker (no config needed) vs manual installation
-  - Simplified API configuration examples to focus on the OpenAI-compatible standard
-  - Docker installation section now highlights setup script features (version checks, disk space verification, health checks)
-  - **README now focuses on Web UI** - Primary usage documentation emphasizes the web interface
-  - **CLI documentation moved to dedicated file** - Created `docs/CLI.md` with comprehensive CLI reference (424 lines)
-  - **RAG documentation moved to dedicated file** - Created `docs/RAG.md` with complete RAG guide (625 lines)
-  - Streamlined main README by removing verbose CLI and RAG examples (~167 lines reduced)
-  - Main README now provides quick overviews with links to detailed docs
-  - Tool calling section condensed with references to detailed security and CLI documentation
+  - Web UI and API accessible at http://localhost:3000
+  - Workspace directory for easy file sharing with container
+- **Documentation Reorganization**: Comprehensive docs split into focused guides
+  - `docs/CLI.md` - Complete command-line reference
+  - `docs/RAG.md` - Retrieval-Augmented Generation guide
+  - README focuses on Docker + Web UI (recommended workflow)
+- **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
 
 ## [0.10.0] - 2026-02-21
 

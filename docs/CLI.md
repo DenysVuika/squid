@@ -297,34 +297,179 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 
 ## Init Command
 
-Initialize Squid configuration for a project.
+Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings and preferences.
+
+### Interactive Mode (Default)
+
+Run `squid init` to be prompted for all configuration values:
 
 ```bash
-# Interactive setup (prompts for values)
+# Initialize in current directory
 squid init
 
-# Initialize in specific directory
+# Initialize in a specific directory
 squid init ./my-project
 squid init /path/to/project
-
-# Non-interactive with all parameters
-squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
-
-# Include API key for cloud services
-squid init --url https://api.openai.com/v1 --model gpt-4 --key sk-your-key --log-level error
-
-# Partial parameters (will prompt for missing values)
-squid init --url http://127.0.0.1:1234/v1 --model qwen2.5-coder
 ```
 
-**Options:**
+**Interactive prompts:**
+- **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
+- **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
+- **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
+- **Context Window**: Maximum context window size in tokens (e.g., `32768`)
+- **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+
+**Example session:**
+```
+$ squid init
+INFO: Initializing squid configuration in "."...
+? API URL: http://127.0.0.1:1234/v1
+? API Model: local-model
+? API Key (optional, press Enter to skip): 
+? Context Window (tokens): 32768
+? Log Level: error
+
+Configuration saved to: "squid.config.json"
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [not set]
+  Context Window: 32768 tokens
+  Log Level: error
+
+✓ Default permissions configured
+  Allowed: ["now"]
+
+✓ Created .squidignore with default patterns
+  Edit this file to customize which files squid should ignore
+```
+
+### Non-Interactive Mode
+
+Provide configuration values via command-line arguments to skip interactive prompts:
+
+```bash
+# Initialize with all parameters
+squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
+
+# Initialize in a specific directory with parameters
+squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level error
+
+# Partial parameters (will prompt for missing values)
+squid init --url http://127.0.0.1:1234/v1 --model gpt-4
+# Will still prompt for API Key and Log Level
+
+# Include API key for cloud services
+squid init --url https://api.openai.com/v1 --model gpt-4 --key sk-your-key-here --log-level error
+```
+
+**Available options:**
 - `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
 - `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 - `--key <KEY>` - API Key (optional for local models)
 - `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
 - `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
 
-Creates a `squid.config.json` file that can be committed to version control to share project settings.
+### Re-running Init on Existing Config
+
+When you run `squid init` on a directory that already has a config file, it will:
+- Use existing values as defaults in prompts
+- **Smart merge permissions**: Preserve your custom permissions + add new defaults
+- Update version to match current app version
+
+**Example:**
+```
+$ squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level info
+Found existing configuration, using current values as defaults...
+
+Configuration saved to: "./squid.config.json"
+  API URL: http://127.0.0.1:1234/v1
+  API Model: local-model
+  API Key: [configured]
+  Log Level: info
+
+✓ Added new default permissions: ["now"]
+
+✓ Current tool permissions:
+  Allowed: ["bash:git status", "bash:ls", "now"]
+  Denied: ["write_file"]
+
+✓ Using existing .squidignore file
+```
+
+In this example:
+- User's existing permissions (`bash:git status`, `bash:ls`, `write_file` denial) are preserved
+- New default permission (`now`) was automatically added
+- Config version updated from 0.4.0 to 0.5.0
+
+### Configuration File Format
+
+The `squid.config.json` file created by `squid init`:
+
+```json
+{
+  "api_url": "http://127.0.0.1:1234/v1",
+  "api_model": "qwen2.5-coder",
+  "context_window": 32768,
+  "log_level": "error",
+  "enable_env_context": true,
+  "permissions": {
+    "allow": ["now"],
+    "deny": []
+  },
+  "database_path": "squid.db",
+  "version": "0.7.0"
+}
+```
+
+**Configuration options:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `api_url` | string | OpenAI-compatible API endpoint URL |
+| `api_model` | string | Model identifier to use |
+| `api_key` | string (optional) | API key for authentication |
+| `context_window` | number | Maximum context window in tokens |
+| `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
+| `enable_env_context` | boolean | Include system info in prompts (default: true) |
+| `permissions.allow` | array | Tools that run without confirmation |
+| `permissions.deny` | array | Tools that are completely blocked |
+| `database_path` | string | Path to SQLite database file |
+| `version` | string | Config file version |
+
+### Alternative: Environment Variables
+
+Instead of `squid.config.json`, you can create a `.env` file:
+
+```bash
+# OpenAI API Configuration
+API_URL=http://127.0.0.1:1234/v1
+API_MODEL=local-model
+API_KEY=not-needed
+CONTEXT_WINDOW=32768
+DATABASE_PATH=squid.db
+LOG_LEVEL=error
+
+# Privacy Settings
+ENABLE_ENV_CONTEXT=true
+```
+
+**Important Notes:**
+- `squid.config.json` takes precedence over `.env` variables
+- **Commit `squid.config.json`** to your repository to share project settings with your team
+- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
+- For cloud API services, store the actual API key in `.env` and omit `api_key` from `squid.config.json`
+
+### Common API URLs
+
+| Service | API URL |
+|---------|---------|
+| **LM Studio** | `http://127.0.0.1:1234/v1` |
+| **Ollama** | `http://localhost:11434/v1` |
+| **Docker Model Runner** | `http://localhost:12434/engines/v1` |
+| **OpenAI** | `https://api.openai.com/v1` |
+| **Mistral AI** | `https://api.mistral.ai/v1` |
+| **OpenRouter** | `https://openrouter.ai/api/v1` |
+| **Together AI** | `https://api.together.xyz/v1` |
 
 ## Tool Calling
 

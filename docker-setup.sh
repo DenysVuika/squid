@@ -155,6 +155,28 @@ check_disk_space() {
     fi
 }
 
+# Setup environment file
+setup_env() {
+    print_header "Setting Up Environment"
+
+    if [ ! -f ".env" ]; then
+        if [ -f ".env.docker.example" ]; then
+            cp .env.docker.example .env
+            print_success "Created .env file from .env.docker.example"
+            print_info "Default configuration:"
+            echo "  • LLM: Qwen2.5-Coder 7B (via Docker AI)"
+            echo "  • Embeddings: Nomic Embed Text v1.5 (via Docker AI)"
+            echo "  • Context Window: 32K tokens"
+            echo "  • RAG: Enabled"
+        else
+            print_warning ".env.docker.example not found, skipping .env creation"
+            echo "You may need to create .env file manually"
+        fi
+    else
+        print_success ".env file already exists"
+    fi
+}
+
 # Setup workspace
 setup_workspace() {
     print_header "Setting Up Workspace"
@@ -281,7 +303,7 @@ show_status() {
 
     # Show environment variables
     print_info "Model Configuration:"
-    docker compose exec -T squid env 2>/dev/null | grep "SQUID_" || true
+    docker compose exec -T squid env 2>/dev/null | grep -E "API_URL|API_MODEL|EMBEDDING_URL|EMBEDDING_MODEL|CONTEXT_WINDOW" || true
 }
 
 # Stop services
@@ -334,9 +356,9 @@ test_setup() {
     fi
 
     print_info "Checking environment variables..."
-    if docker compose exec -T squid env | grep -q "SQUID_URL"; then
+    if docker compose exec -T squid env | grep -q "API_URL"; then
         print_success "Environment variables configured"
-        docker compose exec -T squid env | grep "SQUID_"
+        docker compose exec -T squid env | grep -E "API_URL|API_MODEL|EMBEDDING_URL|EMBEDDING_MODEL|CONTEXT_WINDOW"
     else
         print_warning "Environment variables not found"
     fi
@@ -400,6 +422,7 @@ full_setup() {
     check_disk_space
     check_docker_ai
 
+    setup_env
     setup_workspace
 
     print_info "This will now:"

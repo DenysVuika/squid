@@ -122,6 +122,9 @@ The easiest way to get started - automated setup with helpful checks:
 git clone https://github.com/DenysVuika/squid.git
 cd squid
 
+# Setup environment configuration
+cp .env.docker.example .env
+
 # Run the setup script (recommended)
 chmod +x docker-setup.sh
 ./docker-setup.sh setup
@@ -209,152 +212,67 @@ The `squid serve` command will then serve both the web UI and the API from the s
 
 ## Configuration
 
-**Using Docker?** No configuration needed! Docker Compose automatically sets up everything. Skip to [Usage](#usage).
+### Using Docker (Recommended)
 
-**Manual installation?** Configure squid to connect to your LLM service:
+Docker Compose automatically manages AI models and services, but requires a `.env` file for configuration.
 
-### Option 1: Interactive Setup (Recommended)
-
-Use the `init` command to create a `squid.config.json` file:
-
-#### Interactive Mode (Default)
+**Setup Steps:**
 
 ```bash
-# Initialize in current directory
+# 1. Copy the Docker environment template
+cp .env.docker.example .env
+
+# 2. Start the services
+docker compose up -d
+```
+
+The `.env` file configures:
+- **Model endpoints**: `API_URL`, `EMBEDDING_URL` (connect to Docker AI models)
+- **Model identifiers**: `API_MODEL`, `EMBEDDING_MODEL` (which models to use)
+
+**Default configuration**:
+- LLM: Qwen2.5-Coder 7B via Docker AI at `http://llm:8080/v1`
+- Embeddings: Nomic Embed Text v1.5 via Docker AI at `http://embedding:8080/v1`
+- Context window: 32K tokens (set in docker-compose.yml)
+- Log level: info (set in docker-compose.yml)
+- RAG: Enabled with semantic search
+
+**Customization options:**
+- Use external LLM services (OpenAI, Mistral, LM Studio on host) by modifying `API_URL`, `API_MODEL`, and adding `API_KEY`
+- Adjust context window, log level, or database path by editing `docker-compose.yml` environment section
+
+See `.env.docker.example` for all available options and examples, and `docker-compose.yml` for model configuration.
+
+### Using Manual Installation
+
+For manual installations (cargo install, from source), you need to configure Squid to connect to your LLM service.
+
+**Quick Setup:**
+
+```bash
+# Interactive configuration (recommended)
 squid init
 
-# Initialize in a specific directory
-squid init ./my-project
-squid init /path/to/project
+# Or use command-line flags
+squid init --url http://127.0.0.1:1234/v1 --model qwen2.5-coder
 ```
 
-This will prompt you for:
-- **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
-- **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
-- **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+This creates a `squid.config.json` file with your LLM connection settings.
 
-**Example session:**
-```
-$ squid init
-INFO: Initializing squid configuration in "."...
-? API URL: http://127.0.0.1:1234/v1
-? API Model: local-model
-? API Key (optional, press Enter to skip): 
-? Context Window (tokens): 32768
-? Log Level: error
+**For complete configuration documentation**, including:
+- Interactive and non-interactive `squid init` usage
+- Configuration file format
+- Environment variables
+- All available options
 
-Configuration saved to: "squid.config.json"
-  API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
-  API Key: [not set]
-  Context Window: 32768 tokens
-  Log Level: error
+See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
 
-✓ Default permissions configured
-  Allowed: ["now"]
-
-✓ Created .squidignore with default patterns
-  Edit this file to customize which files squid should ignore
-```
-
-**Re-running init on existing config:**
-
-When you run `squid init` on a directory that already has a config file, it will:
-- Use existing values as defaults in prompts
-- **Smart merge permissions**: Preserve your custom permissions + add new defaults
-- Update version to match current app version
-
-```
-$ squid init --url http://127.0.0.1:1234/v1 --model local-model --api-key "" --log-level info
-Found existing configuration, using current values as defaults...
-
-Configuration saved to: "./squid.config.json"
-  API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
-  API Key: [configured]
-  Log Level: info
-
-✓ Added new default permissions: ["now"]
-
-✓ Current tool permissions:
-  Allowed: ["bash:git status", "bash:ls", "now"]
-  Denied: ["write_file"]
-
-✓ Using existing .squidignore file
-```
-
-In this example:
-- User's existing permissions (`bash:git status`, `bash:ls`, `write_file` denial) are preserved
-- New default permission (`now`) was automatically added
-- Config version updated from 0.4.0 to 0.5.0
-
-#### Non-Interactive Mode
-
-You can also provide configuration values via command-line arguments to skip the interactive prompts:
-
-```bash
-# Initialize with all parameters
-squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
-
-# Initialize in a specific directory with parameters
-squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level error
-
-# Partial parameters (will prompt for missing values)
-squid init --url http://127.0.0.1:1234/v1 --model gpt-4
-# Will still prompt for API Key and Log Level
-
-# Include API key for cloud services
-squid init --url https://api.openai.com/v1 --model gpt-4 --api-key sk-your-key-here --log-level error
-```
-
-**Available options:**
-- `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
-- `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
-- `--key <KEY>` - API Key (optional for local models)
-- `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
-- `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
-
-The configuration is saved to `squid.config.json` in the specified directory (or current directory if not specified). This file can be committed to your repository to share project settings with your team.
-
-**Example `squid.config.json`:**
-```json
-{
-  "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder",
-  "context_window": 32768,
-  "log_level": "error",
-  "enable_env_context": true,
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
-  "database_path": "squid.db",
-  "version": "0.7.0"
-}
-```
-
-### Option 2: Manual Configuration
-
-Create a `.env` file in the project root:
-
-```bash
-# OpenAI API Configuration (for LM Studio or OpenAI)
-API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
-API_KEY=not-needed
-CONTEXT_WINDOW=32768
-DATABASE_PATH=squid.db
-
-# Privacy Settings
-ENABLE_ENV_CONTEXT=true
-```
-
-**Important Notes:**
-- `squid.config.json` takes precedence over `.env` variables. If both exist, the config file will be used.
-- **Commit `squid.config.json`** to your repository to share project settings with your team
-- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
-- For cloud API services (OpenAI, etc.), store the actual API key in `.env` and omit `api_key` from `squid.config.json`
+**Quick reference:**
+- **LM Studio**: `http://127.0.0.1:1234/v1`
+- **Ollama**: `http://localhost:11434/v1`
+- **Docker Model Runner**: `http://localhost:12434/engines/v1`
+- **OpenAI**: `https://api.openai.com/v1`
+- **Mistral AI**: `https://api.mistral.ai/v1`
 
 ### Configuration Options
 
