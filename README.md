@@ -235,6 +235,37 @@ Squid works with any OpenAI-compatible REST API:
 
 ## Installation
 
+### Docker (Quick Start)
+
+The easiest way to get started with Squid is using Docker with the built-in AI model runner:
+
+```bash
+# Clone the repository
+git clone https://github.com/DenysVuika/squid.git
+cd squid
+
+# Run the setup script
+chmod +x docker-setup.sh
+./docker-setup.sh setup
+
+# Or manually
+docker compose up -d
+```
+
+This pulls and runs:
+- **Squid server** (web UI + API)
+- **Qwen2.5-Coder 7B** (bartowski/Q4_K_M, ~4GB) - Main LLM
+- **Nomic Embed Text v1.5** (~270MB) - Embeddings for RAG
+
+**Access:** http://localhost:3000
+
+**Requirements:**
+- Docker Desktop 4.34+ with AI features enabled
+- Docker Compose v2.38+
+- 10GB RAM available for Docker
+
+**Apple Silicon:** Default config uses CPU inference (optimized for M1/M2/M3/M4).
+
 ### From crates.io (Recommended)
 
 ```bash

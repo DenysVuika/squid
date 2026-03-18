@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docker Support**: Complete Docker setup with Docker AI model runner
+  - Multi-stage Dockerfile for optimized Rust builds
+  - Docker Compose with bartowski/qwen2.5-coder-7b-instruct (Q4_K_M) and nomic-embed-text-v1.5
+  - Automatic model pulling via Docker AI model runner
+  - Interactive setup script (`docker-setup.sh`)
+  - Optimized for Apple Silicon (M1/M2/M3/M4) with CPU inference
+  - Health checks and volume support for persistent data
 - **Audio Notification**: The web UI now plays a pleasant chime sound when the assistant finishes responding
   - Helps users know when to return to the page if they've switched tabs or windows
   - Uses Web Audio API to generate a non-intrusive two-tone notification sound

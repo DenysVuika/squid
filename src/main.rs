@@ -168,11 +168,11 @@ async fn initialize_rag_if_needed(
     } else {
         config_enabled
     };
-    
+
     if !should_enable {
         return None;
     }
-    
+
     // Initialize RAG system
     match db::Database::new(&app_config.database_path) {
         Ok(db) => {
@@ -382,7 +382,7 @@ async fn main() {
                     // LM Studio uses: http://host:port/v1 for API and http://host:port for embeddings
                     final_url.strip_suffix("/v1").unwrap_or(&final_url).to_string()
                 };
-                
+
                 let embedding_url = match inquire::Text::new("Embedding API URL:")
                     .with_default(&default_embedding_url)
                     .with_help_message("URL for the embedding service (for LM Studio use http://127.0.0.1:1234, for Ollama use http://127.0.0.1:11434)")
@@ -570,27 +570,27 @@ async fn main() {
                     // Setup demo documents if requested
                     if setup_demo_docs {
                         let docs_dir = dir.join(&config.rag.documents_path);
-                        
+
                         // Create documents directory if it doesn't exist
                         if let Err(e) = std::fs::create_dir_all(&docs_dir) {
                             warn!("Failed to create documents directory: {}", e);
                             println!("\n⚠ Could not create documents directory: {}", e);
                         } else {
                             info!("Created documents directory at {:?}", docs_dir);
-                            
+
                             let mut success_count = 0;
                             let mut fail_count = 0;
-                            
+
                             // Extract all embedded demo documents
                             for filename in DemoDocuments::iter() {
                                 let file_path = docs_dir.join(filename.as_ref());
-                                
+
                                 // Skip if file already exists
                                 if file_path.exists() {
                                     info!("Skipping existing file: {:?}", file_path);
                                     continue;
                                 }
-                                
+
                                 if let Some(content) = DemoDocuments::get(filename.as_ref()) {
                                     match std::fs::write(&file_path, content.data.as_ref()) {
                                         Ok(_) => {
@@ -607,7 +607,7 @@ async fn main() {
                                     fail_count += 1;
                                 }
                             }
-                            
+
                             if success_count > 0 {
                                 println!("\n✓ Created {} demo document(s) in {:?}", success_count, docs_dir);
                                 println!("  Run 'squid rag init' to index these documents for RAG");
@@ -858,7 +858,7 @@ async fn main() {
                     file_extension,
                     message.as_ref().map(|m| format!(": {}", m)).unwrap_or_default()
                 );
-                
+
                 match system.query.execute(&review_query).await {
                     Ok(context) if !context.is_empty() => {
                         debug!("RAG retrieved {} bytes of context for review", context.len());
@@ -930,16 +930,16 @@ async fn main() {
                 println!("🦑: Working directory set to: {:?}", work_dir);
             }
 
-            let bind_address = format!("127.0.0.1:{}", port);
+            let bind_address = format!("0.0.0.0:{}", port);
             let mut app_config = app_config.clone();
-            
+
             // Override database path if specified via CLI
             if let Some(db_path) = db {
                 let db_path_str = db_path.to_string_lossy().to_string();
                 info!("Using custom database path: {}", db_path_str);
                 app_config.database_path = db_path_str;
             }
-            
+
             let app_config = Arc::new(app_config);
 
             // Initialize database
@@ -960,7 +960,7 @@ async fn main() {
             };
 
             let session_manager = Arc::new(session::SessionManager::new(database));
-            
+
             // Initialize RAG system if enabled
             let rag_system = if app_config.rag.enabled {
                 info!("Initializing RAG system...");
@@ -989,7 +989,7 @@ async fn main() {
                 info!("RAG is disabled in configuration");
                 None
             };
-            
+
             // Create approval state map for tool approval workflow
             let approval_map: api::ApprovalStateMap = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 

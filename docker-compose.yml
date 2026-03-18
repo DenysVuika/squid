@@ -1,0 +1,80 @@
+# Squid AI-Powered Code Assistant with Docker AI Model Runner
+# This compose file sets up:
+# - Squid server (web UI + API)
+# - Qwen2.5-Coder 7B LLM (bartowski/Q4_K_M quantization)
+# - Nomic Embed Text v1.5 (embedding model for RAG)
+#
+# APPLE SILICON USERS (M1/M2/M3/M4):
+# - The default config uses CPU-only inference (n-gpu-layers: 0)
+# - This works great on Apple Silicon with good performance
+# - For optimal performance, ensure Docker Desktop has 10GB+ RAM allocated
+# - See docs/DOCKER-APPLE-SILICON.md for detailed Apple Silicon optimization
+
+services:
+  # Squid server - Main application
+  squid:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: squid-server
+    ports:
+      - "3000:3000"
+    volumes:
+      - squid-data:/data
+      - ./workspace:/data/workspace
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+      - CONTEXT_WINDOW=32768
+      - LOG_LEVEL=info
+      - DATABASE_PATH=/data/squid.db
+    # Model bindings - Docker AI automatically injects these environment variables
+    models:
+      llm:
+        endpoint_var: API_URL # OpenAI-compatible LLM endpoint
+        model_var: API_MODEL # Model identifier for LLM
+      embedding:
+        endpoint_var: EMBEDDING_URL # OpenAI-compatible embedding endpoint
+        model_var: EMBEDDING_MODEL # Model identifier for embeddings
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# AI Models - Managed by Docker Model Runner
+models:
+  # Main LLM for code analysis and chat
+  llm:
+    model: huggingface.co/bartowski/qwen2.5-coder-7b-instruct-gguf:Q4_K_M
+    context_size: 32768 # 32K token context window
+    runtime_flags:
+      - "--threads"
+      - "8" # CPU threads (adjust based on your CPU cores)
+      - "--parallel"
+      - "4" # Parallel request slots
+      - "--n-gpu-layers"
+      - "0" # CPU-only (works on all platforms including Apple Silicon)
+      - "--mlock" # Lock memory to prevent swapping
+
+  # Embedding model for RAG (semantic search)
+  embedding:
+    model: huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest
+    context_size: 2048 # 2K token context for embeddings
+    runtime_flags:
+      - "--embeddings" # REQUIRED for embedding models
+      - "--threads"
+      - "4" # CPU threads for embedding generation
+      - "--n-gpu-layers"
+      - "0" # CPU-only (works on all platforms including Apple Silicon)
+
+volumes:
+  squid-data:
+    driver: local
+
+networks:
+  default:
+    name: squid-network
