@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses Web Audio API to generate a non-intrusive two-tone notification sound
   - Automatically triggers when the assistant completes streaming a response
 
+### Changed
+
+- **Improved Documentation**: Reorganized README for better clarity and ease of use
+  - Docker installation with `docker-setup.sh` is now the recommended primary method (simplest setup with automated checks)
+  - Consolidated all OpenAI-compatible API services (Ollama, LM Studio, Docker Model Runner, OpenAI, Mistral, etc.) into unified sections
+  - Streamlined Prerequisites section - removed redundant provider-specific details
+  - Configuration section now clearly distinguishes Docker (no config needed) vs manual installation
+  - Simplified API configuration examples to focus on the OpenAI-compatible standard
+  - Docker installation section now highlights setup script features (version checks, disk space verification, health checks)
+  - **README now focuses on Web UI** - Primary usage documentation emphasizes the web interface
+  - **CLI documentation moved to dedicated file** - Created `docs/CLI.md` with comprehensive CLI reference (424 lines)
+  - **RAG documentation moved to dedicated file** - Created `docs/RAG.md` with complete RAG guide (625 lines)
+  - Streamlined main README by removing verbose CLI and RAG examples (~167 lines reduced)
+  - Main README now provides quick overviews with links to detailed docs
+  - Tool calling section condensed with references to detailed security and CLI documentation
+
 ## [0.10.0] - 2026-02-21
 
 ### Added
