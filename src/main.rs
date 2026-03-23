@@ -209,10 +209,24 @@ async fn main() {
     // Other commands use stdout-only logging
     if matches!(cli.command, Commands::Serve { .. }) {
         let db_path_buf = std::path::PathBuf::from(&app_config.database_path);
+
+        // Parse database log level from config
+        let db_level = match app_config.db_log_level.to_lowercase().as_str() {
+            "error" => log::LevelFilter::Error,
+            "warn" => log::LevelFilter::Warn,
+            "info" => log::LevelFilter::Info,
+            "debug" => log::LevelFilter::Debug,
+            "trace" => log::LevelFilter::Trace,
+            _ => {
+                eprintln!("Invalid db_log_level '{}', defaulting to 'debug'", app_config.db_log_level);
+                log::LevelFilter::Debug
+            }
+        };
+
         logger::init_with_db(
             Some(&app_config.log_level),
             Some(db_path_buf),
-            Some(log::LevelFilter::Info),
+            Some(db_level),
         );
     } else {
         logger::init(Some(&app_config.log_level));
@@ -486,6 +500,7 @@ async fn main() {
                 api_key: final_api_key,
                 context_window: final_context_window,
                 log_level: final_log_level,
+                db_log_level: config::Config::default().db_log_level,
                 permissions: merged_permissions,
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,

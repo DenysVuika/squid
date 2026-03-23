@@ -6,6 +6,7 @@
   "_api_model": "huggingface.co/bartowski/qwen2.5-coder-7b-instruct-gguf:Q4_K_M",
   "_context_window": 32768,
   "log_level": "info",
+  "db_log_level": "debug",
   "database_path": "squid.db",
   "permissions": {
     "allow": ["now"],

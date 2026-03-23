@@ -353,12 +353,22 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Set via `squid init --context-window 32768` or in config file
   - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models
 
-- `LOG_LEVEL`: Logging verbosity (optional, default: `error`)
+- `LOG_LEVEL`: Console logging verbosity (optional, default: `error`)
   - `error`: Only errors (default)
   - `warn`: Warnings and errors
   - `info`: Informational messages
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
+
+- `DB_LOG_LEVEL`: Database logging verbosity (optional, default: `debug`)
+  - Controls what log levels are saved to the database (viewable in Web UI)
+  - `error`: Only errors
+  - `warn`: Warnings and errors
+  - `info`: Informational messages
+  - `debug`: Detailed debugging information (default)
+  - `trace`: Very verbose output
+  - **Note**: Only logs from the squid application are saved to the database (dependency logs are filtered out)
+  - Independent from console logging - you can have different levels for console and database
 
 - `DATABASE_PATH`: Path to the SQLite database file (optional, default: `squid.db`)
   - Used to store chat sessions, messages, and logs

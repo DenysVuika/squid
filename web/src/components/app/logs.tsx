@@ -187,7 +187,6 @@ export default function Logs() {
                       <TableHead className="w-[100px]">Level</TableHead>
                       <TableHead className="w-[200px]">Target</TableHead>
                       <TableHead>Message</TableHead>
-                      <TableHead className="w-[150px]">Session ID</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -200,15 +199,6 @@ export default function Logs() {
                         <TableCell className="font-mono text-xs text-gray-600">{log.target}</TableCell>
                         <TableCell className="max-w-md truncate" title={log.message}>
                           {log.message}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-gray-500">
-                          {log.session_id ? (
-                            <span className="truncate block" title={log.session_id}>
-                              {log.session_id.slice(0, 8)}...
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
                         </TableCell>
                       </TableRow>
                     ))}
