@@ -83,9 +83,9 @@ export const useModelStore = create<ModelStore>()(
             }
           } else {
             // No models available - show warning
-            console.warn('⚠️ No models available. Make sure LM Studio or Ollama is running.');
+            console.warn('⚠️ No models available. Make sure backend is running.');
             toast.error('No models available', {
-              description: 'Make sure LM Studio or Ollama is running and accessible.',
+              description: 'Make sure backend is running and accessible.',
               duration: 5000,
             });
             set({ isLoading: false });
