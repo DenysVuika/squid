@@ -190,18 +190,18 @@ export interface ModelsResponse {
  * ```
  */
 export async function streamChat(apiUrl: string, message: ChatMessage, handlers: StreamHandlers): Promise<void> {
-  const { 
-    onSession, 
-    onSources, 
-    onContent, 
-    onReasoning, 
-    onToolCall, 
-    onToolResult, 
+  const {
+    onSession,
+    onSources,
+    onContent,
+    onReasoning,
+    onToolCall,
+    onToolResult,
     onToolInvocationCompleted,
-    onUsage, 
-    onError, 
-    onDone, 
-    signal 
+    onUsage,
+    onError,
+    onDone,
+    signal,
   } = handlers;
 
   try {
@@ -288,13 +288,11 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
                   // Parse arguments if it's a string
                   let parsedArgs: Record<string, unknown>;
                   try {
-                    parsedArgs = typeof event.arguments === 'string' 
-                      ? JSON.parse(event.arguments) 
-                      : event.arguments;
+                    parsedArgs = typeof event.arguments === 'string' ? JSON.parse(event.arguments) : event.arguments;
                   } catch {
                     parsedArgs = {};
                   }
-                  
+
                   onToolInvocationCompleted({
                     name: event.name,
                     arguments: parsedArgs,
@@ -322,11 +320,7 @@ export async function streamChat(apiUrl: string, message: ChatMessage, handlers:
                 break;
 
               case 'tool_approval_response':
-                if (
-                  handlers.onToolApprovalResponse &&
-                  event.approval_id &&
-                  event.approved !== undefined
-                ) {
+                if (handlers.onToolApprovalResponse && event.approval_id && event.approved !== undefined) {
                   handlers.onToolApprovalResponse(event.approval_id, event.approved);
                 }
                 break;
@@ -588,6 +582,7 @@ export interface ConfigResponse {
   api_url: string;
   api_model: string;
   context_window: number;
+  rag_enabled: boolean;
 }
 
 /**
@@ -660,11 +655,7 @@ export interface RagResponse {
  * @param topK - Optional number of results to return
  * @returns Promise with context and sources
  */
-export async function queryRag(
-  apiUrl: string,
-  query: string,
-  topK?: number
-): Promise<RagQueryResponse> {
+export async function queryRag(apiUrl: string, query: string, topK?: number): Promise<RagQueryResponse> {
   const endpoint = apiUrl ? `${apiUrl}/api/rag/query` : '/api/rag/query';
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -749,11 +740,7 @@ export async function getRagStats(apiUrl: string): Promise<RagStatsResponse> {
  * @param content - The document content
  * @returns Promise with success status
  */
-export async function uploadRagDocument(
-  apiUrl: string,
-  filename: string,
-  content: string
-): Promise<RagResponse> {
+export async function uploadRagDocument(apiUrl: string, filename: string, content: string): Promise<RagResponse> {
   const endpoint = apiUrl ? `${apiUrl}/api/rag/upload` : '/api/rag/upload';
   const response = await fetch(endpoint, {
     method: 'POST',

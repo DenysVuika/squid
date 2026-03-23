@@ -61,18 +61,8 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtStep,
 } from '@/components/ai-elements/chain-of-thought';
-import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from '@/components/ai-elements/reasoning';
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from '@/components/ai-elements/tool';
+import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
+import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -89,6 +79,7 @@ import { ToolApprovalComponent } from './tool-approval';
 import { useSessionStore } from '@/stores/session-store';
 import { useModelStore } from '@/stores/model-store';
 import { useChatStore } from '@/stores/chat-store';
+import { useConfigStore } from '@/stores/config-store';
 
 const suggestions = [
   'What are the latest trends in AI?',
@@ -171,6 +162,7 @@ const Chatbot = () => {
     toolApprovalDecisions,
     toggleRag,
   } = useChatStore();
+  const { ragEnabled, isLoaded } = useConfigStore();
 
   // Local UI state
   const [text, setText] = useState<string>('');
@@ -184,14 +176,14 @@ const Chatbot = () => {
     if (!sources || sources.length === 0) {
       return [];
     }
-    
+
     const sourceMap = new Map<string, { title: string; contents: string[]; href: string }>();
-    
+
     for (const source of sources) {
       if (!source.title || !source.content) {
         continue;
       }
-      
+
       if (sourceMap.has(source.title)) {
         sourceMap.get(source.title)!.contents.push(source.content);
       } else {
@@ -202,14 +194,14 @@ const Chatbot = () => {
         });
       }
     }
-    
-    const result = Array.from(sourceMap.values()).map(item => ({
+
+    const result = Array.from(sourceMap.values()).map((item) => ({
       title: item.title,
       content: item.contents.join('\n\n---\n\n'),
       chunkCount: item.contents.length,
       href: item.href,
     }));
-    
+
     console.log('[Sources] Deduplicated:', sources.length, 'chunks →', result.length, 'sources');
     return result;
   }, []);
@@ -225,16 +217,16 @@ const Chatbot = () => {
   // Load session when activeSessionId changes to a different value
   useEffect(() => {
     const prevId = prevActiveSessionIdRef.current;
-    
+
     // Update ref for next comparison
     prevActiveSessionIdRef.current = activeSessionId;
-    
+
     // If session was deleted (changed to null from a valid ID), clear messages
     if (!activeSessionId && prevId) {
       clearMessages();
       return;
     }
-    
+
     // Don't load if:
     // 1. No session ID
     // 2. Same as previous (no actual change)
@@ -242,19 +234,19 @@ const Chatbot = () => {
     if (!activeSessionId || activeSessionId === prevId || status === 'streaming' || status === 'submitted') {
       return;
     }
-    
+
     // Load session history
     void loadSessionHistory(activeSessionId);
   }, [activeSessionId, status, loadSessionHistory, clearMessages]);
 
   // Track previous status to detect when streaming finishes
   const prevStatusRef = useRef<typeof status>('ready');
-  
+
   // Play notification sound when assistant finishes responding
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     prevStatusRef.current = status;
-    
+
     // Play sound when transitioning from streaming to ready (assistant finished)
     if (prevStatus === 'streaming' && status === 'ready' && messages.length > 0) {
       // Check if the last message is from assistant
@@ -300,9 +292,12 @@ const Chatbot = () => {
     setText(event.target.value);
   }, []);
 
-  const handleModelSelect = useCallback((modelId: string) => {
-    setSelectedModel(modelId);
-  }, [setSelectedModel]);
+  const handleModelSelect = useCallback(
+    (modelId: string) => {
+      setSelectedModel(modelId);
+    },
+    [setSelectedModel]
+  );
 
   const handleStop = useCallback(() => {
     stopStreaming();
@@ -436,290 +431,326 @@ const Chatbot = () => {
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <Conversation>
           <ConversationContent>
-          {messages.map(({ versions, ...message }) => (
-            <MessageBranch defaultBranch={0} key={message.key}>
-              <MessageBranchContent>
-                {versions.map((version) => {
-                  // Memoize deduplicated sources for this message
-                  const dedupedSources = message.sources ? deduplicateSources(message.sources) : [];
-                  
-                  return (
-                  <Message from={message.from} key={`${message.key}-${version.id}`}>
-                    <div>
-                      {message.from === 'assistant' && dedupedSources.length > 0 && (
-                        <Sources>
-                          <SourcesTrigger count={dedupedSources.length} />
-                          <SourcesContent>
-                            {dedupedSources.map((source) => (
-                              <button
-                                key={source.href + source.title}
-                                className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left w-full"
-                                onClick={() => handleViewSourceContent(source.title, source.content)}
-                                type="button"
-                              >
-                                <svg
-                                  className="h-4 w-4 shrink-0"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                  />
-                                </svg>
-                                <span className="block font-medium flex-1">{source.title}</span>
-                                {source.chunkCount > 1 && (
-                                  <span className="text-xs text-muted-foreground shrink-0">
-                                    {source.chunkCount} chunks
-                                  </span>
-                                )}
-                              </button>
-                            ))}
-                          </SourcesContent>
-                        </Sources>
-                      )}
-                      {/* Reasoning display logic */}
-                      {(() => {
-                        const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
-                        const hasTools = message.thinkingSteps?.some(s => s.type === 'tool');
-                        const isCurrentlyStreaming = status === 'streaming' && streamingMessageId === version.id;
+            {messages.map(({ versions, ...message }) => (
+              <MessageBranch defaultBranch={0} key={message.key}>
+                <MessageBranchContent>
+                  {versions.map((version) => {
+                    // Memoize deduplicated sources for this message
+                    const dedupedSources = message.sources ? deduplicateSources(message.sources) : [];
 
-                        if (!hasReasoning) {
-                          return null;
-                        }
-
-                        if (hasReasoning && !hasTools) {
-                          const reasoningContent = message.thinkingSteps!
-                            .filter(s => s.type === 'reasoning')
-                            .map(s => s.type === 'reasoning' ? s.content : '')
-                            .join('\n\n');
-
-                          return (
-                            <Reasoning 
-                              isStreaming={isCurrentlyStreaming}
-                              defaultOpen={false}
-                            >
-                              <ReasoningTrigger />
-                              <ReasoningContent>{reasoningContent}</ReasoningContent>
-                            </Reasoning>
-                          );
-                        }
-
-                        return (
-                          <ChainOfThought defaultOpen={false}>
-                            <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
-                            <ChainOfThoughtContent>
-                              {message.thinkingSteps!.map((step, idx) => {
-                                if (step.type === 'reasoning') {
-                                  return (
-                                    <ChainOfThoughtStep
-                                      key={`reasoning-${idx}`}
-                                      icon={BrainIcon}
-                                      label="Reasoning"
-                                      status={
-                                        isCurrentlyStreaming &&
-                                        idx === message.thinkingSteps!.length - 1
-                                          ? 'active'
-                                          : 'complete'
-                                      }
+                    return (
+                      <Message from={message.from} key={`${message.key}-${version.id}`}>
+                        <div>
+                          {message.from === 'assistant' && dedupedSources.length > 0 && (
+                            <Sources>
+                              <SourcesTrigger count={dedupedSources.length} />
+                              <SourcesContent>
+                                {dedupedSources.map((source) => (
+                                  <button
+                                    key={source.href + source.title}
+                                    className="flex items-center gap-2 cursor-pointer hover:text-primary/80 transition-colors text-left w-full"
+                                    onClick={() => handleViewSourceContent(source.title, source.content)}
+                                    type="button"
+                                  >
+                                    <svg
+                                      className="h-4 w-4 shrink-0"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                      xmlns="http://www.w3.org/2000/svg"
                                     >
-                                      <div className="text-sm whitespace-pre-wrap">{step.content}</div>
-                                    </ChainOfThoughtStep>
-                                  );
-                                } else {
-                                  return (
-                                    <ChainOfThoughtStep
-                                      key={`tool-${idx}`}
-                                      icon={WrenchIcon}
-                                      label={`Tool: ${step.name}`}
-                                      status={step.status === 'pending' ? 'active' : 'complete'}
-                                    >
-                                      <div className="space-y-2">
-                                        {step.parameters && Object.keys(step.parameters).length > 0 && (
-                                          <div className="text-xs">
-                                            <div className="font-medium mb-1">Input:</div>
-                                            <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
-                                              {JSON.stringify(step.parameters, null, 2)}
-                                            </pre>
-                                          </div>
-                                        )}
-                                        {step.result && (
-                                          <div className="text-xs">
-                                            <div className="font-medium mb-1">Output:</div>
-                                            <div className="bg-muted p-2 rounded text-xs whitespace-pre-wrap">
-                                              {step.result}
-                                            </div>
-                                          </div>
-                                        )}
-                                        {step.error && (
-                                          <div className="text-xs text-red-600 dark:text-red-400">
-                                            <div className="font-medium mb-1">Error:</div>
-                                            <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
-                                              {step.error}
-                                            </div>
-                                          </div>
-                                        )}
-                                        {!step.result && !step.error && step.status === 'pending' && (
-                                          <div className="text-xs text-muted-foreground">
-                                            Waiting for tool execution...
-                                          </div>
-                                        )}
-                                      </div>
-                                    </ChainOfThoughtStep>
-                                  );
-                                }
-                              })}
-                            </ChainOfThoughtContent>
-                          </ChainOfThought>
-                        );
-                      })()}
-                      {/* Render content and tools in order using split markers (for loaded sessions with contentBeforeTool) */}
-                      {message.from === 'assistant' && 
-                       !message.thinkingSteps?.some(s => s.type === 'reasoning') && 
-                       message.thinkingSteps && 
-                       message.thinkingSteps.some(s => s.type === 'tool' && (s.contentBeforeTool !== undefined || s.result || s.error)) ? (
-                        <>
-                          {(() => {
-                            let contentPosition = 0;
-                            const elements: React.ReactNode[] = [];
-
-                            message.thinkingSteps!.forEach((step, idx) => {
-                              if (step.type === 'tool') {
-                                // Find corresponding tool approval if exists
-                                const approval = message.toolApprovals?.find(
-                                  a => a.tool_name === step.name
-                                );
-                                const decision = approval ? toolApprovalDecisions.get(approval.approval_id) : null;
-
-                                // Show content before this tool
-                                // During streaming, use approval.contentBeforeApproval
-                                // After loading, use step.contentBeforeTool
-                                const contentBefore = approval?.contentBeforeApproval ?? step.contentBeforeTool;
-                                if (contentBefore) {
-                                  elements.push(
-                                    <MessageContent key={`content-before-${idx}`}>
-                                      <MessageResponse>{contentBefore}</MessageResponse>
-                                    </MessageContent>
-                                  );
-                                  contentPosition += contentBefore.length;
-                                }
-
-                                // Show tool approval or result
-                                if (approval) {
-                                  elements.push(
-                                    <ToolApprovalComponent
-                                      key={`tool-${approval.approval_id}`}
-                                      approval={approval}
-                                      onApprove={(save_decision, scope) =>
-                                        handleToolApprove(approval.approval_id, save_decision, scope)
-                                      }
-                                      onReject={(save_decision) =>
-                                        handleToolReject(approval.approval_id, save_decision)
-                                      }
-                                      isApproved={decision?.approved === true}
-                                      isRejected={decision?.approved === false}
-                                    />
-                                  );
-                                } else if (step.result || step.error) {
-                                  // No approval exists but we have a result (loaded from session)
-                                  // Show the tool execution details using Tool component
-                                  const isRejected = step.error?.includes('rejected by user');
-                                  const toolState = isRejected ? 'output-denied' : (step.status === 'error' || step.error ? 'output-error' : 'output-available');
-                                  elements.push(
-                                    <Tool key={`tool-result-${idx}`} className="mt-4">
-                                      <ToolHeader
-                                        type="dynamic-tool"
-                                        toolName={step.name}
-                                        state={toolState}
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                                       />
-                                      <ToolContent>
-                                        {step.parameters && Object.keys(step.parameters).length > 0 && (
-                                          <ToolInput input={step.parameters} />
-                                        )}
-                                        <ToolOutput
-                                          errorText={step.error}
-                                          output={step.result}
-                                        />
-                                      </ToolContent>
-                                    </Tool>
-                                  );
-                                }
-                              }
-                            });
+                                    </svg>
+                                    <span className="block font-medium flex-1">{source.title}</span>
+                                    {source.chunkCount > 1 && (
+                                      <span className="text-xs text-muted-foreground shrink-0">
+                                        {source.chunkCount} chunks
+                                      </span>
+                                    )}
+                                  </button>
+                                ))}
+                              </SourcesContent>
+                            </Sources>
+                          )}
+                          {/* Reasoning display logic */}
+                          {(() => {
+                            const hasReasoning = message.thinkingSteps?.some((s) => s.type === 'reasoning');
+                            const hasTools = message.thinkingSteps?.some((s) => s.type === 'tool');
+                            const isCurrentlyStreaming = status === 'streaming' && streamingMessageId === version.id;
 
-                            // Show remaining content after all tools
-                            if (contentPosition < version.content.length) {
-                              const remainingContent = version.content.substring(contentPosition);
-                              if (remainingContent.trim()) {
-                                elements.push(
-                                  <MessageContent key="content-after-tools">
-                                    <MessageResponse>{remainingContent}</MessageResponse>
-                                  </MessageContent>
-                                );
-                              }
+                            if (!hasReasoning) {
+                              return null;
                             }
 
-                            return <>{elements}</>;
+                            if (hasReasoning && !hasTools) {
+                              const reasoningContent = message
+                                .thinkingSteps!.filter((s) => s.type === 'reasoning')
+                                .map((s) => (s.type === 'reasoning' ? s.content : ''))
+                                .join('\n\n');
+
+                              return (
+                                <Reasoning isStreaming={isCurrentlyStreaming} defaultOpen={false}>
+                                  <ReasoningTrigger />
+                                  <ReasoningContent>{reasoningContent}</ReasoningContent>
+                                </Reasoning>
+                              );
+                            }
+
+                            return (
+                              <ChainOfThought defaultOpen={false}>
+                                <ChainOfThoughtHeader>Chain of Thought</ChainOfThoughtHeader>
+                                <ChainOfThoughtContent>
+                                  {message.thinkingSteps!.map((step, idx) => {
+                                    if (step.type === 'reasoning') {
+                                      return (
+                                        <ChainOfThoughtStep
+                                          key={`reasoning-${idx}`}
+                                          icon={BrainIcon}
+                                          label="Reasoning"
+                                          status={
+                                            isCurrentlyStreaming && idx === message.thinkingSteps!.length - 1
+                                              ? 'active'
+                                              : 'complete'
+                                          }
+                                        >
+                                          <div className="text-sm whitespace-pre-wrap">{step.content}</div>
+                                        </ChainOfThoughtStep>
+                                      );
+                                    } else {
+                                      return (
+                                        <ChainOfThoughtStep
+                                          key={`tool-${idx}`}
+                                          icon={WrenchIcon}
+                                          label={`Tool: ${step.name}`}
+                                          status={step.status === 'pending' ? 'active' : 'complete'}
+                                        >
+                                          <div className="space-y-2">
+                                            {step.parameters && Object.keys(step.parameters).length > 0 && (
+                                              <div className="text-xs">
+                                                <div className="font-medium mb-1">Input:</div>
+                                                <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
+                                                  {JSON.stringify(step.parameters, null, 2)}
+                                                </pre>
+                                              </div>
+                                            )}
+                                            {step.result && (
+                                              <div className="text-xs">
+                                                <div className="font-medium mb-1">Output:</div>
+                                                <div className="bg-muted p-2 rounded text-xs whitespace-pre-wrap">
+                                                  {step.result}
+                                                </div>
+                                              </div>
+                                            )}
+                                            {step.error && (
+                                              <div className="text-xs text-red-600 dark:text-red-400">
+                                                <div className="font-medium mb-1">Error:</div>
+                                                <div className="bg-red-50 dark:bg-red-950 p-2 rounded text-xs">
+                                                  {step.error}
+                                                </div>
+                                              </div>
+                                            )}
+                                            {!step.result && !step.error && step.status === 'pending' && (
+                                              <div className="text-xs text-muted-foreground">
+                                                Waiting for tool execution...
+                                              </div>
+                                            )}
+                                          </div>
+                                        </ChainOfThoughtStep>
+                                      );
+                                    }
+                                  })}
+                                </ChainOfThoughtContent>
+                              </ChainOfThought>
+                            );
                           })()}
-                        </>
-                      ) : message.from === 'assistant' && !message.thinkingSteps?.some(s => s.type === 'reasoning') && message.toolApprovals && message.toolApprovals.length > 0 ? (
-                        <>
-                          {/* Fallback: Legacy split mode using contentBeforeApproval */}
-                          {message.toolApprovals[0].contentBeforeApproval !== undefined ? (
+                          {/* Render content and tools in order using split markers (for loaded sessions with contentBeforeTool) */}
+                          {message.from === 'assistant' &&
+                          !message.thinkingSteps?.some((s) => s.type === 'reasoning') &&
+                          message.thinkingSteps &&
+                          message.thinkingSteps.some(
+                            (s) => s.type === 'tool' && (s.contentBeforeTool !== undefined || s.result || s.error)
+                          ) ? (
                             <>
-                              {/* Split mode: content before approval */}
-                              {message.toolApprovals[0].contentBeforeApproval && (
-                                <MessageContent>
-                                  <MessageResponse>
-                                    {message.toolApprovals[0].contentBeforeApproval}
-                                  </MessageResponse>
-                                </MessageContent>
-                              )}
-                              {/* Tool approvals */}
-                              {message.toolApprovals.map((approval) => {
-                                const decision = toolApprovalDecisions.get(approval.approval_id);
-                                return (
-                                  <ToolApprovalComponent
-                                    key={approval.approval_id}
-                                    approval={approval}
-                                    onApprove={(save_decision, scope) =>
-                                      handleToolApprove(approval.approval_id, save_decision, scope)
+                              {(() => {
+                                let contentPosition = 0;
+                                const elements: React.ReactNode[] = [];
+
+                                message.thinkingSteps!.forEach((step, idx) => {
+                                  if (step.type === 'tool') {
+                                    // Find corresponding tool approval if exists
+                                    const approval = message.toolApprovals?.find((a) => a.tool_name === step.name);
+                                    const decision = approval ? toolApprovalDecisions.get(approval.approval_id) : null;
+
+                                    // Show content before this tool
+                                    // During streaming, use approval.contentBeforeApproval
+                                    // After loading, use step.contentBeforeTool
+                                    const contentBefore = approval?.contentBeforeApproval ?? step.contentBeforeTool;
+                                    if (contentBefore) {
+                                      elements.push(
+                                        <MessageContent key={`content-before-${idx}`}>
+                                          <MessageResponse>{contentBefore}</MessageResponse>
+                                        </MessageContent>
+                                      );
+                                      contentPosition += contentBefore.length;
                                     }
-                                    onReject={(save_decision) =>
-                                      handleToolReject(approval.approval_id, save_decision)
+
+                                    // Show tool approval or result
+                                    if (approval) {
+                                      elements.push(
+                                        <ToolApprovalComponent
+                                          key={`tool-${approval.approval_id}`}
+                                          approval={approval}
+                                          onApprove={(save_decision, scope) =>
+                                            handleToolApprove(approval.approval_id, save_decision, scope)
+                                          }
+                                          onReject={(save_decision) =>
+                                            handleToolReject(approval.approval_id, save_decision)
+                                          }
+                                          isApproved={decision?.approved === true}
+                                          isRejected={decision?.approved === false}
+                                        />
+                                      );
+                                    } else if (step.result || step.error) {
+                                      // No approval exists but we have a result (loaded from session)
+                                      // Show the tool execution details using Tool component
+                                      const isRejected = step.error?.includes('rejected by user');
+                                      const toolState = isRejected
+                                        ? 'output-denied'
+                                        : step.status === 'error' || step.error
+                                          ? 'output-error'
+                                          : 'output-available';
+                                      elements.push(
+                                        <Tool key={`tool-result-${idx}`} className="mt-4">
+                                          <ToolHeader type="dynamic-tool" toolName={step.name} state={toolState} />
+                                          <ToolContent>
+                                            {step.parameters && Object.keys(step.parameters).length > 0 && (
+                                              <ToolInput input={step.parameters} />
+                                            )}
+                                            <ToolOutput errorText={step.error} output={step.result} />
+                                          </ToolContent>
+                                        </Tool>
+                                      );
                                     }
-                                    isApproved={decision?.approved === true}
-                                    isRejected={decision?.approved === false}
-                                  />
-                                );
-                              })}
-                              {/* Split mode: content after approval */}
-                              {version.content && 
-                               version.content.length > (message.toolApprovals[0].contentBeforeApproval?.length || 0) && (
-                                <MessageContent>
-                                  <MessageResponse>
-                                    {version.content.substring(message.toolApprovals[0].contentBeforeApproval?.length || 0)}
-                                  </MessageResponse>
-                                </MessageContent>
+                                  }
+                                });
+
+                                // Show remaining content after all tools
+                                if (contentPosition < version.content.length) {
+                                  const remainingContent = version.content.substring(contentPosition);
+                                  if (remainingContent.trim()) {
+                                    elements.push(
+                                      <MessageContent key="content-after-tools">
+                                        <MessageResponse>{remainingContent}</MessageResponse>
+                                      </MessageContent>
+                                    );
+                                  }
+                                }
+
+                                return <>{elements}</>;
+                              })()}
+                            </>
+                          ) : message.from === 'assistant' &&
+                            !message.thinkingSteps?.some((s) => s.type === 'reasoning') &&
+                            message.toolApprovals &&
+                            message.toolApprovals.length > 0 ? (
+                            <>
+                              {/* Fallback: Legacy split mode using contentBeforeApproval */}
+                              {message.toolApprovals[0].contentBeforeApproval !== undefined ? (
+                                <>
+                                  {/* Split mode: content before approval */}
+                                  {message.toolApprovals[0].contentBeforeApproval && (
+                                    <MessageContent>
+                                      <MessageResponse>
+                                        {message.toolApprovals[0].contentBeforeApproval}
+                                      </MessageResponse>
+                                    </MessageContent>
+                                  )}
+                                  {/* Tool approvals */}
+                                  {message.toolApprovals.map((approval) => {
+                                    const decision = toolApprovalDecisions.get(approval.approval_id);
+                                    return (
+                                      <ToolApprovalComponent
+                                        key={approval.approval_id}
+                                        approval={approval}
+                                        onApprove={(save_decision, scope) =>
+                                          handleToolApprove(approval.approval_id, save_decision, scope)
+                                        }
+                                        onReject={(save_decision) =>
+                                          handleToolReject(approval.approval_id, save_decision)
+                                        }
+                                        isApproved={decision?.approved === true}
+                                        isRejected={decision?.approved === false}
+                                      />
+                                    );
+                                  })}
+                                  {/* Split mode: content after approval */}
+                                  {version.content &&
+                                    version.content.length >
+                                      (message.toolApprovals[0].contentBeforeApproval?.length || 0) && (
+                                      <MessageContent>
+                                        <MessageResponse>
+                                          {version.content.substring(
+                                            message.toolApprovals[0].contentBeforeApproval?.length || 0
+                                          )}
+                                        </MessageResponse>
+                                      </MessageContent>
+                                    )}
+                                </>
+                              ) : (
+                                <>
+                                  {/* No split mode: show all content then approval (streaming before approval or legacy sessions) */}
+                                  {version.content && (
+                                    <MessageContent>
+                                      <MessageResponse>{version.content}</MessageResponse>
+                                    </MessageContent>
+                                  )}
+                                  {/* Tool approvals */}
+                                  {message.toolApprovals.map((approval) => {
+                                    const decision = toolApprovalDecisions.get(approval.approval_id);
+                                    return (
+                                      <ToolApprovalComponent
+                                        key={approval.approval_id}
+                                        approval={approval}
+                                        onApprove={(save_decision, scope) =>
+                                          handleToolApprove(approval.approval_id, save_decision, scope)
+                                        }
+                                        onReject={(save_decision) =>
+                                          handleToolReject(approval.approval_id, save_decision)
+                                        }
+                                        isApproved={decision?.approved === true}
+                                        isRejected={decision?.approved === false}
+                                      />
+                                    );
+                                  })}
+                                </>
                               )}
                             </>
                           ) : (
                             <>
-                              {/* No split mode: show all content then approval (streaming before approval or legacy sessions) */}
-                              {version.content && (
-                                <MessageContent>
-                                  <MessageResponse>
-                                    {version.content}
-                                  </MessageResponse>
-                                </MessageContent>
-                              )}
-                              {/* Tool approvals */}
-                              {message.toolApprovals.map((approval) => {
+                              {/* Normal message content (reasoning mode or no approvals) */}
+                              <MessageContent>
+                                {message.from === 'assistant' &&
+                                !version.content &&
+                                status === 'streaming' &&
+                                !message.thinkingSteps ? (
+                                  <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                                ) : (
+                                  <MessageResponse>{version.content}</MessageResponse>
+                                )}
+                              </MessageContent>
+                              {/* Tool approvals for reasoning mode (after content) */}
+                              {message.toolApprovals?.map((approval) => {
                                 const decision = toolApprovalDecisions.get(approval.approval_id);
+                                const hasReasoning = message.thinkingSteps?.some((s) => s.type === 'reasoning');
+                                // Hide approved/rejected approvals when chain of thought is active (has reasoning)
+                                if (hasReasoning && decision) {
+                                  return null;
+                                }
                                 return (
                                   <ToolApprovalComponent
                                     key={approval.approval_id}
@@ -727,9 +758,7 @@ const Chatbot = () => {
                                     onApprove={(save_decision, scope) =>
                                       handleToolApprove(approval.approval_id, save_decision, scope)
                                     }
-                                    onReject={(save_decision) =>
-                                      handleToolReject(approval.approval_id, save_decision)
-                                    }
+                                    onReject={(save_decision) => handleToolReject(approval.approval_id, save_decision)}
                                     isApproved={decision?.approved === true}
                                     isRejected={decision?.approved === false}
                                   />
@@ -737,62 +766,23 @@ const Chatbot = () => {
                               })}
                             </>
                           )}
-                        </>
-                      ) : (
-                        <>
-                          {/* Normal message content (reasoning mode or no approvals) */}
-                          <MessageContent>
-                            {message.from === 'assistant' &&
-                            !version.content &&
-                            status === 'streaming' &&
-                            !message.thinkingSteps ? (
-                              <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
-                            ) : (
-                              <MessageResponse>{version.content}</MessageResponse>
-                            )}
-                          </MessageContent>
-                          {/* Tool approvals for reasoning mode (after content) */}
-                          {message.toolApprovals?.map((approval) => {
-                            const decision = toolApprovalDecisions.get(approval.approval_id);
-                            const hasReasoning = message.thinkingSteps?.some(s => s.type === 'reasoning');
-                            // Hide approved/rejected approvals when chain of thought is active (has reasoning)
-                            if (hasReasoning && decision) {
-                              return null;
-                            }
-                            return (
-                              <ToolApprovalComponent
-                                key={approval.approval_id}
-                                approval={approval}
-                                onApprove={(save_decision, scope) =>
-                                  handleToolApprove(approval.approval_id, save_decision, scope)
-                                }
-                                onReject={(save_decision) =>
-                                  handleToolReject(approval.approval_id, save_decision)
-                                }
-                                isApproved={decision?.approved === true}
-                                isRejected={decision?.approved === false}
-                              />
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  </Message>
-                  );
-                })}
-              </MessageBranchContent>
-              {versions.length > 1 && (
-                <MessageBranchSelector>
-                  <MessageBranchPrevious />
-                  <MessageBranchPage />
-                  <MessageBranchNext />
-                </MessageBranchSelector>
-              )}
-            </MessageBranch>
-          ))}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
+                        </div>
+                      </Message>
+                    );
+                  })}
+                </MessageBranchContent>
+                {versions.length > 1 && (
+                  <MessageBranchSelector>
+                    <MessageBranchPrevious />
+                    <MessageBranchPage />
+                    <MessageBranchNext />
+                  </MessageBranchSelector>
+                )}
+              </MessageBranch>
+            ))}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
       </div>
       <div className="grid shrink-0 gap-4 border-t pt-4">
         <Suggestions className="px-4">
@@ -822,19 +812,21 @@ const Chatbot = () => {
                     <PromptInputActionAddAttachments />
                   </PromptInputActionMenuContent>
                 </PromptInputActionMenu>
-                <PromptInputButton 
-                  onClick={handleRagToggle}
-                  tooltip={{ 
-                    content: useRag 
-                      ? "RAG enabled - queries enhanced with document context" 
-                      : "Enable RAG to search documents",
-                    side: "top"
-                  }}
-                  variant={useRag ? 'default' : 'ghost'}
-                >
-                  <Sparkles size={16} />
-                  <span>RAG</span>
-                </PromptInputButton>
+                {isLoaded && ragEnabled && (
+                  <PromptInputButton
+                    onClick={handleRagToggle}
+                    tooltip={{
+                      content: useRag
+                        ? 'RAG enabled - queries enhanced with document context'
+                        : 'Enable RAG to search documents',
+                      side: 'top',
+                    }}
+                    variant={useRag ? 'default' : 'ghost'}
+                  >
+                    <Sparkles size={16} />
+                    <span>RAG</span>
+                  </PromptInputButton>
+                )}
                 <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>
@@ -851,7 +843,12 @@ const Chatbot = () => {
                           {models
                             .filter((m) => m.provider === provider)
                             .map((m) => (
-                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                              <ModelItem
+                                isSelected={selectedModel === m.id}
+                                key={m.id}
+                                m={m}
+                                onSelect={handleModelSelect}
+                              />
                             ))}
                         </ModelSelectorGroup>
                       ))}

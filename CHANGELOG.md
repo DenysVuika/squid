@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/RAG.md` - Retrieval-Augmented Generation guide
   - README focuses on Docker + Web UI (recommended workflow)
 - **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
+- **Conditional RAG UI Elements**: Web UI now respects `rag.enabled` configuration
+  - RAG toggle button hidden in chat input when RAG is disabled
+  - RAG documents menu button hidden when RAG is disabled
+  - API config endpoint returns RAG enabled status
 
 ### Changed
 
