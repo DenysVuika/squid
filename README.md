@@ -181,21 +181,28 @@ For development, use `cargo run --` instead of `squid` in the examples below.
 
 ### Building the Web UI
 
-The web UI is built separately and embedded into the binary. To build the complete application with the web UI:
+The web UI is **automatically built** during Rust compilation via `build.rs`. Simply run:
 
 ```bash
-# Build the web UI
-cd web
-npm install
-npm run build
-
-# The build output is automatically copied to ../static/
-# Build the Rust application (which embeds the static files)
-cd ..
 cargo build --release
 ```
 
+The build script (`build.rs`) will:
+- Check if the web sources have changed since the last build
+- Automatically run `npm ci` (or `npm install`) and `npm run build` in the `web/` directory
+- Output the built assets to the `static/` folder, which is then embedded into the binary
+- Skip the web build if npm is not available (falls back to existing static files)
+
 The `squid serve` command will then serve both the web UI and the API from the same server.
+
+**Manual Build (Optional):** You can still build the web UI manually if needed:
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
 
 **Note:** If you're using a pre-built binary from crates.io or releases, the web UI is already included.
 
