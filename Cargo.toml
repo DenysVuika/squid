@@ -6,16 +6,19 @@ repository = "https://github.com/DenysVuika/squid"
 authors = ["Denys Vuika <denys.vuika@gmail.com>"]
 license = "Apache-2.0"
 edition = "2024"
+build = "build.rs"
 keywords = ["ai", "code-review", "command-line", "developer-tools"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 include = [
     "/src",
     "/static",
+    "/web",
     "/migrations",
     "/documents",
     "/.squidignore.example",
     "/squid.config.json.example",
+    "/build.rs",
     "/Cargo.toml",
     "/Cargo.lock",
     "/README.md",

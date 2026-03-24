@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/RAG.md` - Retrieval-Augmented Generation guide
   - README focuses on Docker + Web UI (recommended workflow)
 - **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
+- **Automatic Web Build**: Web UI is now automatically built during Rust compilation
+  - Added `build.rs` script that detects changes in web sources and rebuilds automatically
+  - Runs `npm ci/install` and `npm run build` when `static/` is missing or stale
+  - Gracefully falls back to existing static files if npm is unavailable
+  - Eliminates manual web build steps - just run `cargo build --release`
 - **Conditional RAG UI Elements**: Web UI now respects `rag.enabled` configuration
   - RAG toggle button hidden in chat input when RAG is disabled
   - RAG documents menu button hidden when RAG is disabled
