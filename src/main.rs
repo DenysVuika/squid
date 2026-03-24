@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+mod agent;
 mod api;
 mod config;
 mod db;
@@ -507,6 +508,7 @@ async fn main() {
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
                 rag: final_rag_config,
+                agents: config::Config::default().agents,
             };
 
             match config.save_to_dir(dir) {

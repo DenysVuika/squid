@@ -305,7 +305,7 @@ pub async fn ask_llm_streaming(
                     let config_clone = app_config.clone();
                     let handle = tokio::spawn(async move {
                         let result: serde_json::Value =
-                            tools::call_tool(&name, &args, &config_clone).await;
+                            tools::call_tool(&name, &args, None, &config_clone).await;
                         (tool_call_id, result)
                     });
                     execution_handles.push(handle);
@@ -475,7 +475,7 @@ pub async fn ask_llm(
                 let config_clone = app_config.clone();
                 let handle = tokio::spawn(async move {
                     let result: serde_json::Value =
-                        tools::call_tool(&name, &args, &config_clone).await;
+                        tools::call_tool(&name, &args, None, &config_clone).await;
                     (tool_call_clone, result)
                 });
                 handles.push(handle);

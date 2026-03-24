@@ -29,14 +29,10 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import {
-  ModelSelector,
-  ModelSelectorContent,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
   ModelSelectorInput,
   ModelSelectorList,
-  ModelSelectorName,
-  ModelSelectorTrigger,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
 } from '@/components/ai-elements/model-selector';
 import {
   PromptInput,
@@ -71,13 +67,19 @@ import { playNotificationSound } from '@/lib/notification-sound';
 
 // App components
 import { SourceContentSidebar } from './source-content-sidebar';
-import { ModelItem } from './model-item';
+import { AgentItem } from './agent-item';
 import { SuggestionItem } from './suggestion-item';
 import { ToolApprovalComponent } from './tool-approval';
+import {
+  AgentSelector,
+  AgentSelectorTrigger,
+  AgentSelectorContent,
+  AgentSelectorName,
+} from './agent-selector';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
-import { useModelStore } from '@/stores/model-store';
+import { useAgentStore } from '@/stores/agent-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useConfigStore } from '@/stores/config-store';
 
@@ -138,16 +140,16 @@ const Chatbot = () => {
   // Zustand stores
   const { activeSessionId } = useSessionStore();
   const {
-    models,
-    modelGroups,
-    selectedModel,
+    agents,
+    agentGroups,
+    selectedAgent,
     tokenUsage,
-    modelSelectorOpen,
-    setSelectedModel,
-    setModelSelectorOpen,
-    loadModels,
-    getModelForPricing,
-  } = useModelStore();
+    agentSelectorOpen,
+    setSelectedAgent,
+    setAgentSelectorOpen,
+    loadAgents,
+    getAgentModelForPricing,
+  } = useAgentStore();
   const {
     messages,
     status,
@@ -169,7 +171,7 @@ const Chatbot = () => {
   const [sourceContentOpen, setSourceContentOpen] = useState(false);
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
-  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
+  const selectedAgentData = useMemo(() => agents.find((a) => a.id === selectedAgent), [selectedAgent, agents]);
 
   // Deduplicate sources by filename and combine chunks
   const deduplicateSources = useCallback((sources: Array<{ href: string; title: string; content: string }>) => {
@@ -206,10 +208,10 @@ const Chatbot = () => {
     return result;
   }, []);
 
-  // Fetch available models on mount
+  // Fetch available agents on mount
   useEffect(() => {
-    void loadModels();
-  }, [loadModels]);
+    void loadAgents();
+  }, [loadAgents]);
 
   // Track previous activeSessionId to detect actual changes
   const prevActiveSessionIdRef = useRef<string | null>(null);
@@ -292,11 +294,11 @@ const Chatbot = () => {
     setText(event.target.value);
   }, []);
 
-  const handleModelSelect = useCallback(
-    (modelId: string) => {
-      setSelectedModel(modelId);
+  const handleAgentSelect = useCallback(
+    (agentId: string) => {
+      setSelectedAgent(agentId);
     },
-    [setSelectedModel]
+    [setSelectedAgent]
   );
 
   const handleStop = useCallback(() => {
@@ -396,7 +398,7 @@ const Chatbot = () => {
       <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-white px-4 py-2 dark:bg-gray-950 rounded-t-xl">
         <Context
           maxTokens={tokenUsage.context_window || 128000}
-          modelId={getModelForPricing()}
+          modelId={getAgentModelForPricing()}
           usage={{
             inputTokens: tokenUsage.input_tokens,
             outputTokens: tokenUsage.output_tokens,
@@ -827,34 +829,38 @@ const Chatbot = () => {
                     <span>RAG</span>
                   </PromptInputButton>
                 )}
-                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                  <ModelSelectorTrigger asChild>
+                <AgentSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
+                  <AgentSelectorTrigger asChild>
                     <PromptInputButton>
-                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
-                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                      {selectedAgentData?.name && <AgentSelectorName>{selectedAgentData.name}</AgentSelectorName>}
+                      {!selectedAgentData && <AgentSelectorName>Select agent...</AgentSelectorName>}
                     </PromptInputButton>
-                  </ModelSelectorTrigger>
-                  <ModelSelectorContent>
-                    <ModelSelectorInput placeholder="Search models..." />
+                  </AgentSelectorTrigger>
+                  <AgentSelectorContent>
+                    <ModelSelectorInput placeholder="Search agents..." />
                     <ModelSelectorList>
-                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                      {modelGroups.map((provider) => (
+                      <ModelSelectorEmpty>No agents found.</ModelSelectorEmpty>
+                      {agentGroups.map((provider) => (
                         <ModelSelectorGroup heading={provider} key={provider}>
-                          {models
-                            .filter((m) => m.provider === provider)
-                            .map((m) => (
-                              <ModelItem
-                                isSelected={selectedModel === m.id}
-                                key={m.id}
-                                m={m}
-                                onSelect={handleModelSelect}
+                          {agents
+                            .filter((a) => {
+                              const parts = a.model.split('/');
+                              const agentProvider = parts.length > 1 ? parts[0] : 'local';
+                              return agentProvider === provider;
+                            })
+                            .map((a) => (
+                              <AgentItem
+                                agent={a}
+                                isSelected={selectedAgent === a.id}
+                                key={a.id}
+                                onSelect={handleAgentSelect}
                               />
                             ))}
                         </ModelSelectorGroup>
                       ))}
                     </ModelSelectorList>
-                  </ModelSelectorContent>
-                </ModelSelector>
+                  </AgentSelectorContent>
+                </AgentSelector>
               </PromptInputTools>
               <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
             </PromptInputFooter>

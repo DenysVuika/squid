@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::agent::{AgentConfig, AgentPermissions, AgentsConfig};
+
 /// Tool permissions configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permissions {
@@ -143,6 +145,8 @@ pub struct Config {
     pub enable_env_context: bool,
     #[serde(default)]
     pub rag: RagConfig,
+    #[serde(default, flatten)]
+    pub agents: AgentsConfig,
 }
 
 fn default_context_window() -> u32 {
@@ -181,6 +185,7 @@ impl Default for Config {
             database_path: default_database_path(),
             enable_env_context: default_enable_env_context(),
             rag: RagConfig::default(),
+            agents: AgentsConfig::default(),
         }
     }
 }
@@ -514,6 +519,21 @@ impl Config {
 
         self.save_to_dir(&PathBuf::from("."))?;
         Ok(())
+    }
+
+    /// Get agent configuration by ID
+    pub fn get_agent(&self, agent_id: &str) -> Option<&AgentConfig> {
+        self.agents.agents.get(agent_id)
+    }
+
+    /// Get agent permissions by ID
+    pub fn get_agent_permissions(&self, agent_id: &str) -> Option<&AgentPermissions> {
+        self.get_agent(agent_id).map(|a| &a.permissions)
+    }
+
+    /// Get the default agent configuration
+    pub fn get_default_agent(&self) -> Option<&AgentConfig> {
+        self.get_agent(&self.agents.default_agent)
     }
 }
 

@@ -102,7 +102,7 @@ pub struct ChatSession {
     pub created_at: i64,
     pub updated_at: i64,
     pub title: Option<String>,
-    pub model_id: Option<String>,
+    pub agent_id: Option<String>,
     pub token_usage: TokenUsage,
     pub cost_usd: f64,
 }
@@ -117,7 +117,7 @@ impl ChatSession {
             created_at: now,
             updated_at: now,
             title: None,
-            model_id: None,
+            agent_id: None,
             token_usage: TokenUsage::default(),
             cost_usd: 0.0,
         }
@@ -141,8 +141,8 @@ impl ChatSession {
 
     /// Set the model used for this session
     pub fn set_model(&mut self, model_id: String) {
-        if self.model_id.is_none() {
-            self.model_id = Some(model_id);
+        if self.agent_id.is_none() {
+            self.agent_id = Some(model_id);
         }
     }
 
@@ -426,7 +426,7 @@ impl SessionManager {
     pub fn update_token_usage(
         &self,
         session_id: &str,
-        model_id: &str,
+        agent_id: &str,
         input_tokens: i64,
         output_tokens: i64,
         reasoning_tokens: i64,
@@ -437,8 +437,8 @@ impl SessionManager {
         let mut session = self.get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
-        // Set model if not already set
-        session.set_model(model_id.to_string());
+        // Set agent if not already set
+        session.set_model(agent_id.to_string());
 
         // Set context window
         session.set_context_window(context_window);

@@ -23,26 +23,28 @@ import {
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 import {
-  ModelSelector,
-  ModelSelectorContent,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
   ModelSelectorInput,
   ModelSelectorList,
-  ModelSelectorName,
-  ModelSelectorTrigger,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
 } from '@/components/ai-elements/model-selector';
 import { Suggestions } from '@/components/ai-elements/suggestion';
 import { toast } from 'sonner';
 
 // App components
-import { ModelItem } from './model-item';
+import { AgentItem } from './agent-item';
 import { SuggestionItem } from './suggestion-item';
+import {
+  AgentSelector,
+  AgentSelectorTrigger,
+  AgentSelectorContent,
+  AgentSelectorName,
+} from './agent-selector';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
-import { useModelStore } from '@/stores/model-store';
+import { useAgentStore } from '@/stores/agent-store';
 
 const suggestions = [
   'Review this file for potential bugs',
@@ -117,22 +119,22 @@ export function FileViewer() {
   const { startNewChat } = useSessionStore();
   const { clearMessages, addUserMessage, setStatus } = useChatStore();
   const {
-    models,
-    modelGroups,
-    selectedModel,
-    modelSelectorOpen,
-    setSelectedModel,
-    setModelSelectorOpen,
-    loadModels,
+    agents,
+    agentGroups,
+    selectedAgent,
+    agentSelectorOpen,
+    setSelectedAgent,
+    setAgentSelectorOpen,
+    loadAgents,
     resetTokenUsage,
-  } = useModelStore();
+  } = useAgentStore();
 
-  const selectedModelData = useMemo(() => models.find((m) => m.id === selectedModel), [selectedModel, models]);
+  const selectedAgentData = useMemo(() => agents.find((a) => a.id === selectedAgent), [selectedAgent, agents]);
 
-  // Fetch available models on mount
+  // Fetch available agents on mount
   useEffect(() => {
-    void loadModels();
-  }, [loadModels]);
+    void loadAgents();
+  }, [loadAgents]);
 
   useEffect(() => {
     const fetchFileContent = async () => {
@@ -174,11 +176,11 @@ export function FileViewer() {
     setPromptText(event.target.value);
   }, []);
 
-  const handleModelSelect = useCallback(
-    (modelId: string) => {
-      setSelectedModel(modelId);
+  const handleAgentSelect = useCallback(
+    (agentId: string) => {
+      setSelectedAgent(agentId);
     },
-    [setSelectedModel]
+    [setSelectedAgent]
   );
 
   const handlePromptSubmit = useCallback(
@@ -328,29 +330,33 @@ export function FileViewer() {
             </PromptInputBody>
             <PromptInputFooter>
               <PromptInputTools>
-                <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                  <ModelSelectorTrigger asChild>
+                <AgentSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
+                  <AgentSelectorTrigger asChild>
                     <PromptInputButton>
-                      {selectedModelData?.name && <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>}
-                      {!selectedModelData && <ModelSelectorName>Select model...</ModelSelectorName>}
+                      {selectedAgentData?.name && <AgentSelectorName>{selectedAgentData.name}</AgentSelectorName>}
+                      {!selectedAgentData && <AgentSelectorName>Select agent...</AgentSelectorName>}
                     </PromptInputButton>
-                  </ModelSelectorTrigger>
-                  <ModelSelectorContent>
-                    <ModelSelectorInput placeholder="Search models..." />
+                  </AgentSelectorTrigger>
+                  <AgentSelectorContent>
+                    <ModelSelectorInput placeholder="Search agents..." />
                     <ModelSelectorList>
-                      <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                      {modelGroups.map((provider) => (
+                      <ModelSelectorEmpty>No agents found.</ModelSelectorEmpty>
+                      {agentGroups.map((provider) => (
                         <ModelSelectorGroup heading={provider} key={provider}>
-                          {models
-                            .filter((m) => m.provider === provider)
-                            .map((m) => (
-                              <ModelItem isSelected={selectedModel === m.id} key={m.id} m={m} onSelect={handleModelSelect} />
+                          {agents
+                            .filter((a) => {
+                              const parts = a.model.split('/');
+                              const agentProvider = parts.length > 1 ? parts[0] : 'local';
+                              return agentProvider === provider;
+                            })
+                            .map((a) => (
+                              <AgentItem agent={a} isSelected={selectedAgent === a.id} key={a.id} onSelect={handleAgentSelect} />
                             ))}
                         </ModelSelectorGroup>
                       ))}
                     </ModelSelectorList>
-                  </ModelSelectorContent>
-                </ModelSelector>
+                  </AgentSelectorContent>
+                </AgentSelector>
               </PromptInputTools>
               <PromptInputSubmit disabled={!promptText.trim()} status={undefined} />
             </PromptInputFooter>

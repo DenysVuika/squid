@@ -427,6 +427,75 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     - **Never** - Add to deny list and auto-save config (bash commands save as `bash:command`)
   - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
 
+### Agents
+
+Squid uses an **agent-based architecture** where each agent has its own model, system prompt, and tool permissions. This allows you to create specialized assistants for different tasks.
+
+**Agent Configuration Example:**
+
+```json
+{
+  "agents": {
+    "code-reviewer": {
+      "name": "Code Reviewer",
+      "enabled": true,
+      "description": "Reviews code for best practices and potential issues",
+      "model": "anthropic/claude-sonnet-4-5",
+      "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
+      "permissions": {
+        "allow": ["now", "read_file", "grep"],
+        "deny": ["write_file", "bash"]
+      }
+    },
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant",
+      "model": "qwen2.5-coder-7b-instruct",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash"],
+        "deny": []
+      }
+    }
+  },
+  "default_agent": "general-assistant"
+}
+```
+
+**Agent Properties:**
+
+- **id** (object key): Unique identifier for the agent (e.g., `"code-reviewer"`)
+- **name**: Display name shown in the UI
+- **enabled**: Whether the agent appears in the agent selector (default: `true`)
+- **description**: Brief explanation of the agent's purpose
+- **model**: The underlying LLM model ID
+  - For local models: Use the model name (e.g., `"qwen2.5-coder-7b-instruct"`)
+  - For cloud services: Use provider/model format (e.g., `"anthropic/claude-sonnet-4-5"`, `"openai/gpt-4"`)
+- **prompt** (optional): Custom system prompt for this agent
+  - Overrides the default system prompt
+  - Defines the agent's personality and behavior
+- **permissions**: Tool execution permissions specific to this agent
+  - **allow**: Tools this agent can use without confirmation
+  - **deny**: Tools this agent cannot use at all
+  - Uses the same granular bash permissions as global config (e.g., `"bash:ls"`)
+
+**Default Agent:**
+
+The `default_agent` field specifies which agent is selected by default when starting a new session.
+
+**Multiple Agent Workflows:**
+
+You can create agents for different purposes:
+
+- **Code Reviewer** (read-only): Reviews code without making changes
+- **Safe Explorer** (read-only): Explores and documents code
+- **General Assistant** (full access): Makes code changes and runs commands
+- **Terminal Assistant** (command specialist): Focused on bash operations with specific command allowlists
+
+See `sample-files/agents-example.json` for a complete configuration with multiple agents.
+
+**Migration Note:** If you have an existing `squid.config.json` without agents, add the `agents` section to enable agent-based configuration. Legacy configurations continue to work but use the global model setting.
+
 ### Common Context Window Sizes
 
 <details>
