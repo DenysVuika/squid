@@ -42,6 +42,16 @@
         "allow": ["now", "read_file", "grep"],
         "deny": ["write_file", "bash"]
       }
+    },
+    "light": {
+      "name": "Light",
+      "enabled": true,
+      "description": "Lightweight assistant with minimal permissions",
+      "model": "liquid/lfm2.5-1.2b",
+      "permissions": {
+        "allow": ["now"],
+        "deny": []
+      }
     }
   },
   "default_agent": "general-assistant"
