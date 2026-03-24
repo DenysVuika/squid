@@ -23,6 +23,10 @@ import {
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 import {
+  ModelSelector,
+  ModelSelectorTrigger,
+  ModelSelectorContent,
+  ModelSelectorName,
   ModelSelectorInput,
   ModelSelectorList,
   ModelSelectorEmpty,
@@ -34,12 +38,6 @@ import { toast } from 'sonner';
 // App components
 import { AgentItem } from './agent-item';
 import { SuggestionItem } from './suggestion-item';
-import {
-  AgentSelector,
-  AgentSelectorTrigger,
-  AgentSelectorContent,
-  AgentSelectorName,
-} from './agent-selector';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -330,14 +328,14 @@ export function FileViewer() {
             </PromptInputBody>
             <PromptInputFooter>
               <PromptInputTools>
-                <AgentSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
-                  <AgentSelectorTrigger asChild>
+                <ModelSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
                     <PromptInputButton>
-                      {selectedAgentData?.name && <AgentSelectorName>{selectedAgentData.name}</AgentSelectorName>}
-                      {!selectedAgentData && <AgentSelectorName>Select agent...</AgentSelectorName>}
+                      {selectedAgentData?.name && <ModelSelectorName>{selectedAgentData.name}</ModelSelectorName>}
+                      {!selectedAgentData && <ModelSelectorName>Select agent...</ModelSelectorName>}
                     </PromptInputButton>
-                  </AgentSelectorTrigger>
-                  <AgentSelectorContent>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
                     <ModelSelectorInput placeholder="Search agents..." />
                     <ModelSelectorList>
                       <ModelSelectorEmpty>No agents found.</ModelSelectorEmpty>
@@ -355,8 +353,8 @@ export function FileViewer() {
                         </ModelSelectorGroup>
                       ))}
                     </ModelSelectorList>
-                  </AgentSelectorContent>
-                </AgentSelector>
+                  </ModelSelectorContent>
+                </ModelSelector>
               </PromptInputTools>
               <PromptInputSubmit disabled={!promptText.trim()} status={undefined} />
             </PromptInputFooter>

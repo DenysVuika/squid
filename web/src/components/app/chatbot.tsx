@@ -29,6 +29,10 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import {
+  ModelSelector,
+  ModelSelectorTrigger,
+  ModelSelectorContent,
+  ModelSelectorName,
   ModelSelectorInput,
   ModelSelectorList,
   ModelSelectorEmpty,
@@ -70,12 +74,6 @@ import { SourceContentSidebar } from './source-content-sidebar';
 import { AgentItem } from './agent-item';
 import { SuggestionItem } from './suggestion-item';
 import { ToolApprovalComponent } from './tool-approval';
-import {
-  AgentSelector,
-  AgentSelectorTrigger,
-  AgentSelectorContent,
-  AgentSelectorName,
-} from './agent-selector';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -829,14 +827,14 @@ const Chatbot = () => {
                     <span>RAG</span>
                   </PromptInputButton>
                 )}
-                <AgentSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
-                  <AgentSelectorTrigger asChild>
+                <ModelSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
+                  <ModelSelectorTrigger asChild>
                     <PromptInputButton>
-                      {selectedAgentData?.name && <AgentSelectorName>{selectedAgentData.name}</AgentSelectorName>}
-                      {!selectedAgentData && <AgentSelectorName>Select agent...</AgentSelectorName>}
+                      {selectedAgentData?.name && <ModelSelectorName>{selectedAgentData.name}</ModelSelectorName>}
+                      {!selectedAgentData && <ModelSelectorName>Select agent...</ModelSelectorName>}
                     </PromptInputButton>
-                  </AgentSelectorTrigger>
-                  <AgentSelectorContent>
+                  </ModelSelectorTrigger>
+                  <ModelSelectorContent>
                     <ModelSelectorInput placeholder="Search agents..." />
                     <ModelSelectorList>
                       <ModelSelectorEmpty>No agents found.</ModelSelectorEmpty>
@@ -859,8 +857,8 @@ const Chatbot = () => {
                         </ModelSelectorGroup>
                       ))}
                     </ModelSelectorList>
-                  </AgentSelectorContent>
-                </AgentSelector>
+                  </ModelSelectorContent>
+                </ModelSelector>
               </PromptInputTools>
               <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
             </PromptInputFooter>
