@@ -31,6 +31,7 @@ target
 /static/*
 !/static/.gitkeep
 squid.db
+squid.db-journal
 
 # Web development files (compiled output goes to static/)
 web/node_modules
