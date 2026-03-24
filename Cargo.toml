@@ -13,7 +13,6 @@ readme = "README.md"
 include = [
     "/src",
     "/static",
-    "/web",
     "/migrations",
     "/documents",
     "/.squidignore.example",
