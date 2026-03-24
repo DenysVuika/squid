@@ -586,7 +586,10 @@ squid review src/main.rs
 squid rag init
 
 # View application logs
-squid logs --level error
+squid logs show --level error
+
+# Clear all logs from database
+squid logs reset
 ```
 
 For complete CLI documentation, examples, and advanced usage, see [docs/CLI.md](docs/CLI.md).

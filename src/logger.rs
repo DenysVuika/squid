@@ -188,6 +188,15 @@ pub fn cleanup_old_logs(db_path: &str, max_age_seconds: i64) -> Result<usize, ru
     Ok(deleted)
 }
 
+/// Clear all logs from database
+pub fn reset_logs(db_path: &str) -> Result<usize, rusqlite::Error> {
+    let conn = Connection::open(db_path)?;
+
+    let deleted = conn.execute("DELETE FROM logs", [])?;
+
+    Ok(deleted)
+}
+
 /// A log entry from the database
 #[derive(Debug, Clone)]
 pub struct LogEntry {
