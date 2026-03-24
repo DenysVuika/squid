@@ -12,7 +12,7 @@ import { FileText, MessageSquare, Files, Database } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
-import { useModelStore } from '@/stores/model-store';
+import { useAgentStore } from '@/stores/agent-store';
 import { useConfigStore } from '@/stores/config-store';
 
 function AppContent() {
@@ -22,7 +22,7 @@ function AppContent() {
   // Zustand stores
   const { sessions, activeSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
   const { clearMessages } = useChatStore();
-  const { resetTokenUsage } = useModelStore();
+  const { resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
 
   // State for right sidebar (files panel)
