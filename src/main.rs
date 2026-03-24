@@ -116,8 +116,22 @@ enum Commands {
     },
     /// View application logs from the database
     Logs {
+        #[command(subcommand)]
+        command: LogCommands,
+    },
+    /// RAG (Retrieval-Augmented Generation) operations
+    Rag {
+        #[command(subcommand)]
+        command: RagCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum LogCommands {
+    /// Display logs from the database
+    Show {
         /// Number of log entries to display
-        #[arg(short, long, default_value = "50")]
+        #[arg(short, long, default_value = "100")]
         limit: usize,
         /// Filter by log level (trace, debug, info, warn, error)
         #[arg(short = 'L', long)]
@@ -126,11 +140,8 @@ enum Commands {
         #[arg(short, long)]
         session_id: Option<String>,
     },
-    /// RAG (Retrieval-Augmented Generation) operations
-    Rag {
-        #[command(subcommand)]
-        command: RagCommands,
-    },
+    /// Clear all logs from the database
+    Reset,
 }
 
 #[derive(Subcommand)]
@@ -209,10 +220,24 @@ async fn main() {
     // Other commands use stdout-only logging
     if matches!(cli.command, Commands::Serve { .. }) {
         let db_path_buf = std::path::PathBuf::from(&app_config.database_path);
+
+        // Parse database log level from config
+        let db_level = match app_config.db_log_level.to_lowercase().as_str() {
+            "error" => log::LevelFilter::Error,
+            "warn" => log::LevelFilter::Warn,
+            "info" => log::LevelFilter::Info,
+            "debug" => log::LevelFilter::Debug,
+            "trace" => log::LevelFilter::Trace,
+            _ => {
+                eprintln!("Invalid db_log_level '{}', defaulting to 'debug'", app_config.db_log_level);
+                log::LevelFilter::Debug
+            }
+        };
+
         logger::init_with_db(
             Some(&app_config.log_level),
             Some(db_path_buf),
-            Some(log::LevelFilter::Info),
+            Some(db_level),
         );
     } else {
         logger::init(Some(&app_config.log_level));
@@ -486,6 +511,7 @@ async fn main() {
                 api_key: final_api_key,
                 context_window: final_context_window,
                 log_level: final_log_level,
+                db_log_level: config::Config::default().db_log_level,
                 permissions: merged_permissions,
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
@@ -1076,48 +1102,66 @@ async fn main() {
                 }
             }
         }
-        Commands::Logs {
-            limit,
-            level,
-            session_id,
-        } => {
+        Commands::Logs { command } => {
             let db_path = &app_config.database_path;
 
-            println!("🦑: Fetching logs from database: {}", db_path);
+            match command {
+                LogCommands::Show {
+                    limit,
+                    level,
+                    session_id,
+                } => {
+                    println!("🦑: Fetching logs from database: {}", db_path);
 
-            match logger::query_logs(
-                db_path,
-                Some(*limit),
-                level.as_deref(),
-                session_id.as_deref(),
-            ) {
-                Ok(logs) => {
-                    if logs.is_empty() {
-                        println!("No logs found.");
-                    } else {
-                        println!("\n{} log entries:\n", logs.len());
-                        for log in logs {
-                            let timestamp = chrono::DateTime::from_timestamp(log.timestamp, 0)
-                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                .unwrap_or_else(|| "unknown".to_string());
+                    match logger::query_logs(
+                        db_path,
+                        Some(*limit),
+                        level.as_deref(),
+                        session_id.as_deref(),
+                    ) {
+                        Ok(logs) => {
+                            if logs.is_empty() {
+                                println!("No logs found.");
+                            } else {
+                                println!("\n{} log entries:\n", logs.len());
+                                for log in logs {
+                                    let timestamp = chrono::DateTime::from_timestamp(log.timestamp, 0)
+                                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                        .unwrap_or_else(|| "unknown".to_string());
 
-                            let session_info = log
-                                .session_id
-                                .map(|sid| format!(" [session: {}]", &sid[..8]))
-                                .unwrap_or_default();
+                                    let session_info = log
+                                        .session_id
+                                        .map(|sid| format!(" [session: {}]", &sid[..8]))
+                                        .unwrap_or_default();
 
-                            println!(
-                                "[{}] {} {}{}: {}",
-                                timestamp, log.level.to_uppercase(), log.target, session_info, log.message
-                            );
+                                    println!(
+                                        "[{}] {} {}{}: {}",
+                                        timestamp, log.level.to_uppercase(), log.target, session_info, log.message
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to query logs: {}", e);
+                            println!("🦑: Failed to read logs from database - {}", e);
+                            println!("    Database path: {}", db_path);
+                            println!("    Make sure the database exists and is not corrupted.");
                         }
                     }
                 }
-                Err(e) => {
-                    error!("Failed to query logs: {}", e);
-                    println!("🦑: Failed to read logs from database - {}", e);
-                    println!("    Database path: {}", db_path);
-                    println!("    Make sure the database exists and is not corrupted.");
+                LogCommands::Reset => {
+                    println!("🦑: Clearing all logs from database: {}", db_path);
+
+                    match logger::reset_logs(db_path) {
+                        Ok(count) => {
+                            println!("✓ Successfully cleared {} log entries.", count);
+                        }
+                        Err(e) => {
+                            error!("Failed to reset logs: {}", e);
+                            println!("🦑: Failed to clear logs from database - {}", e);
+                            println!("    Database path: {}", db_path);
+                        }
+                    }
                 }
             }
         }

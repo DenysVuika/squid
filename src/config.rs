@@ -105,7 +105,8 @@ impl Default for RagConfig {
 /// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 /// - `api_key`: Optional API key (use `None` for local models)
 /// - `context_window`: Maximum context window size in tokens (e.g., `32768` for Qwen2.5-Coder)
-/// - `log_level`: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+/// - `log_level`: Console logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+/// - `db_log_level`: Database logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 /// - `version`: Config file version (matches app version when created)
 ///
 /// **Best Practices:**
@@ -113,7 +114,8 @@ impl Default for RagConfig {
 /// - Keep sensitive API keys in `.env` file (which is gitignored)
 /// - Use `api_key: None` in config file for local models (LM Studio, Ollama)
 /// - For cloud services (OpenAI, etc.), omit `api_key` from config and set it via `.env`
-/// - Default `log_level` is `error` (minimal noise)
+/// - Default `log_level` is `error` (minimal console noise)
+/// - Default `db_log_level` is `debug` (capture detailed logs in database)
 /// - Use `.squidignore` file for project-wide ignore patterns
 ///
 /// **Configuration Priority:**
@@ -129,6 +131,8 @@ pub struct Config {
     pub context_window: u32,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default = "default_db_log_level")]
+    pub db_log_level: String,
     #[serde(default)]
     pub permissions: Permissions,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,6 +155,10 @@ fn default_log_level() -> String {
     "error".to_string()
 }
 
+fn default_db_log_level() -> String {
+    "debug".to_string()
+}
+
 fn default_database_path() -> String {
     "squid.db".to_string()
 }
@@ -167,6 +175,7 @@ impl Default for Config {
             api_key: None,
             context_window: default_context_window(),
             log_level: default_log_level(),
+            db_log_level: default_db_log_level(),
             permissions: Permissions::default(),
             version: None,
             database_path: default_database_path(),

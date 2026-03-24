@@ -261,26 +261,47 @@ RAG automatically indexes these file types:
 
 ## Logs Command
 
-View application logs stored in the database.
+View and manage application logs stored in the database.
+
+### View Logs
 
 ```bash
-# View recent logs (last 50 by default)
-squid logs
+# View recent logs (last 100 by default)
+squid logs show
 
 # View more logs
-squid logs --limit 100
+squid logs show --limit 100
 
 # Filter by log level
-squid logs --level error
-squid logs --level warn
-squid logs --level info
+squid logs show --level error
+squid logs show --level warn
+squid logs show --level info
 
 # View logs for a specific session
-squid logs --session-id 72dd7601-7da4-4252-80f6-7012da923faf
+squid logs show --session-id 72dd7601-7da4-4252-80f6-7012da923faf
 
 # Combine filters
-squid logs --limit 20 --level error
+squid logs show --limit 20 --level error
 ```
+
+**Options:**
+- `-l, --limit <NUMBER>` - Number of logs to retrieve (default: 100)
+- `--level <LEVEL>` - Filter by log level (error, warn, info, debug, trace)
+- `--session-id <ID>` - Filter by session ID
+
+### Clear Logs
+
+```bash
+# Clear all logs from the database
+squid logs reset
+```
+
+This removes all log entries from the database, which can be useful to:
+- Free up database space
+- Start fresh after debugging
+- Remove old logs that are no longer needed
+
+**Warning:** This operation cannot be undone. All log entries will be permanently deleted.
 
 The logs are stored in the SQLite database (`squid.db`) alongside your chat sessions. This makes it easy to:
 - Debug issues by reviewing what happened during a session
@@ -288,12 +309,7 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 - Correlate logs with specific chat conversations
 - Monitor application behavior over time
 
-**Options:**
-- `-l, --limit <NUMBER>` - Number of logs to retrieve (default: 50)
-- `--level <LEVEL>` - Filter by log level (error, warn, info, debug, trace)
-- `--session-id <ID>` - Filter by session ID
-
-**Note:** The `logs` command reads from the database. Logs are automatically stored when running the `serve` command.
+**Note:** Logs are automatically stored when running the `serve` command.
 
 ## Init Command
 

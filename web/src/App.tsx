@@ -13,15 +13,17 @@ import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useModelStore } from '@/stores/model-store';
+import { useConfigStore } from '@/stores/config-store';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // Zustand stores
   const { sessions, activeSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
   const { clearMessages } = useChatStore();
   const { resetTokenUsage } = useModelStore();
+  const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
@@ -30,6 +32,10 @@ function AppContent() {
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
 
   const handleSessionSelect = (sessionId: string) => {
     // Only load history if switching to a different session
@@ -100,18 +106,20 @@ function AppContent() {
           {!isLogsPage && (
             <>
               <Separator orientation="vertical" className="h-4" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="mr-2"
-                onClick={() => {
-                  setShowRagPanel(!showRagPanel);
-                  if (!showRagPanel) setShowFilesPanel(false);
-                }}
-                title="Toggle RAG documents"
-              >
-                <Database className={showRagPanel ? 'text-primary' : ''} />
-              </Button>
+              {isLoaded && ragEnabled && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mr-2"
+                  onClick={() => {
+                    setShowRagPanel(!showRagPanel);
+                    if (!showRagPanel) setShowFilesPanel(false);
+                  }}
+                  title="Toggle RAG documents"
+                >
+                  <Database className={showRagPanel ? 'text-primary' : ''} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -135,7 +143,7 @@ function AppContent() {
               <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>
-          {!isLogsPage && showRagPanel && (
+          {!isLogsPage && isLoaded && ragEnabled && showRagPanel && (
             <div className="border-l w-96 shrink-0 overflow-auto p-4">
               <DocumentManager />
             </div>

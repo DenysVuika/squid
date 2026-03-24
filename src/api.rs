@@ -1503,6 +1503,7 @@ pub struct ConfigResponse {
     pub api_url: String,
     pub api_model: String,
     pub context_window: u32,
+    pub rag_enabled: bool,
 }
 
 /// Get API configuration (default model, etc.)
@@ -1515,6 +1516,7 @@ pub async fn get_config(
         api_url: app_config.api_url.clone(),
         api_model: app_config.api_model.clone(),
         context_window: app_config.context_window,
+        rag_enabled: app_config.rag.enabled,
     };
 
     Ok(HttpResponse::Ok().json(response))

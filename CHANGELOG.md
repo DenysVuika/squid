@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Logs Reset Command**: Clear all logs from the database with `squid logs reset`
+  - New subcommand structure: `squid logs show` (view) and `squid logs reset` (clear)
+  - Increased default log limit from 50 to 100 entries for `logs show`
+  - Useful for freeing database space and removing old debugging logs
+  - Updated CLI documentation with examples and warnings
+
 - **Docker Support with AI Models**: One-command setup with built-in LLM and embedding models
   - Qwen2.5-Coder 7B (Q4_K_M quantization) for code analysis and chat
   - Nomic Embed Text v1.5 for RAG semantic search
@@ -25,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/RAG.md` - Retrieval-Augmented Generation guide
   - README focuses on Docker + Web UI (recommended workflow)
 - **Audio Notification**: Web UI plays a pleasant chime when assistant finishes responding
+- **Conditional RAG UI Elements**: Web UI now respects `rag.enabled` configuration
+  - RAG toggle button hidden in chat input when RAG is disabled
+  - RAG documents menu button hidden when RAG is disabled
+  - API config endpoint returns RAG enabled status
 
 ### Changed
 
