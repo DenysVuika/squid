@@ -22,9 +22,16 @@
       "name": "General Assistant",
       "enabled": true,
       "description": "Full-featured coding assistant with all tools",
-      "model": "qwen/qwen3.5-9b",
+      "model": "qwen3.5-4b",
       "permissions": {
-        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
+        "allow": [
+          "now",
+          "read_file",
+          "write_file",
+          "grep",
+          "bash:ls",
+          "bash:git"
+        ],
         "deny": []
       }
     },
@@ -32,7 +39,7 @@
       "name": "Code Reviewer",
       "enabled": true,
       "description": "Reviews code for quality and security (read-only)",
-      "model": "qwen/qwen3.5-9b",
+      "model": "qwen3.5-4b",
       "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
