@@ -46,10 +46,6 @@ Create `squid.config.json`:
   "context_window": 32768,
   "log_level": "info",
   "database_path": "squid.db",
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
   "rag": {
     "enabled": true,
     "embedding_model": "text-embedding-nomic-embed-text-v1.5",
@@ -58,7 +54,20 @@ Create `squid.config.json`:
     "chunk_overlap": 50,
     "top_k": 5,
     "documents_path": "documents"
-  }
+  },
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
+        "deny": []
+      }
+    }
+  },
+  "default_agent": "general-assistant"
 }
 ```
 

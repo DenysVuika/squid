@@ -185,21 +185,37 @@ squid ask "Search for passwords in the project"
 # → You control whether this happens
 ```
 
-### 🎛️ Tool Permissions (Allow/Deny Lists)
+### 🎛️ Tool Permissions (Per-Agent)
 
-Configure which tools can run automatically (without confirmation) or should never run at all using the `permissions` section in `squid.config.json`.
+Squid uses **agent-based permissions** where each agent defines which tools can run automatically (without confirmation) or should never run at all.
 
 **Configuration:**
 
 ```json
 {
-  "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model",
-  "log_level": "info",
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  }
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
+        "deny": []
+      }
+    },
+    "code-reviewer": {
+      "name": "Code Reviewer",
+      "enabled": true,
+      "description": "Reviews code (read-only)",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": ["now", "read_file", "grep"],
+        "deny": ["write_file", "bash"]
+      }
+    }
+  },
+  "default_agent": "general-assistant"
 }
 ```
 
@@ -208,7 +224,9 @@ Configure which tools can run automatically (without confirmation) or should nev
 - `deny` - Tools that are completely blocked and will never run
 
 **Default Behavior:**
-- The `now` tool is allowed by default (safe, read-only, no file access)
+- Each agent defines its own permission set
+- CLI commands use the `default_agent` permissions
+- Web UI uses the selected agent's permissions
 - All other tools require confirmation on first use
 
 **Interactive Permission Management:**
@@ -228,31 +246,8 @@ Can I read this file?
 **Options:**
 - **Yes (this time)** - Allow once, ask again next time
 - **No (skip)** - Deny once, ask again next time  
-- **Always (add to allow list)** - Allow this tool permanently, auto-save to config
-- **Never (add to deny list)** - Block this tool permanently, auto-save to config
-
-**Example Workflow:**
-
-```bash
-# First time using read_file
-squid ask "Read README.md"
-# → Select "Always" from the prompt
-# ✓ Tool 'read_file' added to allow list in squid.config.json
-
-# Now read_file runs automatically
-squid ask "Read package.json"
-# → No prompt, executes immediately
-
-# Block a dangerous tool
-squid ask "Write to /etc/hosts"
-# → Select "Never" from the prompt
-# ✓ Tool 'write_file' added to deny list in squid.config.json
-
-# Future write attempts are blocked
-squid ask "Create a new file"
-# → Blocked immediately, no prompt shown
-# 🦑: Tool 'write_file' is denied by configuration
-```
+- **Always (add to allow list)** - Allow this tool permanently for the current agent, auto-save to config
+- **Never (add to deny list)** - Block this tool permanently for the current agent, auto-save to config
 
 **Permission Priority:**
 
@@ -261,33 +256,14 @@ squid ask "Create a new file"
 3. **Default** - User is prompted for approval
 
 **Security Notes:**
-- Permissions are stored in `squid.config.json` (committed to your repo)
-- Allow/deny choices are saved automatically when you select Always/Never
-- You can manually edit the config file to modify permissions
-- Denied tools return an error to the LLM without user interaction
+- Permissions are stored per-agent in `squid.config.json`
+- Different agents can have different permission levels
 - Path validation still applies to allowed tools (whitelist/blacklist/.squidignore)
-
-**Example Configuration:**
-
-```json
-{
-  "permissions": {
-    "allow": ["now", "read_file", "grep"],
-    "deny": ["write_file"]
-  }
-}
-```
-
-This configuration:
-- ✅ Auto-approves read operations and searches (safe for most projects)
-- ❌ Blocks all write operations (maximum safety)
-- 🕐 Auto-approves time queries (no security impact)
-
-**Important:** For bash commands, dangerous patterns are **always blocked** regardless of permissions. Even if `"bash"` is in the allow list, commands like `rm -rf`, `sudo`, etc. are still blocked.
+- Denied tools return an error to the LLM without user interaction
 
 #### 🎯 Granular Bash Permissions
 
-The `bash` tool supports **granular permissions** for fine-grained control over which commands can run without approval:
+Each agent's bash permissions support **granular control** for fine-grained management of which commands can run without approval:
 
 **Format:**
 - `"bash"` - Allows **all** bash commands (uses internal safety checks)
@@ -296,29 +272,37 @@ The `bash` tool supports **granular permissions** for fine-grained control over 
 - `"bash:git status"` - Allows only `git status` commands specifically
 - `"bash:cat"` - Allows only `cat` commands
 
-**Example Configuration with Granular Bash Permissions:**
+**Example Agent Configuration with Granular Bash Permissions:**
 
 ```json
 {
-  "permissions": {
-    "allow": [
-      "now",
-      "read_file", 
-      "grep",
-      "bash:ls",
-      "bash:git status",
-      "bash:pwd"
-    ],
-    "deny": [
-      "write_file",
-      "bash:rm",
-      "bash:sudo"
-    ]
+  "agents": {
+    "safe-explorer": {
+      "name": "Safe Explorer",
+      "enabled": true,
+      "description": "Read-only agent with safe bash commands",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": [
+          "now",
+          "read_file", 
+          "grep",
+          "bash:ls",
+          "bash:git status",
+          "bash:pwd"
+        ],
+        "deny": [
+          "write_file",
+          "bash:rm",
+          "bash:sudo"
+        ]
+      }
+    }
   }
 }
 ```
 
-This configuration:
+This agent configuration:
 - ✅ Auto-approves `ls` commands without prompting
 - ✅ Auto-approves `git status` (but not other git commands)
 - ✅ Auto-approves `pwd` command
@@ -524,11 +508,15 @@ squid ask "Delete all temporary files with rm -rf /tmp/*"
 # wget, and kill operations are not allowed.
 ```
 
-**Even with "bash" in allow list:**
+**Even with "bash" in agent allow list:**
 ```json
 {
-  "permissions": {
-    "allow": ["bash"]  // Allow all bash? NO - dangerous commands still blocked!
+  "agents": {
+    "general-assistant": {
+      "permissions": {
+        "allow": ["bash"]  // Allow all bash? NO - dangerous commands still blocked!
+      }
+    }
   }
 }
 ```

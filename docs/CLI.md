@@ -428,11 +428,20 @@ The `squid.config.json` file created by `squid init`:
   "context_window": 32768,
   "log_level": "error",
   "enable_env_context": true,
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
   "database_path": "squid.db",
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
+        "deny": []
+      }
+    }
+  },
+  "default_agent": "general-assistant",
   "version": "0.7.0"
 }
 ```
@@ -447,9 +456,9 @@ The `squid.config.json` file created by `squid init`:
 | `context_window` | number | Maximum context window in tokens |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
 | `enable_env_context` | boolean | Include system info in prompts (default: true) |
-| `permissions.allow` | array | Tools that run without confirmation |
-| `permissions.deny` | array | Tools that are completely blocked |
 | `database_path` | string | Path to SQLite database file |
+| `agents` | object | Agent configurations (see Agents section in README) |
+| `default_agent` | string | Default agent to use |
 | `version` | string | Config file version |
 
 ### Alternative: Environment Variables

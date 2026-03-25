@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent-Based Architecture**: Multiple pre-configured AI assistants with different capabilities
+  - Each agent has its own model, system prompt, and tool permissions
+  - Agent selector in Web UI showing descriptions and underlying models
+  - Per-agent tool permissions for fine-grained security control
+  - New `/api/agents` endpoint returning available agents
+  - Example configurations: code reviewer (read-only), general assistant (full access), safe explorer, terminal specialist
+  - See `sample-files/agents-example.json` for configuration examples
 - **Logs Reset Command**: Clear all logs from the database with `squid logs reset`
   - New subcommand structure: `squid logs show` (view) and `squid logs reset` (clear)
   - Increased default log limit from 50 to 100 entries for `logs show`
@@ -43,6 +50,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING**: Configuration now uses `agents` instead of single model selection
+  - Add `agents` object to `squid.config.json` with agent definitions
+  - Each agent specifies its own model, prompt, and permissions
+  - Frontend selects agents instead of models directly
+- **BREAKING**: API endpoints now use `agent_id` parameter instead of `model`
+  - POST `/api/chat` requires `agent_id` field in request body
+  - Chat streaming retrieves agent configuration and uses agent's model
+- **BREAKING**: Frontend components renamed from Model* to Agent*
+  - `model-store.ts` → `agent-store.ts` with agent terminology
+  - `ModelItem` → `AgentItem` displaying agent name, description, and model
+  - Zustand storage key changed to `'agent-storage'`
+- **BREAKING**: Tool permission checking now uses per-agent permissions
+  - `check_tool_permission()` function signature changed to accept `agent_id`
+  - CLI tool calls use default agent from configuration
 - **Metal GPU Acceleration Enabled by Default**: Docker AI models now use Metal GPU acceleration on Apple Silicon
   - Changed `--n-gpu-layers` from `0` to `35` for both LLM and embedding models
   - Provides significantly faster inference on M1/M2/M3/M4 Macs (comparable to LM Studio/Ollama speeds)

@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+mod agent;
 mod api;
 mod config;
 mod db;
@@ -467,34 +468,6 @@ async fn main() {
                 false
             };
 
-            // Smart merge permissions: keep user's custom permissions + add new defaults
-            let (merged_permissions, old_permissions) = if config_existed {
-                let old_perms = default_config.permissions.clone();
-                let allow_set: std::collections::HashSet<String> =
-                    default_config.permissions.allow.iter().cloned().collect();
-                let deny_set: std::collections::HashSet<String> =
-                    default_config.permissions.deny.iter().cloned().collect();
-
-                // Add new default permissions that user doesn't have
-                let new_defaults = config::Permissions::default();
-                let mut merged_allow = allow_set.clone();
-                for default_perm in &new_defaults.allow {
-                    if !allow_set.contains(default_perm) && !deny_set.contains(default_perm) {
-                        merged_allow.insert(default_perm.clone());
-                    }
-                }
-
-                (
-                    config::Permissions {
-                        allow: merged_allow.into_iter().collect(),
-                        deny: deny_set.into_iter().collect(),
-                    },
-                    Some(old_perms),
-                )
-            } else {
-                (default_config.permissions, None)
-            };
-
             let config = config::Config {
                 api_url: final_url,
                 api_model: final_model,
@@ -502,11 +475,11 @@ async fn main() {
                 context_window: final_context_window,
                 log_level: final_log_level,
                 db_log_level: config::Config::default().db_log_level,
-                permissions: merged_permissions,
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
                 rag: final_rag_config,
+                agents: config::Config::default().agents,
             };
 
             match config.save_to_dir(dir) {
@@ -528,38 +501,6 @@ async fn main() {
                         println!("    Embedding URL: {}", config.rag.embedding_url);
                         println!("    Embedding Model: {}", config.rag.embedding_model);
                         println!("    Documents path: {}", config.rag.documents_path);
-                    }
-
-                    // Show info about permissions
-                    if let Some(old_perms) = old_permissions {
-                        // Check if new permissions were added
-                        let old_allow_set: std::collections::HashSet<String> =
-                            old_perms.allow.iter().cloned().collect();
-                        let new_allow_set: std::collections::HashSet<String> =
-                            config.permissions.allow.iter().cloned().collect();
-                        let added_perms: Vec<_> =
-                            new_allow_set.difference(&old_allow_set).collect();
-
-                        if !added_perms.is_empty() {
-                            println!("\n✓ Added new default permissions: {:?}", added_perms);
-                        }
-
-                        if !config.permissions.allow.is_empty()
-                            || !config.permissions.deny.is_empty()
-                        {
-                            println!("\n✓ Current tool permissions:");
-                            if !config.permissions.allow.is_empty() {
-                                println!("  Allowed: {:?}", config.permissions.allow);
-                            }
-                            if !config.permissions.deny.is_empty() {
-                                println!("  Denied: {:?}", config.permissions.deny);
-                            }
-                        }
-                    } else {
-                        println!("\n✓ Default permissions configured");
-                        if !config.permissions.allow.is_empty() {
-                            println!("  Allowed: {:?}", config.permissions.allow);
-                        }
                     }
 
                     // Create .squidignore file if it doesn't exist

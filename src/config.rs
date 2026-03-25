@@ -3,29 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// Tool permissions configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Permissions {
-    /// Tools that are always allowed to run without confirmation
-    #[serde(default = "default_allowed_tools")]
-    pub allow: Vec<String>,
-    /// Tools that are never allowed to run
-    #[serde(default)]
-    pub deny: Vec<String>,
-}
-
-fn default_allowed_tools() -> Vec<String> {
-    vec!["now".to_string()]
-}
-
-impl Default for Permissions {
-    fn default() -> Self {
-        Self {
-            allow: default_allowed_tools(),
-            deny: Vec::new(),
-        }
-    }
-}
+use crate::agent::{AgentConfig, AgentPermissions, AgentsConfig};
 
 /// RAG (Retrieval-Augmented Generation) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,8 +111,6 @@ pub struct Config {
     pub log_level: String,
     #[serde(default = "default_db_log_level")]
     pub db_log_level: String,
-    #[serde(default)]
-    pub permissions: Permissions,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(default = "default_database_path")]
@@ -143,6 +119,8 @@ pub struct Config {
     pub enable_env_context: bool,
     #[serde(default)]
     pub rag: RagConfig,
+    #[serde(default, flatten)]
+    pub agents: AgentsConfig,
 }
 
 fn default_context_window() -> u32 {
@@ -176,11 +154,11 @@ impl Default for Config {
             context_window: default_context_window(),
             log_level: default_log_level(),
             db_log_level: default_db_log_level(),
-            permissions: Permissions::default(),
             version: None,
             database_path: default_database_path(),
             enable_env_context: default_enable_env_context(),
             rag: RagConfig::default(),
+            agents: AgentsConfig::default(),
         }
     }
 }
@@ -416,100 +394,53 @@ impl Config {
             .unwrap_or_else(|| "not-needed".to_string())
     }
 
-    /// Check if a tool is allowed to run without confirmation
-    /// Supports granular bash permissions: "bash:ls", "bash:git", etc.
-    pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
-        self.permissions.allow.contains(&tool_name.to_string())
+    /// Get agent configuration by ID
+    pub fn get_agent(&self, agent_id: &str) -> Option<&AgentConfig> {
+        self.agents.agents.get(agent_id)
     }
 
-    /// Check if a tool is denied from running
-    /// Supports granular bash permissions: "bash:ls", "bash:git", etc.
-    pub fn is_tool_denied(&self, tool_name: &str) -> bool {
-        self.permissions.deny.contains(&tool_name.to_string())
+    /// Get agent permissions by ID
+    pub fn get_agent_permissions(&self, agent_id: &str) -> Option<&AgentPermissions> {
+        self.get_agent(agent_id).map(|a| &a.permissions)
     }
 
-    /// Check if a bash command is allowed to run without confirmation
-    /// Supports granular permissions:
-    /// - "bash" -> allows all bash commands
-    /// - "bash:ls" -> allows only ls commands (ls, ls -la, etc.)
-    /// - "bash:git" -> allows only git commands
-    /// - "bash:git status" -> allows only git status commands
-    pub fn is_bash_command_allowed(&self, command: &str) -> bool {
-        // Check if all bash commands are allowed
-        if self.permissions.allow.contains(&"bash".to_string()) {
-            return true;
-        }
-
-        // Extract the first word(s) from the command for matching
-        let command_trimmed = command.trim();
-
-        // Check for granular permissions
-        for permission in &self.permissions.allow {
-            if let Some(bash_cmd) = permission.strip_prefix("bash:") {
-                // Match if command starts with the allowed pattern
-                if command_trimmed == bash_cmd
-                    || command_trimmed.starts_with(&format!("{} ", bash_cmd))
-                {
-                    return true;
-                }
-            }
-        }
-
-        false
+    /// Get the default agent configuration
+    pub fn get_default_agent(&self) -> Option<&AgentConfig> {
+        self.get_agent(&self.agents.default_agent)
     }
 
-    /// Check if a bash command is denied from running
-    /// Supports granular permissions similar to is_bash_command_allowed
-    pub fn is_bash_command_denied(&self, command: &str) -> bool {
-        // Check if all bash commands are denied
-        if self.permissions.deny.contains(&"bash".to_string()) {
-            return true;
-        }
-
-        // Extract the first word(s) from the command for matching
-        let command_trimmed = command.trim();
-
-        // Check for granular denials
-        for permission in &self.permissions.deny {
-            if let Some(bash_cmd) = permission.strip_prefix("bash:") {
-                // Match if command starts with the denied pattern
-                if command_trimmed == bash_cmd
-                    || command_trimmed.starts_with(&format!("{} ", bash_cmd))
-                {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
-    /// Add a tool to the allow list and save config
-    pub fn allow_tool(&mut self, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    /// Add a tool to an agent's allow list and save config
+    pub fn allow_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
+        
+        let agent = self.agents.agents.get_mut(agent_id)
+            .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
         // Remove from deny list if present
-        self.permissions.deny.retain(|t| t != &tool_str);
+        agent.permissions.deny.retain(|t| t != &tool_str);
 
         // Add to allow list if not already present
-        if !self.permissions.allow.contains(&tool_str) {
-            self.permissions.allow.push(tool_str);
+        if !agent.permissions.allow.contains(&tool_str) {
+            agent.permissions.allow.push(tool_str);
         }
 
         self.save_to_dir(&PathBuf::from("."))?;
         Ok(())
     }
 
-    /// Add a tool to the deny list and save config
-    pub fn deny_tool(&mut self, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    /// Add a tool to an agent's deny list and save config
+    pub fn deny_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
+        
+        let agent = self.agents.agents.get_mut(agent_id)
+            .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
         // Remove from allow list if present
-        self.permissions.allow.retain(|t| t != &tool_str);
+        agent.permissions.allow.retain(|t| t != &tool_str);
 
         // Add to deny list if not already present
-        if !self.permissions.deny.contains(&tool_str) {
-            self.permissions.deny.push(tool_str);
+        if !agent.permissions.deny.contains(&tool_str) {
+            agent.permissions.deny.push(tool_str);
         }
 
         self.save_to_dir(&PathBuf::from("."))?;
@@ -529,8 +460,6 @@ mod tests {
         assert_eq!(config.api_key, None);
         assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");
-        assert_eq!(config.permissions.allow, vec!["now".to_string()]);
-        assert_eq!(config.permissions.deny.len(), 0);
         assert_eq!(config.version, None);
         assert_eq!(config.database_path, "squid.db");
         assert_eq!(config.enable_env_context, true);
@@ -552,82 +481,6 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(config.get_api_key(), "test-key");
-    }
-
-    #[test]
-    fn test_is_tool_allowed() {
-        let config = Config::default();
-        assert!(config.is_tool_allowed("now"));
-        assert!(!config.is_tool_allowed("read_file"));
-    }
-
-    #[test]
-    fn test_is_tool_denied() {
-        let mut config = Config::default();
-        config.permissions.deny.push("write_file".to_string());
-        assert!(config.is_tool_denied("write_file"));
-        assert!(!config.is_tool_denied("read_file"));
-    }
-
-    #[test]
-    fn test_is_bash_command_allowed() {
-        let mut config = Config::default();
-
-        // Test: no bash permissions
-        assert!(!config.is_bash_command_allowed("ls -la"));
-
-        // Test: all bash allowed
-        config.permissions.allow.push("bash".to_string());
-        assert!(config.is_bash_command_allowed("ls -la"));
-        assert!(config.is_bash_command_allowed("git status"));
-
-        // Test: granular permission
-        config.permissions.allow.clear();
-        config.permissions.allow.push("bash:ls".to_string());
-        assert!(config.is_bash_command_allowed("ls"));
-        assert!(config.is_bash_command_allowed("ls -la"));
-        assert!(config.is_bash_command_allowed("ls -l"));
-        assert!(!config.is_bash_command_allowed("cat file.txt"));
-
-        // Test: more specific granular permission
-        config.permissions.allow.push("bash:git status".to_string());
-        assert!(config.is_bash_command_allowed("git status"));
-        assert!(config.is_bash_command_allowed("git status --short"));
-        assert!(!config.is_bash_command_allowed("git log"));
-    }
-
-    #[test]
-    fn test_is_bash_command_denied() {
-        let mut config = Config::default();
-
-        // Test: no bash denials
-        assert!(!config.is_bash_command_denied("ls -la"));
-
-        // Test: all bash denied
-        config.permissions.deny.push("bash".to_string());
-        assert!(config.is_bash_command_denied("ls -la"));
-        assert!(config.is_bash_command_denied("git status"));
-
-        // Test: granular denial
-        config.permissions.deny.clear();
-        config.permissions.deny.push("bash:rm".to_string());
-        assert!(config.is_bash_command_denied("rm file.txt"));
-        assert!(config.is_bash_command_denied("rm -rf folder"));
-        assert!(!config.is_bash_command_denied("ls -la"));
-    }
-
-    #[test]
-    fn test_allow_tool() {
-        let mut config = Config::default();
-        config.permissions.deny.push("read_file".to_string());
-
-        // This would save to disk, so we can't test it fully in unit tests
-        // but we can verify the logic
-        config.permissions.allow.push("read_file".to_string());
-        config.permissions.deny.retain(|t| t != "read_file");
-
-        assert!(config.permissions.allow.contains(&"read_file".to_string()));
-        assert!(!config.permissions.deny.contains(&"read_file".to_string()));
     }
 
     #[test]

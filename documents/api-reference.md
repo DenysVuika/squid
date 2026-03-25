@@ -121,14 +121,23 @@ Execute safe commands:
 
 ### Tool Approval
 
-All tools require user approval by default. Configure in `squid.config.json`:
+All tools require user approval by default. Configure per-agent in `squid.config.json`:
 
 ```json
 {
-  "permissions": {
-    "allow": ["now", "bash:ls", "bash:git"],
-    "deny": ["bash:rm"]
-  }
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant",
+      "model": "qwen2.5-coder",
+      "permissions": {
+        "allow": ["now", "read_file", "grep", "bash:ls", "bash:git"],
+        "deny": ["bash:rm"]
+      }
+    }
+  },
+  "default_agent": "general-assistant"
 }
 ```
 

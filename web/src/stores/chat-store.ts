@@ -4,7 +4,7 @@ import type { FileUIPart } from 'ai';
 import { streamChat, loadSession, sendToolApproval, type Source } from '@/lib/chat-api';
 import { toast } from 'sonner';
 import { useSessionStore } from './session-store';
-import { useModelStore } from './model-store';
+import { useAgentStore } from './agent-store';
 
 export interface ToolApproval {
   approval_id: string;
@@ -183,7 +183,7 @@ export const useChatStore = create<ChatStore>()(
     });
 
     const sessionStore = useSessionStore.getState();
-    const modelStore = useModelStore.getState();
+    const agentStore = useAgentStore.getState();
 
     try {
       // Read file contents if files are attached
@@ -222,7 +222,7 @@ export const useChatStore = create<ChatStore>()(
           message: userMessage,
           session_id: sessionStore.activeSessionId || undefined,
           files: fileAttachments,
-          model: modelStore.selectedModel || undefined,
+          agent_id: agentStore.selectedAgent,
           use_rag: get().useRag || undefined,
         },
         {
@@ -393,17 +393,17 @@ export const useChatStore = create<ChatStore>()(
             }));
           },
           onUsage: (usage) => {
-            modelStore.updateTokenUsage({
+            agentStore.updateTokenUsage({
               total_tokens:
-                modelStore.tokenUsage.total_tokens +
+                agentStore.tokenUsage.total_tokens +
                 usage.input_tokens +
                 usage.output_tokens +
                 usage.reasoning_tokens +
                 usage.cache_tokens,
-              input_tokens: modelStore.tokenUsage.input_tokens + usage.input_tokens,
-              output_tokens: modelStore.tokenUsage.output_tokens + usage.output_tokens,
-              reasoning_tokens: modelStore.tokenUsage.reasoning_tokens + usage.reasoning_tokens,
-              cache_tokens: modelStore.tokenUsage.cache_tokens + usage.cache_tokens,
+              input_tokens: agentStore.tokenUsage.input_tokens + usage.input_tokens,
+              output_tokens: agentStore.tokenUsage.output_tokens + usage.output_tokens,
+              reasoning_tokens: agentStore.tokenUsage.reasoning_tokens + usage.reasoning_tokens,
+              cache_tokens: agentStore.tokenUsage.cache_tokens + usage.cache_tokens,
             });
           },
           onToolInvocationCompleted: (tool) => {
@@ -476,7 +476,7 @@ export const useChatStore = create<ChatStore>()(
               try {
                 const session = await loadSession('', sessionStore.activeSessionId);
                 if (session) {
-                  modelStore.updateTokenUsage(session.token_usage);
+                  agentStore.updateTokenUsage(session.token_usage);
                 }
               } catch (error) {
                 console.error('Failed to reload session:', error);
@@ -531,7 +531,7 @@ export const useChatStore = create<ChatStore>()(
     }
 
     const sessionStore = useSessionStore.getState();
-    const modelStore = useModelStore.getState();
+    const agentStore = useAgentStore.getState();
 
     // Update session ID
     sessionStore.setActiveSession(sessionId);
@@ -590,23 +590,14 @@ export const useChatStore = create<ChatStore>()(
     });
 
     // Load token usage from session
-    modelStore.updateTokenUsage(session.token_usage);
-    modelStore.setSessionModelId(session.model_id);
+    agentStore.updateTokenUsage(session.token_usage);
+    agentStore.setSessionAgentId(session.agent_id);
 
-    // Update model selector if session has a model_id
-    if (session.model_id && modelStore.models.length > 0) {
-      let matchedModel = modelStore.models.find((m) => m.id === session.model_id);
-
-      // Fuzzy matching if no exact match
-      if (!matchedModel) {
-        const sessionModelLower = session.model_id.toLowerCase();
-        matchedModel = modelStore.models.find(
-          (m) => m.id.toLowerCase().includes(sessionModelLower) || sessionModelLower.includes(m.id.toLowerCase())
-        );
-      }
-
-      if (matchedModel) {
-        modelStore.setSelectedModel(matchedModel.id);
+    // Restore agent if session has an agent_id
+    if (session.agent_id && agentStore.agents.length > 0) {
+      const matchedAgent = agentStore.agents.find((a) => a.id === session.agent_id);
+      if (matchedAgent) {
+        agentStore.setSelectedAgent(matchedAgent.id);
       }
     }
   },

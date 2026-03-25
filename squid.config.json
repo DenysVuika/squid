@@ -8,10 +8,6 @@
   "log_level": "info",
   "db_log_level": "debug",
   "database_path": "squid.db",
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
   "rag": {
     "enabled": false,
     "embedding_model": "huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest",
@@ -20,5 +16,46 @@
     "chunk_overlap": 50,
     "top_k": 5,
     "documents_path": "documents"
-  }
+  },
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant with all tools",
+      "model": "qwen3.5-4b",
+      "permissions": {
+        "allow": [
+          "now",
+          "read_file",
+          "write_file",
+          "grep",
+          "bash:ls",
+          "bash:git"
+        ],
+        "deny": []
+      }
+    },
+    "code-reviewer": {
+      "name": "Code Reviewer",
+      "enabled": true,
+      "description": "Reviews code for quality and security (read-only)",
+      "model": "qwen3.5-4b",
+      "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
+      "permissions": {
+        "allow": ["now", "read_file", "grep"],
+        "deny": ["write_file", "bash"]
+      }
+    },
+    "light": {
+      "name": "Light",
+      "enabled": true,
+      "description": "Lightweight assistant with minimal permissions",
+      "model": "liquid/lfm2.5-1.2b",
+      "permissions": {
+        "allow": ["now"],
+        "deny": []
+      }
+    }
+  },
+  "default_agent": "general-assistant"
 }

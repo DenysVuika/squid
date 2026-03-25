@@ -27,6 +27,7 @@ pub struct ApprovalState {
     pub tool_name: String,
     pub tool_args: Value,
     pub tool_call_id: String,
+    pub agent_id: String,
     pub sender: oneshot::Sender<bool>,
     pub created_at: Instant,
 }
@@ -60,8 +61,7 @@ pub struct ChatRequest {
     pub files: Vec<FileAttachment>,
     #[serde(default)]
     pub system_prompt: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
+    pub agent_id: String,
     #[serde(default)]
     pub use_rag: Option<bool>,
 }
@@ -147,7 +147,7 @@ pub struct SessionResponse {
     pub created_at: i64,
     pub updated_at: i64,
     pub title: Option<String>,
-    pub model_id: Option<String>,
+    pub agent_id: Option<String>,
     pub token_usage: TokenUsageResponse,
     pub cost_usd: f64,
 }
@@ -160,7 +160,7 @@ pub struct SessionListItem {
     pub updated_at: i64,
     pub preview: Option<String>,
     pub title: Option<String>,
-    pub model_id: Option<String>,
+    pub agent_id: Option<String>,
     pub token_usage: TokenUsageResponse,
     pub cost_usd: f64,
 }
@@ -240,7 +240,7 @@ pub async fn get_session(
                 created_at: session.created_at,
                 updated_at: session.updated_at,
                 title: session.title.clone(),
-                model_id: session.model_id.clone(),
+                agent_id: session.agent_id.clone(),
                 token_usage: TokenUsageResponse {
                     total_tokens: session.token_usage.total_tokens,
                     input_tokens: session.token_usage.input_tokens,
@@ -291,7 +291,7 @@ pub async fn list_sessions(
                 updated_at: session.updated_at,
                 preview,
                 title: session.title.clone(),
-                model_id: session.model_id.clone(),
+                agent_id: session.agent_id.clone(),
                 token_usage: TokenUsageResponse {
                     total_tokens: session.token_usage.total_tokens,
                     input_tokens: session.token_usage.input_tokens,
@@ -393,8 +393,18 @@ pub async fn chat_stream(
     let system_prompt_for_stream = system_prompt.clone(); // Clone for use inside stream
     let app_config_clone = app_config.get_ref().clone();
     let session_manager_clone = session_manager.get_ref().clone();
-    // Use the model from request, or fall back to config default
-    let model_id = body.model.clone().unwrap_or_else(|| app_config.api_model.clone());
+    let agent_id = body.agent_id.clone();
+    let agent_id_for_stream = agent_id.clone(); // Clone for use inside stream
+
+    // Get agent to extract model_id for token estimation and session storage
+    let model_id = match app_config_clone.get_agent(&agent_id) {
+        Some(agent) => agent.model.clone(),
+        None => {
+            return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+                "error": format!("Agent '{}' not found", agent_id)
+            })));
+        }
+    };
 
     // Get or create session
     let session_id = body.session_id.clone().unwrap_or_else(|| {
@@ -486,7 +496,7 @@ pub async fn chat_stream(
             &question,
             &files,
             system_prompt.as_deref(),
-            &model_id,
+            &agent_id,
             &app_config_clone,
             &session_manager_clone,
             approval_map.get_ref(),
@@ -763,7 +773,7 @@ pub async fn chat_stream(
                            session_id, total_input_tokens, total_output_tokens);
                     if let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
-                        &model_id,
+                        &agent_id_for_stream,
                         total_input_tokens,
                         total_output_tokens,
                         total_reasoning_tokens,
@@ -806,7 +816,7 @@ async fn create_chat_stream(
     question: &str,
     files: &[session::FileAttachment],
     system_prompt: Option<&str>,
-    model_id: &str,
+    agent_id: &str,
     app_config: &config::Config,
     session_manager: &session::SessionManager,
     approval_map: &ApprovalStateMap,
@@ -815,8 +825,17 @@ async fn create_chat_stream(
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
 > {
+    // Get agent config
+    let agent = match app_config.get_agent(agent_id) {
+        Some(a) => a,
+        None => {
+            return Err(format!("Agent '{}' not found", agent_id).into());
+        }
+    };
+
+    let model_id = agent.model.clone();
     debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using API Model: {}", model_id);
+    debug!("Using Agent: {} (model: {})", agent_id, model_id);
 
     let config = OpenAIConfig::new()
         .with_api_base(&app_config.api_url)
@@ -861,7 +880,11 @@ async fn create_chat_stream(
     user_message.push_str(&format!("User query: {}", question));
 
     let default_prompt = llm::combine_prompts(llm::get_ask_prompt());
-    let system_message = system_prompt.unwrap_or(&default_prompt);
+    // Use agent's prompt if available, then system_prompt parameter, then default
+    let final_system_prompt = agent.prompt.as_deref()
+        .or(system_prompt)
+        .unwrap_or(&default_prompt);
+    let system_message = final_system_prompt;
 
     debug!("System message:\n{}", system_message);
     debug!("User message:\n{}", user_message);
@@ -870,6 +893,9 @@ async fn create_chat_stream(
     let session = session_manager
         .get_session(session_id)
         .ok_or("Session not found")?;
+
+    // Capture agent_id for use in stream
+    let agent_id_owned = agent_id.to_string();
 
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage {
@@ -995,7 +1021,7 @@ async fn create_chat_stream(
     let output_stream = async_stream::stream! {
         loop {
         let request = CreateChatCompletionRequestArgs::default()
-            .model(model_id)
+            .model(model_id.clone())
             .messages(messages.clone())
             .tools(tools::get_tools())
             .stream_options(ChatCompletionStreamOptions {
@@ -1129,7 +1155,7 @@ async fn create_chat_stream(
                                 };
 
                                 // Check permission status
-                                let permission_status = tools::check_tool_permission(name, &args_value, app_config);
+                                let permission_status = tools::check_tool_permission(name, &args_value, &agent_id_owned, app_config);
 
                                 debug!("Tool '{}' permission status: {:?}", name, permission_status);
 
@@ -1187,6 +1213,7 @@ async fn create_chat_stream(
                                                 tool_name: name.clone(),
                                                 tool_args: args_value.clone(),
                                                 tool_call_id: tool_call_id.clone(),
+                                                agent_id: agent_id_owned.clone(),
                                                 sender,
                                                 created_at: Instant::now(),
                                             });
@@ -1522,6 +1549,48 @@ pub async fn get_config(
     Ok(HttpResponse::Ok().json(response))
 }
 
+#[derive(Debug, Serialize)]
+pub struct AgentInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub model: String,
+    pub enabled: bool,
+    pub permissions: crate::agent::AgentPermissions,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentsResponse {
+    pub agents: Vec<AgentInfo>,
+    pub default_agent: String,
+}
+
+pub async fn get_agents(
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching agents configuration");
+
+    let agents: Vec<AgentInfo> = app_config
+        .agents
+        .agents
+        .iter()
+        .filter(|(_, agent)| agent.enabled)
+        .map(|(id, agent)| AgentInfo {
+            id: id.clone(),
+            name: agent.name.clone(),
+            description: agent.description.clone(),
+            model: agent.model.clone(),
+            enabled: agent.enabled,
+            permissions: agent.permissions.clone(),
+        })
+        .collect();
+
+    Ok(HttpResponse::Ok().json(AgentsResponse {
+        agents,
+        default_agent: app_config.agents.default_agent.clone(),
+    }))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ToolApprovalRequest {
     pub approval_id: String,
@@ -1560,6 +1629,7 @@ pub async fn handle_tool_approval(
         // If save_decision is true, update the config file
         if body.save_decision {
             let tool_name = &approval_state.tool_name;
+            let agent_id = &approval_state.agent_id;
             let scope = if body.scope.is_empty() {
                 tool_name.clone()
             } else {
@@ -1568,9 +1638,9 @@ pub async fn handle_tool_approval(
 
             let mut config = config::Config::load();
             let result = if body.approved {
-                config.allow_tool(&scope)
+                config.allow_tool_for_agent(agent_id, &scope)
             } else {
-                config.deny_tool(&scope)
+                config.deny_tool_for_agent(agent_id, &scope)
             };
 
             if let Err(e) = result {
@@ -1597,7 +1667,7 @@ pub async fn handle_tool_approval(
 // RAG (Retrieval-Augmented Generation) Endpoints
 // ========================================
 
-use crate::rag::{RagSystem, DocumentInfo};
+use crate::rag::RagSystem;
 
 #[derive(Debug, Deserialize)]
 pub struct RagQueryRequest {

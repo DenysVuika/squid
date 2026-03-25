@@ -334,11 +334,12 @@ pub enum ToolPermissionStatus {
     NeedsApproval,
 }
 
-/// Check tool permission status based on config and security rules
-/// This function performs mandatory security checks and consults allow/deny lists
+/// Check tool permission status based on agent configuration and security rules
+/// This function performs mandatory security checks and consults agent-specific allow/deny lists
 pub fn check_tool_permission(
     name: &str,
     args: &serde_json::Value,
+    agent_id: &str,
     config: &Config,
 ) -> ToolPermissionStatus {
     // MANDATORY SECURITY CHECK: Block dangerous bash commands BEFORE any permission checks
@@ -364,35 +365,49 @@ pub fn check_tool_permission(
         }
     }
 
-    // Check if tool is denied (with granular bash command support)
-    if name == "bash" {
-        let command = args["command"].as_str().unwrap_or("");
-        if config.is_bash_command_denied(command) {
-            warn!(
-                "Bash command '{}' is in the deny list, blocking execution",
-                command
-            );
+    // Get agent-specific permissions
+    let permissions = match config.get_agent_permissions(agent_id) {
+        Some(p) => p,
+        None => {
+            warn!("Agent '{}' not found, denying all tools", agent_id);
             return ToolPermissionStatus::Denied {
-                reason: format!("Bash command '{}' is denied by configuration", command),
+                reason: format!("Agent '{}' not found", agent_id),
             };
         }
-    } else if config.is_tool_denied(name) {
-        warn!("Tool '{}' is in the deny list, blocking execution", name);
+    };
+
+    // Check if tool is denied
+    if permissions.deny.contains(&name.to_string()) {
+        warn!("Tool '{}' denied by agent '{}'", name, agent_id);
         return ToolPermissionStatus::Denied {
-            reason: format!("Tool '{}' is denied by configuration", name),
+            reason: format!("Tool '{}' denied by agent configuration", name),
         };
     }
 
-    // Check if tool is auto-allowed (with granular bash command support)
+    // Check if tool is allowed (with granular bash command support)
     let auto_allowed = if name == "bash" {
         let command = args["command"].as_str().unwrap_or("");
-        config.is_bash_command_allowed(command)
+        
+        // Check if "bash" is in allow list (allows all bash commands)
+        if permissions.allow.contains(&"bash".to_string()) {
+            return ToolPermissionStatus::Allowed;
+        }
+        
+        // Check for granular bash permissions
+        let command_trimmed = command.trim();
+        permissions.allow.iter().any(|perm| {
+            if let Some(bash_cmd) = perm.strip_prefix("bash:") {
+                command_trimmed == bash_cmd || command_trimmed.starts_with(&format!("{} ", bash_cmd))
+            } else {
+                false
+            }
+        })
     } else {
-        config.is_tool_allowed(name)
+        permissions.allow.contains(&name.to_string())
     };
 
     if auto_allowed {
-        info!("Tool '{}' is in the allow list, auto-approving", name);
+        info!("Tool '{}' is allowed for agent '{}', auto-approving", name, agent_id);
         ToolPermissionStatus::Allowed
     } else {
         ToolPermissionStatus::NeedsApproval
@@ -554,7 +569,7 @@ pub async fn execute_tool_direct(
     }
 }
 
-pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::Value {
+pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &Config) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
     // Parse arguments first to get command for bash tool
@@ -566,8 +581,11 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
         }
     };
 
+    // Use provided agent_id or default agent
+    let agent_id_str = agent_id.unwrap_or(&config.agents.default_agent);
+
     // Check permission status using the extracted function
-    match check_tool_permission(name, &args, config) {
+    match check_tool_permission(name, &args, agent_id_str, config) {
         ToolPermissionStatus::Denied { reason } => {
             return json!({"error": reason, "skipped": true});
         }
@@ -631,7 +649,7 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
 
     // Ask for user approval if not auto-allowed (checked above by check_tool_permission)
     // This section only runs if ToolPermissionStatus::NeedsApproval was returned
-    let permission_status = check_tool_permission(name, &args, config);
+    let permission_status = check_tool_permission(name, &args, agent_id_str, config);
     let permission = if matches!(permission_status, ToolPermissionStatus::Allowed) {
         PermissionChoice::Yes
     } else {
@@ -725,17 +743,18 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to allow list", tool_to_save);
+                        info!("Adding '{}' to allow list for agent '{}'", tool_to_save, agent_id_str);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.allow_tool(&tool_to_save) {
+                        if let Err(e) = updated_config.allow_tool_for_agent(agent_id_str, &tool_to_save) {
                             error!("Failed to update config with allow list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Permission '{}' added to allow list in squid.config.json",
+                                "{} Permission '{}' added to allow list for agent '{}' in squid.config.json",
                                 style("✓").green(),
-                                style(&tool_to_save).cyan()
+                                style(&tool_to_save).cyan(),
+                                style(agent_id_str).cyan()
                             );
                         }
                     }
@@ -762,17 +781,18 @@ pub async fn call_tool(name: &str, args: &str, config: &Config) -> serde_json::V
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to deny list", tool_to_save);
+                        info!("Adding '{}' to deny list for agent '{}'", tool_to_save, agent_id_str);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.deny_tool(&tool_to_save) {
+                        if let Err(e) = updated_config.deny_tool_for_agent(agent_id_str, &tool_to_save) {
                             error!("Failed to update config with deny list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Permission '{}' added to deny list in squid.config.json",
+                                "{} Permission '{}' added to deny list for agent '{}' in squid.config.json",
                                 style("✓").green(),
-                                style(&tool_to_save).cyan()
+                                style(&tool_to_save).cyan(),
+                                style(agent_id_str).cyan()
                             );
                         }
                     }

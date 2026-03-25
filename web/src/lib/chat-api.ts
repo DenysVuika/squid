@@ -15,7 +15,7 @@ export interface ChatMessage {
   session_id?: string;
   files?: FileAttachment[];
   system_prompt?: string;
-  model?: string;
+  agent_id: string;
   use_rag?: boolean;
 }
 
@@ -123,7 +123,7 @@ export interface SessionData {
   created_at: number;
   updated_at: number;
   title: string | null;
-  model_id: string | null;
+  agent_id: string | null;
   token_usage: TokenUsage;
   cost_usd: number;
 }
@@ -135,7 +135,7 @@ export interface SessionListItem {
   updated_at: number;
   preview: string | null;
   title: string | null;
-  model_id: string | null;
+  agent_id: string | null;
   token_usage: TokenUsage;
   cost_usd: number;
 }
@@ -575,6 +575,47 @@ export async function fetchModels(apiUrl: string): Promise<ModelsResponse> {
   }
 
   const data: ModelsResponse = await response.json();
+  return data;
+}
+
+export interface AgentInfo {
+  id: string;
+  name: string;
+  description: string;
+  model: string;
+  enabled: boolean;
+  permissions: {
+    allow: string[];
+    deny: string[];
+  };
+}
+
+export interface AgentsResponse {
+  agents: AgentInfo[];
+  default_agent: string;
+}
+
+/**
+ * Fetch available agents from the API
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with list of available agents
+ *
+ * @example
+ * ```typescript
+ * const { agents, default_agent } = await fetchAgents('');
+ * console.log(`Found ${agents.length} agents, default: ${default_agent}`);
+ * ```
+ */
+export async function fetchAgents(apiUrl: string): Promise<AgentsResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/agents` : '/api/agents';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch agents: HTTP ${response.status}`);
+  }
+
+  const data: AgentsResponse = await response.json();
   return data;
 }
 
