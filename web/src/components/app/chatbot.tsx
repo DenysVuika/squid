@@ -66,7 +66,7 @@ import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/componen
 import type { BundledLanguage } from 'shiki';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { BrainIcon, WrenchIcon, Sparkles } from 'lucide-react';
+import { BrainIcon, WrenchIcon, Sparkles, Bot } from 'lucide-react';
 import { playNotificationSound } from '@/lib/notification-sound';
 
 // App components
@@ -830,6 +830,7 @@ const Chatbot = () => {
                 <ModelSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>
+                      <Bot size={16} />
                       {selectedAgentData?.name && <ModelSelectorName>{selectedAgentData.name}</ModelSelectorName>}
                       {!selectedAgentData && <ModelSelectorName>Select agent...</ModelSelectorName>}
                     </PromptInputButton>
