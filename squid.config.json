@@ -17,6 +17,9 @@
     "top_k": 5,
     "documents_path": "documents"
   },
+  "server": {
+    "allow_network": false
+  },
   "agents": {
     "general-assistant": {
       "name": "General Assistant",

@@ -4,6 +4,9 @@
   "log_level": "error",
   "db_log_level": "debug",
   "enable_env_context": true,
+  "server": {
+    "allow_network": false
+  },
   "rag": {
     "enabled": true,
     "embedding_model": "text-embedding-nomic-embed-text-v1.5",

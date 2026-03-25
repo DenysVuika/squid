@@ -58,7 +58,11 @@ pub async fn start_server(
         println!("🦑: Working directory set to: {:?}", work_dir);
     }
 
-    let bind_address = format!("0.0.0.0:{}", port);
+    let bind_address = if app_config.server.allow_network {
+        format!("0.0.0.0:{}", port)
+    } else {
+        format!("127.0.0.1:{}", port)
+    };
     let mut app_config = app_config;
 
     // Override database path if specified via CLI
@@ -145,7 +149,11 @@ pub async fn start_server(
     });
 
     println!("🦑: Starting Squid Web UI...");
-    println!("🌐 Server running at: http://{}", bind_address);
+    if app_config.server.allow_network {
+        println!("🌐 Server running at: http://{} (accessible from local network)", bind_address);
+    } else {
+        println!("🌐 Server running at: http://{} (localhost only)", bind_address);
+    }
     println!("📡 API endpoint: http://{}/api/chat", bind_address);
     println!("Press Ctrl+C to stop the server\n");
 

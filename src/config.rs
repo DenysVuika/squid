@@ -73,6 +73,27 @@ impl Default for RagConfig {
     }
 }
 
+/// Server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    /// Allow server to bind to 0.0.0.0 (accessible from local network)
+    /// When false, server binds to 127.0.0.1 (localhost only)
+    #[serde(default = "default_allow_network")]
+    pub allow_network: bool,
+}
+
+fn default_allow_network() -> bool {
+    false
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            allow_network: default_allow_network(),
+        }
+    }
+}
+
 
 /// Configuration for squid CLI
 ///
@@ -119,6 +140,8 @@ pub struct Config {
     pub enable_env_context: bool,
     #[serde(default)]
     pub rag: RagConfig,
+    #[serde(default)]
+    pub server: ServerConfig,
     #[serde(default, flatten)]
     pub agents: AgentsConfig,
 }
@@ -158,6 +181,7 @@ impl Default for Config {
             database_path: default_database_path(),
             enable_env_context: default_enable_env_context(),
             rag: RagConfig::default(),
+            server: ServerConfig::default(),
             agents: AgentsConfig::default(),
         }
     }
@@ -300,6 +324,14 @@ impl Config {
             config.rag.documents_path = docs_path;
         }
 
+        // Server configuration overrides
+        if let Ok(allow_network) = std::env::var("SQUID_SERVER_ALLOW_NETWORK") {
+            if let Ok(enabled) = allow_network.parse() {
+                debug!("Overriding SQUID_SERVER_ALLOW_NETWORK from environment");
+                config.server.allow_network = enabled;
+            }
+        }
+
         config
     }
 
@@ -412,7 +444,7 @@ impl Config {
     /// Add a tool to an agent's allow list and save config
     pub fn allow_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
-        
+
         let agent = self.agents.agents.get_mut(agent_id)
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
@@ -431,7 +463,7 @@ impl Config {
     /// Add a tool to an agent's deny list and save config
     pub fn deny_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
-        
+
         let agent = self.agents.agents.get_mut(agent_id)
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 

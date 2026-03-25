@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - RAG toggle button hidden in chat input when RAG is disabled
   - RAG documents menu button hidden when RAG is disabled
   - API config endpoint returns RAG enabled status
+- **Server Network Configuration**: Control whether the web server is accessible from local network
+  - New `server.allow_network` setting in `squid.config.json` (default: `false`)
+  - Environment variable `SQUID_SERVER_ALLOW_NETWORK` takes precedence over config file
+  - When disabled (default), server binds to `127.0.0.1` (localhost only)
+  - When enabled, server binds to `0.0.0.0` (accessible from local network)
+  - Console output clearly indicates network accessibility mode
+  - Improves security by requiring explicit opt-in for network access
 
 ### Changed
 
