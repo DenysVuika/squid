@@ -8,10 +8,6 @@
   "log_level": "info",
   "db_log_level": "debug",
   "database_path": "squid.db",
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
   "rag": {
     "enabled": false,
     "embedding_model": "huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest",

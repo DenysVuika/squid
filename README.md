@@ -405,28 +405,6 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Or via environment variable: `ENABLE_ENV_CONTEXT=false`
   - **Note**: Even when enabled, hostname and working directory are excluded by default for privacy
 
-- `permissions`: Tool execution permissions (optional)
-  - `allow`: Array of tool names that run without confirmation (default: `["now"]`)
-  - `deny`: Array of tool names that are completely blocked (default: `[]`)
-  - **Granular bash permissions**: Use `"bash:command"` format for specific commands
-    - `"bash"` - allows all bash commands (dangerous patterns still blocked)
-    - `"bash:ls"` - allows only `ls` commands (ls, ls -la, etc.)
-    - `"bash:git status"` - allows only `git status` commands
-  - ⚠️ **Important**: Dangerous bash commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** regardless of permissions
-  - Example:
-    ```json
-    "permissions": {
-      "allow": ["now", "read_file", "grep", "bash:ls", "bash:git status"],
-      "deny": ["write_file", "bash:rm"]
-    }
-    ```
-  - When prompted for tool approval, you can choose:
-    - **Yes (this time)** - Allow once, ask again next time
-    - **No (skip)** - Deny once, ask again next time
-    - **Always** - Add to allow list and auto-save config (bash commands save as `bash:command`)
-    - **Never** - Add to deny list and auto-save config (bash commands save as `bash:command`)
-  - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
-
 ### Agents
 
 Squid uses an **agent-based architecture** where each agent has its own model, system prompt, and tool permissions. This allows you to create specialized assistants for different tasks.
@@ -477,7 +455,8 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
 - **permissions**: Tool execution permissions specific to this agent
   - **allow**: Tools this agent can use without confirmation
   - **deny**: Tools this agent cannot use at all
-  - Uses the same granular bash permissions as global config (e.g., `"bash:ls"`)
+  - Supports granular bash permissions (e.g., `"bash:ls"`, `"bash:git status"`)
+  - ⚠️ **Important**: Dangerous bash commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** regardless of permissions
 
 **Default Agent:**
 

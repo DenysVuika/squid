@@ -4,18 +4,6 @@
   "log_level": "error",
   "db_log_level": "debug",
   "enable_env_context": true,
-  "permissions": {
-    "allow": [
-      "now",
-      "read_file",
-      "grep",
-      "bash:ls",
-      "bash:pwd",
-      "bash:git status",
-      "bash:cat"
-    ],
-    "deny": []
-  },
   "rag": {
     "enabled": true,
     "embedding_model": "text-embedding-nomic-embed-text-v1.5",
@@ -25,5 +13,29 @@
     "top_k": 5,
     "documents_path": "documents"
   },
+  "agents": {
+    "general-assistant": {
+      "name": "General Assistant",
+      "enabled": true,
+      "description": "Full-featured coding assistant with all tools",
+      "model": "local-model",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:pwd", "bash:git status", "bash:cat"],
+        "deny": []
+      }
+    },
+    "code-reviewer": {
+      "name": "Code Reviewer",
+      "enabled": true,
+      "description": "Reviews code for quality and security (read-only)",
+      "model": "local-model",
+      "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
+      "permissions": {
+        "allow": ["now", "read_file", "grep"],
+        "deny": ["write_file", "bash"]
+      }
+    }
+  },
+  "default_agent": "general-assistant",
   "version": "0.6.0"
 }

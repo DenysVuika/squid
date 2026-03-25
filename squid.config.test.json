@@ -7,10 +7,6 @@
   "db_log_level": "debug",
   "database_path": "squid.db",
   "enable_env_context": true,
-  "permissions": {
-    "allow": ["now"],
-    "deny": []
-  },
   "rag": {
     "enabled": true,
     "embedding_model": "text-embedding-nomic-embed-text-v1.5",

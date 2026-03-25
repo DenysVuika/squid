@@ -743,17 +743,18 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to allow list", tool_to_save);
+                        info!("Adding '{}' to allow list for agent '{}'", tool_to_save, agent_id_str);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.allow_tool(&tool_to_save) {
+                        if let Err(e) = updated_config.allow_tool_for_agent(agent_id_str, &tool_to_save) {
                             error!("Failed to update config with allow list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Permission '{}' added to allow list in squid.config.json",
+                                "{} Permission '{}' added to allow list for agent '{}' in squid.config.json",
                                 style("✓").green(),
-                                style(&tool_to_save).cyan()
+                                style(&tool_to_save).cyan(),
+                                style(agent_id_str).cyan()
                             );
                         }
                     }
@@ -780,17 +781,18 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to deny list", tool_to_save);
+                        info!("Adding '{}' to deny list for agent '{}'", tool_to_save, agent_id_str);
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.deny_tool(&tool_to_save) {
+                        if let Err(e) = updated_config.deny_tool_for_agent(agent_id_str, &tool_to_save) {
                             error!("Failed to update config with deny list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
                             eprintln!(
-                                "{} Permission '{}' added to deny list in squid.config.json",
+                                "{} Permission '{}' added to deny list for agent '{}' in squid.config.json",
                                 style("✓").green(),
-                                style(&tool_to_save).cyan()
+                                style(&tool_to_save).cyan(),
+                                style(agent_id_str).cyan()
                             );
                         }
                     }

@@ -27,6 +27,7 @@ pub struct ApprovalState {
     pub tool_name: String,
     pub tool_args: Value,
     pub tool_call_id: String,
+    pub agent_id: String,
     pub sender: oneshot::Sender<bool>,
     pub created_at: Instant,
 }
@@ -1212,6 +1213,7 @@ async fn create_chat_stream(
                                                 tool_name: name.clone(),
                                                 tool_args: args_value.clone(),
                                                 tool_call_id: tool_call_id.clone(),
+                                                agent_id: agent_id_owned.clone(),
                                                 sender,
                                                 created_at: Instant::now(),
                                             });
@@ -1627,6 +1629,7 @@ pub async fn handle_tool_approval(
         // If save_decision is true, update the config file
         if body.save_decision {
             let tool_name = &approval_state.tool_name;
+            let agent_id = &approval_state.agent_id;
             let scope = if body.scope.is_empty() {
                 tool_name.clone()
             } else {
@@ -1635,9 +1638,9 @@ pub async fn handle_tool_approval(
 
             let mut config = config::Config::load();
             let result = if body.approved {
-                config.allow_tool(&scope)
+                config.allow_tool_for_agent(agent_id, &scope)
             } else {
-                config.deny_tool(&scope)
+                config.deny_tool_for_agent(agent_id, &scope)
             };
 
             if let Err(e) = result {
