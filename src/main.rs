@@ -479,6 +479,7 @@ async fn main() {
                 database_path: config::Config::default().database_path,
                 enable_env_context: config::Config::default().enable_env_context,
                 rag: final_rag_config,
+                server: config::Config::default().server,
                 agents: config::Config::default().agents,
             };
 

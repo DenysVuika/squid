@@ -264,6 +264,7 @@ services:
 **Customization options:**
 - Adjust GPU layers, context window, log level, or database path by editing `docker-compose.yml`
 - Disable GPU acceleration by setting `--n-gpu-layers` to `0` for CPU-only inference
+- Allow network access by setting `SQUID_SERVER_ALLOW_NETWORK=true` (binds to 0.0.0.0 instead of 127.0.0.1)
 
 **Important**: Environment variables defined in `docker-compose.yml` always override any `squid.config.json` file in the workspace. This ensures Docker configuration takes precedence.
 
@@ -404,6 +405,25 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     ```
   - Or via environment variable: `ENABLE_ENV_CONTEXT=false`
   - **Note**: Even when enabled, hostname and working directory are excluded by default for privacy
+
+- `server.allow_network`: Allow server to be accessible from local network (optional, default: `false`)
+  - When disabled (default), the server binds to `127.0.0.1` (localhost only)
+  - When enabled, the server binds to `0.0.0.0` (accessible from other devices on local network)
+  - **Security Note**: Only enable this if you trust your local network and understand the security implications
+  - Set via `squid.config.json`:
+    ```json
+    {
+      "server": {
+        "allow_network": true
+      }
+    }
+    ```
+  - Or via environment variable (takes precedence): `SQUID_SERVER_ALLOW_NETWORK=true`
+  - Useful when:
+    - Accessing the Web UI from a mobile device or tablet on the same network
+    - Running Squid on a server and accessing it from other computers
+    - Testing the Web UI across different devices
+  - The console output indicates whether the server is accessible from the local network
 
 ### Agents
 
