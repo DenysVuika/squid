@@ -5,7 +5,8 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use std::time::Duration;
 use tiktoken_rs::cl100k_base;
 
@@ -359,7 +360,7 @@ impl DocumentWatcher {
 
     /// Process file system events (should be called in a loop)
     pub async fn process_events(&self) -> Result<()> {
-        let rx = self.receiver.lock().unwrap();
+        let rx = self.receiver.lock().await;
 
         while let Ok(result) = rx.try_recv() {
             match result {

@@ -11,7 +11,7 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -1878,12 +1878,12 @@ pub async fn rag_upload_document(
 ) -> Result<HttpResponse, Error> {
     debug!("Uploading document: {}", body.filename);
 
-    let Some(rag_system) = rag_system.as_ref() else {
+    if rag_system.as_ref().is_none() {
         return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
             success: false,
             message: "RAG system is not enabled".to_string(),
         }));
-    };
+    }
 
     use std::path::PathBuf;
     use tokio::fs;
@@ -1908,22 +1908,9 @@ pub async fn rag_upload_document(
         }));
     }
 
-    match rag_system.indexer.index_single_file(&file_path).await {
-        Ok(_) => {
-            Ok(HttpResponse::Ok().json(RagResponse {
-                success: true,
-                message: format!("Document {} uploaded and indexed successfully", body.filename),
-            }))
-        }
-        Err(e) => {
-            error!("Failed to index uploaded document '{}': {}", body.filename, e);
-            error!("  Embedding URL: {}", app_config.rag.embedding_url);
-            error!("  Embedding Model: {}", app_config.rag.embedding_model);
-            error!("  Documents Path: {}", app_config.rag.documents_path);
-            Ok(HttpResponse::InternalServerError().json(RagResponse {
-                success: false,
-                message: format!("File uploaded but indexing failed: {}. Check server logs for details.", e),
-            }))
-        }
-    }
+    // File will be automatically indexed by the document watcher
+    Ok(HttpResponse::Ok().json(RagResponse {
+        success: true,
+        message: format!("Document {} uploaded successfully. Indexing in progress...", body.filename),
+    }))
 }

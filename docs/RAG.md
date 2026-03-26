@@ -136,6 +136,36 @@ squid ask "How do I configure the database?"
 # RAG automatically searches your documents for relevant context
 ```
 
+## Automatic File Monitoring
+
+When RAG is enabled and the server is running, Squid automatically monitors the documents directory for changes:
+
+- **Automatic Reindexing**: Files are automatically reindexed when created, modified, or deleted
+- **No Manual Intervention**: No need to run `squid rag init` after updating documents
+- **Background Processing**: Runs continuously while the server is active
+- **Real-time Updates**: Changes are detected within seconds and reflected in search results
+
+**How it works:**
+1. Start the server with RAG enabled: `squid serve`
+2. The document watcher starts monitoring `documents_path` (default: `./documents`)
+3. Add, edit, or delete files in the documents directory
+4. Files are automatically reindexed in the background
+5. New content is immediately available in RAG queries
+
+**Example workflow:**
+```bash
+# Start server (watcher starts automatically)
+squid serve
+
+# In another terminal, add a new document
+echo "# New Feature\nThis is a new feature." > documents/new-feature.md
+
+# The file is automatically indexed
+# Now you can query it immediately in the Web UI or CLI
+```
+
+**Note:** The document watcher only runs when the server is active (`squid serve`). For CLI-only workflows, use `squid rag init` to manually reindex documents.
+
 ## CLI Commands
 
 ### Initialize and Index
@@ -218,6 +248,18 @@ squid rag rebuild --dir /path/to/docs
 ![RAG in Web UI](assets/rag.png)
 
 *Native RAG toggle button in the prompt input toolbar - enable/disable document search with one click*
+
+### Uploading Documents
+
+The Web UI provides a document upload interface for adding files to your RAG index:
+
+1. Click the upload button in the RAG section
+2. Select files to upload (supports all [supported file types](#supported-file-types))
+3. Files are saved to the configured `documents_path` directory
+4. The document watcher automatically indexes files within 1-2 seconds
+5. Statistics automatically update to reflect the new content
+
+**Note:** When the server is running, uploaded files are automatically indexed by the background document watcher. Statistics refresh automatically after indexing completes.
 
 ### Features
 
