@@ -5,6 +5,7 @@
       "enabled": true,
       "description": "Full-featured coding assistant with all tools available",
       "model": "qwen2.5-coder-7b-instruct",
+      "pricing_model": "gpt-4o",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
         "deny": []
@@ -26,6 +27,7 @@
       "enabled": true,
       "description": "Read-only code exploration and documentation assistant",
       "model": "qwen2.5-coder-7b-instruct",
+      "pricing_model": "gpt-4o-mini",
       "prompt": "You are a helpful code documentation assistant. Help users understand code by reading and explaining it. You cannot modify files or execute commands.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
@@ -37,9 +39,18 @@
       "enabled": true,
       "description": "Specialized in command-line operations and scripting",
       "model": "qwen2.5-coder-7b-instruct",
+      "pricing_model": "gpt-4o-mini",
       "prompt": "You are a command-line expert. Help users with shell commands, scripting, and terminal operations. Always explain what commands do before suggesting them.",
       "permissions": {
-        "allow": ["now", "read_file", "grep", "bash:ls", "bash:git", "bash:npm", "bash:cargo"],
+        "allow": [
+          "now",
+          "read_file",
+          "grep",
+          "bash:ls",
+          "bash:git",
+          "bash:npm",
+          "bash:cargo"
+        ],
         "deny": ["write_file"]
       }
     }

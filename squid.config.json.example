@@ -22,6 +22,7 @@
       "enabled": true,
       "description": "Full-featured coding assistant with all tools",
       "model": "local-model",
+      "pricing_model": "gpt-4o-mini",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:pwd", "bash:git status", "bash:cat"],
         "deny": []
@@ -32,6 +33,7 @@
       "enabled": true,
       "description": "Reviews code for quality and security (read-only)",
       "model": "local-model",
+      "pricing_model": "gpt-4o-mini",
       "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
