@@ -11,11 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
+- **Agent Pricing Configuration**: Added optional `pricing_model` field to agent configuration
+  - Allows local models to map to known cloud models for accurate cost estimation (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
+  - Frontend uses `tokenlens` library with pricing model for token cost calculations
+  - Cloud models use their own pricing automatically and don't need this field
+  - See `sample-files/agents-example.json` and README for examples
 
 ### Changed
 
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
+
+### Removed
+
+- **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint
+  - Models API was replaced by agent-based architecture in v0.11.0
+  - `fetchModels()` function removed from frontend
+  - `model-metadata.json` file removed (pricing configuration moved to per-agent `pricing_model` field)
 
 ## [0.11.0] - 2026-03-25
 

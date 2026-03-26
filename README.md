@@ -350,7 +350,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - LM Studio/Ollama/Docker: Use the model name you loaded/pulled
   - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
   - Mistral AI: `devstral-2512`, `mistral-large-latest`, etc.
-  - **Note**: The Web UI can fetch available models via the `/api/models` endpoint
+  - **Note**: The Web UI can fetch available agents via the `/api/agents` endpoint
   
 - `API_KEY`: Your API key
   - Local services (LM Studio, Ollama, Docker): `not-needed`
@@ -450,6 +450,7 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "enabled": true,
       "description": "Full-featured coding assistant",
       "model": "qwen2.5-coder-7b-instruct",
+      "pricing_model": "gpt-4o",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
         "deny": []
@@ -469,6 +470,11 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
 - **model**: The underlying LLM model ID
   - For local models: Use the model name (e.g., `"qwen2.5-coder-7b-instruct"`)
   - For cloud services: Use provider/model format (e.g., `"anthropic/claude-sonnet-4-5"`, `"openai/gpt-4"`)
+- **pricing_model** (optional): Model ID to use for cost estimation in the UI
+  - Required for local models to calculate token costs
+  - Maps your local model to a known cloud model's pricing (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
+  - Cloud models use their own pricing automatically and don't need this field
+  - Example: Set to `"gpt-4o"` for high-capability models or `"gpt-4o-mini"` for smaller models
 - **prompt** (optional): Custom system prompt for this agent
   - Overrides the default system prompt
   - Defines the agent's personality and behavior
@@ -772,36 +778,47 @@ The web server exposes REST API endpoints for programmatic access:
 }
 ```
 
-**Models Endpoint:** `GET /api/models`
+**Agents Endpoint:** `GET /api/agents`
 
-Fetches available models from your LLM provider (LM Studio, Ollama, etc.) and augments them with metadata like context window sizes.
+Fetches available agents configured in your `squid.config.json` file. Each agent has its own model, system prompt, and tool permissions.
 
 **Response:**
 ```json
 {
-  "models": [
+  "agents": [
     {
-      "id": "qwen2.5-coder-7b-instruct",
-      "name": "Qwen 2.5 Coder 7B Instruct",
-      "max_context_length": 32768,
-      "provider": "Qwen"
+      "id": "general-assistant",
+      "name": "General Assistant",
+      "description": "Full-featured coding assistant with all tools available",
+      "model": "qwen2.5-coder-7b-instruct",
+      "enabled": true,
+      "pricing_model": "gpt-4o",
+      "permissions": {
+        "allow": ["now", "read_file", "write_file", "grep", "bash"],
+        "deny": []
+      }
     },
     {
-      "id": "llama-3.1-8b",
-      "name": "Llama 3.1 8B",
-      "max_context_length": 131072,
-      "provider": "Meta"
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "description": "Reviews code for best practices and potential issues",
+      "model": "anthropic/claude-sonnet-4-5",
+      "enabled": true,
+      "permissions": {
+        "allow": ["now", "read_file", "grep"],
+        "deny": ["write_file", "bash"]
+      }
     }
-  ]
+  ],
+  "default_agent": "general-assistant"
 }
 ```
 
 **Features:**
-- Automatically fetches models from your LLM provider's `/models` endpoint
-- Augments response with friendly names and context window sizes from built-in metadata
-- Falls back to sensible defaults (8192 tokens) for unknown models
-- Filters out embedding models
-- Sorts with Qwen models first (preferred for coding)
+- Returns all enabled agents from your configuration
+- Each agent includes its model, description, and tool permissions
+- Optional `pricing_model` field for cost estimation (useful for local models)
+- Used by Web UI agent selector to display available assistants
 
 **Example using curl:**
 ```bash

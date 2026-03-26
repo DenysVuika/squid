@@ -173,7 +173,7 @@ The serve command starts:
 - `DELETE /api/sessions/:id` - Delete session
 - `PUT /api/sessions/:id/title` - Update session title
 - `GET /api/logs` - Get application logs
-- `GET /api/models` - List available models
+- `GET /api/agents` - List available agents
 - `POST /api/rag/index` - Index documents for RAG
 - `GET /api/rag/documents` - List indexed documents
 - And more...

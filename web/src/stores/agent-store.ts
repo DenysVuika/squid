@@ -51,10 +51,7 @@ export const useAgentStore = create<AgentStore>()(
         set({ isLoading: true });
         try {
           // Fetch both agents and config in parallel
-          const [{ agents: fetchedAgents, default_agent }] = await Promise.all([
-            fetchAgents(''),
-            fetchConfig(''),
-          ]);
+          const [{ agents: fetchedAgents, default_agent }] = await Promise.all([fetchAgents(''), fetchConfig('')]);
 
           if (fetchedAgents.length > 0) {
             // Extract unique providers (from model strings, e.g., "anthropic/claude" -> "anthropic")
@@ -154,7 +151,7 @@ export const useAgentStore = create<AgentStore>()(
         set({ agentSelectorOpen: open });
       },
 
-      // Get model ID for pricing calculations (from current agent's model)
+      // Get model ID for pricing calculations (from current agent's pricing_model or model)
       getAgentModelForPricing: () => {
         const { agents, selectedAgent, sessionAgentId } = get();
         const currentAgentId = sessionAgentId || selectedAgent;
@@ -164,7 +161,7 @@ export const useAgentStore = create<AgentStore>()(
         }
 
         const agentData = agents.find((a) => a.id === currentAgentId);
-        return agentData?.model || currentAgentId;
+        return agentData?.pricing_model || agentData?.model || currentAgentId;
       },
     }),
     {
