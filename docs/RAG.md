@@ -249,6 +249,18 @@ squid rag rebuild --dir /path/to/docs
 
 *Native RAG toggle button in the prompt input toolbar - enable/disable document search with one click*
 
+### Uploading Documents
+
+The Web UI provides a document upload interface for adding files to your RAG index:
+
+1. Click the upload button in the RAG section
+2. Select files to upload (supports all [supported file types](#supported-file-types))
+3. Files are saved to the configured `documents_path` directory
+4. The document watcher automatically indexes files within 1-2 seconds
+5. Statistics automatically update to reflect the new content
+
+**Note:** When the server is running, uploaded files are automatically indexed by the background document watcher. Statistics refresh automatically after indexing completes.
+
 ### Features
 
 - **🔍 Native Toggle Button**: Enable/disable RAG with a single click in the prompt input toolbar

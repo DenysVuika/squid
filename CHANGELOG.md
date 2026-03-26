@@ -9,15 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Automatic Document Reindexing**: RAG system now monitors the documents folder for changes
-  - File watcher automatically reindexes documents when files are created, modified, or deleted
-  - Runs in background when server starts with RAG enabled
-  - No manual `squid rag init` needed after updating documents
-  - Monitors `documents_path` configured in `squid.config.json`
+- **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
+- **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
 
 ### Changed
 
-- **Build Warnings**: More prominent error messages when npm/node is missing during build, with clear installation instructions
+- **Build Warnings**: More prominent error messages when npm/node is missing during build
+- **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
 
 ## [0.11.0] - 2026-03-25
 

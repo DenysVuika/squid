@@ -44,9 +44,12 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
   const [content, setContent] = useState('');
   const [fileInputKey, setFileInputKey] = useState(Date.now());
 
-  const endpoint = useCallback((path: string) => {
-    return apiUrl ? `${apiUrl}${path}` : path;
-  }, [apiUrl]);
+  const endpoint = useCallback(
+    (path: string) => {
+      return apiUrl ? `${apiUrl}${path}` : path;
+    },
+    [apiUrl]
+  );
 
   const loadDocuments = useCallback(async () => {
     setLoading(true);
@@ -131,6 +134,10 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
       setFileInputKey(Date.now());
       void loadDocuments();
       void loadStats();
+
+      // Poll for updated stats after document watcher indexes the file (typically 2-3 seconds)
+      setTimeout(() => void loadStats(), 3000);
+
       onDocumentChange?.();
     } catch (error) {
       console.error('Failed to upload document:', error);
@@ -199,7 +206,15 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
             <CardDescription>Manage your indexed documents for semantic search</CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => { void loadDocuments(); void loadStats(); }} className="flex-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void loadDocuments();
+                void loadStats();
+              }}
+              className="flex-1"
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -213,9 +228,7 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Upload Document</DialogTitle>
-                  <DialogDescription>
-                    Upload a document to be indexed for semantic search
-                  </DialogDescription>
+                  <DialogDescription>Upload a document to be indexed for semantic search</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -260,7 +273,12 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
                     >
                       Cancel
                     </Button>
-                    <Button onClick={() => { void handleUpload(); }} disabled={uploading || !filename || !content}>
+                    <Button
+                      onClick={() => {
+                        void handleUpload();
+                      }}
+                      disabled={uploading || !filename || !content}
+                    >
                       {uploading ? 'Uploading...' : 'Upload'}
                     </Button>
                   </div>
@@ -321,7 +339,9 @@ export function DocumentManager({ apiUrl = '', onDocumentChange }: DocumentManag
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => { void handleDelete(doc.filename); }}
+                  onClick={() => {
+                    void handleDelete(doc.filename);
+                  }}
                   className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                 >
                   <Trash2 className="h-4 w-4" />
