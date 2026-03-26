@@ -1,11 +1,7 @@
 import * as React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Files, Loader2 } from 'lucide-react';
-import {
-  FileTree,
-  FileTreeFile,
-  FileTreeFolder,
-} from '@/components/ai-elements/file-tree';
+import { FileTree, FileTreeFile, FileTreeFolder } from '@/components/ai-elements/file-tree';
 
 interface FileNode {
   name: string;
@@ -22,7 +18,7 @@ export function FilesSidebar() {
   const [error, setError] = React.useState<string | null>(null);
   const [selectedPath, setSelectedPath] = React.useState<string | undefined>();
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
-  
+
   // Extract file path from current route
   const currentFilePath = React.useMemo(() => {
     if (location.pathname.startsWith('/workspace/files/')) {
@@ -35,11 +31,11 @@ export function FilesSidebar() {
   React.useEffect(() => {
     if (currentFilePath) {
       setSelectedPath(currentFilePath);
-      
+
       // Expand all parent directories of the current file
       const parts = currentFilePath.split('/');
       let currentPath = '';
-      
+
       // Build paths for each parent directory
       const newExpanded = new Set<string>();
       for (let i = 0; i < parts.length - 1; i++) {
@@ -50,20 +46,20 @@ export function FilesSidebar() {
         }
         newExpanded.add(currentPath);
       }
-      
-      setExpandedPaths(prev => {
+
+      setExpandedPaths((prev) => {
         // Merge with existing expanded paths to preserve user's manual expansions
         const merged = new Set([...prev, ...newExpanded]);
         return merged;
       });
     }
   }, [currentFilePath]);
-  
+
   // Keep track of all file paths (not directories) for quick lookup
   const filePaths = React.useMemo(() => {
     const paths = new Set<string>();
     const collectFilePaths = (nodes: FileNode[]) => {
-      nodes.forEach(node => {
+      nodes.forEach((node) => {
         if (!node.is_dir) {
           paths.add(node.path);
         }
@@ -76,13 +72,16 @@ export function FilesSidebar() {
     return paths;
   }, [files]);
 
-  const handleFileSelect = React.useCallback((path: string) => {
-    setSelectedPath(path);
-    // Only navigate if this is a file, not a directory
-    if (filePaths.has(path)) {
-      navigate(`/workspace/files/${path}`);
-    }
-  }, [navigate, filePaths]);
+  const handleFileSelect = React.useCallback(
+    (path: string) => {
+      setSelectedPath(path);
+      // Only navigate if this is a file, not a directory
+      if (filePaths.has(path)) {
+        navigate(`/workspace/files/${path}`);
+      }
+    },
+    [navigate, filePaths]
+  );
 
   React.useEffect(() => {
     const fetchFiles = async () => {
@@ -136,27 +135,22 @@ export function FilesSidebar() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        {error && (
-          <div className="text-sm text-destructive py-4">
-            Error: {error}
-          </div>
-        )}
+        {error && <div className="text-sm text-destructive py-4">Error: {error}</div>}
         {!loading && !error && files.length === 0 && (
-          <div className="text-sm text-muted-foreground py-4">
-            No files found
-          </div>
+          <div className="text-sm text-muted-foreground py-4">No files found</div>
         )}
-            {!loading && !error && files.length > 0 && (
-              <FileTree
-                expanded={expandedPaths}
-                onExpandedChange={handleExpandedChange}
-                // @ts-expect-error - FileTree has type conflict between HTML onSelect and custom onSelect
-                onSelect={handleFileSelect}
-                selectedPath={selectedPath}
-              >
-                {renderFileTree(files)}
-              </FileTree>
-            )}
+        {!loading && !error && files.length > 0 && (
+          <FileTree
+            className="rounded-none border-0 -m-4"
+            expanded={expandedPaths}
+            onExpandedChange={handleExpandedChange}
+            // @ts-expect-error - FileTree has type conflict between HTML onSelect and custom onSelect
+            onSelect={handleFileSelect}
+            selectedPath={selectedPath}
+          >
+            {renderFileTree(files)}
+          </FileTree>
+        )}
       </div>
     </div>
   );
