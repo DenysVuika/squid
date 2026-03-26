@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Build Warnings**: More prominent error messages when npm/node is missing during build, with clear installation instructions
+
 ## [0.11.0] - 2026-03-25
 
 ### Added
