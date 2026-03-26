@@ -136,6 +136,36 @@ squid ask "How do I configure the database?"
 # RAG automatically searches your documents for relevant context
 ```
 
+## Automatic File Monitoring
+
+When RAG is enabled and the server is running, Squid automatically monitors the documents directory for changes:
+
+- **Automatic Reindexing**: Files are automatically reindexed when created, modified, or deleted
+- **No Manual Intervention**: No need to run `squid rag init` after updating documents
+- **Background Processing**: Runs continuously while the server is active
+- **Real-time Updates**: Changes are detected within seconds and reflected in search results
+
+**How it works:**
+1. Start the server with RAG enabled: `squid serve`
+2. The document watcher starts monitoring `documents_path` (default: `./documents`)
+3. Add, edit, or delete files in the documents directory
+4. Files are automatically reindexed in the background
+5. New content is immediately available in RAG queries
+
+**Example workflow:**
+```bash
+# Start server (watcher starts automatically)
+squid serve
+
+# In another terminal, add a new document
+echo "# New Feature\nThis is a new feature." > documents/new-feature.md
+
+# The file is automatically indexed
+# Now you can query it immediately in the Web UI or CLI
+```
+
+**Note:** The document watcher only runs when the server is active (`squid serve`). For CLI-only workflows, use `squid rag init` to manually reindex documents.
+
 ## CLI Commands
 
 ### Initialize and Index

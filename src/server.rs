@@ -126,6 +126,39 @@ pub async fn start_server(
         None
     };
 
+    // Start document watcher if RAG is enabled
+    if let Some(ref rag) = rag_system {
+        let documents_path = std::path::PathBuf::from(&app_config.rag.documents_path);
+        match rag.create_watcher(documents_path.clone()) {
+            Ok(mut watcher) => {
+                match watcher.start() {
+                    Ok(_) => {
+                        info!("Document watcher started for: {}", documents_path.display());
+                        println!("🦑: Document watcher active - monitoring {} for changes", documents_path.display());
+
+                        // Spawn background task to process file system events
+                        tokio::spawn(async move {
+                            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+                            loop {
+                                interval.tick().await;
+                                if let Err(e) = watcher.process_events().await {
+                                    log::error!("Error processing document watcher events: {}", e);
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        warn!("Failed to start document watcher: {}", e);
+                        println!("🦑: Document watcher could not be started - {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to create document watcher: {}", e);
+            }
+        }
+    }
+
     // Create approval state map for tool approval workflow
     let approval_map: api::ApprovalStateMap = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Automatic Document Reindexing**: RAG system now monitors the documents folder for changes
+  - File watcher automatically reindexes documents when files are created, modified, or deleted
+  - Runs in background when server starts with RAG enabled
+  - No manual `squid rag init` needed after updating documents
+  - Monitors `documents_path` configured in `squid.config.json`
+
 ### Changed
 
 - **Build Warnings**: More prominent error messages when npm/node is missing during build, with clear installation instructions
