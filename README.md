@@ -325,7 +325,12 @@ This creates a `squid.config.json` file with:
 - **Context window settings**: Applied to each agent (can be customized per-agent later)
 - **Optional RAG setup**: Document search and retrieval features
 
-**Note**: CLI commands (`squid ask`, `squid review`) and Web UI will use these agent configurations. If no config exists, commands will suggest running `squid init` first.
+**Note**: CLI commands (`squid ask`, `squid review`) work with either:
+- A `squid.config.json` file (recommended for agent configurations)
+- Environment variables in a `.env` file (minimum: `API_URL`)
+- A combination of both (environment variables override config file)
+
+If neither is configured, commands will suggest running `squid init` or setting up environment variables.
 
 **For complete configuration documentation**, including:
 - Interactive and non-interactive `squid init` usage
@@ -680,7 +685,10 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid logs`** - View application logs
 - **`squid init`** - Initialize project configuration
 
-**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require a `squid.config.json` file. If the file is not found, Squid will display a helpful message suggesting you run `squid init` first to set up your configuration and default agents.
+**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:
+- Run `squid init` to create a config file with agent configurations
+- Use a `.env` file with environment variables like `API_URL`, `API_KEY`, etc.
+- Mix both approaches (environment variables override config file settings)
 
 **Quick Examples:**
 

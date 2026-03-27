@@ -158,10 +158,17 @@ enum RagCommands {
 /// Check if configuration file exists and suggest running init
 fn check_config_or_suggest_init() -> bool {
     if !config::Config::config_file_exists() {
-        eprintln!("⚠️  No squid.config.json found in current directory or parent directories.\n");
-        eprintln!("To get started, run:");
-        eprintln!("  squid init\n");
-        eprintln!("This will guide you through setting up:");
+        // Check if essential environment variables are set
+        if std::env::var("API_URL").is_ok() {
+            eprintln!("ℹ️  Using configuration from environment variables (.env file)");
+            return true;
+        }
+
+        eprintln!("⚠️  No squid.config.json found and no API_URL environment variable set.\n");
+        eprintln!("To get started, you can either:");
+        eprintln!("  1. Run 'squid init' to create squid.config.json");
+        eprintln!("  2. Set API_URL in your .env file\n");
+        eprintln!("For squid init, this will guide you through setting up:");
         eprintln!("  • API endpoint configuration");
         eprintln!("  • Default agents (general-assistant, code-reviewer)");
         eprintln!("  • Context window settings");

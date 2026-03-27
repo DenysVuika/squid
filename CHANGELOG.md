@@ -13,12 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
 - **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation
 - **Per-Agent Context Window**: Agents can now specify their own `context_window` setting, overriding the global default
-- **Configuration Check for CLI**: Commands now suggest running `squid init` if `squid.config.json` is not found
+- **Environment-Only Configuration Support**: CLI commands now work with just environment variables (no `squid.config.json` required if `API_URL` is set)
 - **Improved Init Command**: `squid init` now creates two default agents (`general-assistant` and `code-reviewer`) with detailed setup summary
 - **Agent Selection in CLI**: Added `--agent` parameter to `ask` and `review` commands to specify which agent to use
 
 ### Changed
 
+- **Relaxed Configuration Check**: CLI commands no longer require `squid.config.json` if essential environment variables like `API_URL` are set
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
 - **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use agent configurations instead of global `API_MODEL`
