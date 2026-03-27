@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -123,7 +123,9 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
-    pub api_model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.12.0", note = "Use agent-specific model configuration instead. CLI commands now use the default agent's model.")]
+    pub api_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
     #[serde(default = "default_context_window")]
@@ -172,7 +174,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
-            api_model: "qwen2.5-coder-7b-instruct".to_string(),
+            api_model: None, // Deprecated: use agent-specific models
             api_key: None,
             context_window: default_context_window(),
             log_level: default_log_level(),
@@ -247,8 +249,9 @@ impl Config {
         }
 
         if let Ok(api_model) = std::env::var("API_MODEL") {
-            debug!("Overriding API_MODEL from environment");
-            config.api_model = api_model;
+            warn!("⚠️  API_MODEL is deprecated. Use agent-specific model configuration instead. CLI commands now use the default agent's model.");
+            debug!("Overriding API_MODEL from environment (deprecated)");
+            config.api_model = Some(api_model);
         }
 
         if let Ok(api_key) = std::env::var("API_KEY") {
@@ -488,7 +491,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
-        assert_eq!(config.api_model, "qwen2.5-coder-7b-instruct");
+        assert_eq!(config.api_model, None);
         assert_eq!(config.api_key, None);
         assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");

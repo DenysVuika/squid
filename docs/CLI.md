@@ -469,7 +469,7 @@ Instead of `squid.config.json`, you can create a `.env` file:
 ```bash
 # OpenAI API Configuration
 API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
+# API_MODEL=local-model  # DEPRECATED: Use agent-specific models in squid.config.json
 API_KEY=not-needed
 SQUID_CONTEXT_WINDOW=32768
 DATABASE_PATH=squid.db

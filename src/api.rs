@@ -1397,9 +1397,19 @@ pub async fn get_config(
 ) -> Result<HttpResponse, Error> {
     debug!("Fetching API configuration");
 
+    // Get default agent's model
+    let default_agent_id = &app_config.agents.default_agent;
+    let api_model = match app_config.get_agent(default_agent_id) {
+        Some(agent) => agent.model.clone(),
+        None => {
+            warn!("Default agent '{}' not found, using fallback", default_agent_id);
+            "local-model".to_string()
+        }
+    };
+
     let response = ConfigResponse {
         api_url: app_config.api_url.clone(),
-        api_model: app_config.api_model.clone(),
+        api_model,
         context_window: app_config.context_window,
         rag_enabled: app_config.rag.enabled,
     };

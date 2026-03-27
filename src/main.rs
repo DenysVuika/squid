@@ -296,21 +296,7 @@ async fn main() {
                 }
             };
 
-            let final_model = if let Some(m) = model {
-                m.clone()
-            } else {
-                match inquire::Text::new("API Model:")
-                    .with_default(&default_config.api_model)
-                    .with_help_message("The model identifier to use")
-                    .prompt()
-                {
-                    Ok(m) => m,
-                    Err(_) => {
-                        error!("Configuration initialization cancelled or failed");
-                        return;
-                    }
-                }
-            };
+
 
             let final_context_window = if context_window.is_some() {
                 context_window.unwrap()
@@ -470,7 +456,7 @@ async fn main() {
 
             let config = config::Config {
                 api_url: final_url,
-                api_model: final_model,
+                api_model: None, // Deprecated: use agent-specific models
                 api_key: final_api_key,
                 context_window: final_context_window,
                 log_level: final_log_level,
@@ -489,7 +475,6 @@ async fn main() {
                     info!("✓ Configuration saved to {:?}", config_path);
                     println!("\nConfiguration saved to: {:?}", config_path);
                     println!("  API URL: {}", config.api_url);
-                    println!("  API Model: {}", config.api_model);
                     if config.api_key.is_some() {
                         println!("  API Key: [configured]");
                     } else {
@@ -708,12 +693,27 @@ async fn main() {
                 (None, file_opt) => file_opt,
             };
 
+            // Get default agent's model
+            let default_agent_id = &app_config.agents.default_agent;
+            let model = match app_config.get_agent(default_agent_id) {
+                Some(agent) => {
+                    info!("Using default agent '{}' with model '{}'", default_agent_id, agent.model);
+                    agent.model.as_str()
+                }
+                None => {
+                    error!("Default agent '{}' not found", default_agent_id);
+                    println!("🦑: Configuration error - default agent '{}' not found", default_agent_id);
+                    return;
+                }
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &full_question,
                     enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
+                    model,
                     &app_config,
                 )
                 .await
@@ -731,6 +731,7 @@ async fn main() {
                     enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
+                    model,
                     &app_config,
                 )
                 .await
@@ -843,12 +844,27 @@ async fn main() {
                 file_content
             };
 
+            // Get default agent's model
+            let default_agent_id = &app_config.agents.default_agent;
+            let model = match app_config.get_agent(default_agent_id) {
+                Some(agent) => {
+                    info!("Using default agent '{}' with model '{}'", default_agent_id, agent.model);
+                    agent.model.as_str()
+                }
+                None => {
+                    error!("Default agent '{}' not found", default_agent_id);
+                    println!("🦑: Configuration error - default agent '{}' not found", default_agent_id);
+                    return;
+                }
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &question,
                     Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
+                    model,
                     &app_config,
                 )
                 .await
@@ -866,6 +882,7 @@ async fn main() {
                     Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
+                    model,
                     &app_config,
                 )
                 .await

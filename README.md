@@ -347,10 +347,11 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Other OpenAI-compatible services: Check provider's documentation
   
 - `API_MODEL`: The model identifier to use (can be overridden in Web UI)
-  - LM Studio/Ollama/Docker: Use the model name you loaded/pulled
-  - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
-  - Mistral AI: `devstral-2512`, `mistral-large-latest`, etc.
-  - **Note**: The Web UI can fetch available agents via the `/api/agents` endpoint
+  - ~~`API_MODEL`~~ **DEPRECATED** (as of v0.12.0): Use agent-specific model configuration instead
+    - CLI commands (`ask`, `review`) now use the default agent's model from `squid.config.json`
+    - Web UI always used agent-specific models
+    - Configure models per-agent in the `agents` section (see [Agents](#agents) below)
+    - **Migration**: Remove `API_MODEL` from `.env` and configure models in `squid.config.json` agents
   
 - `API_KEY`: Your API key
   - Local services (LM Studio, Ollama, Docker): `not-needed`

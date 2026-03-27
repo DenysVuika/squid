@@ -16,11 +16,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Frontend uses `tokenlens` library with pricing model for token cost calculations
   - Cloud models use their own pricing automatically and don't need this field
   - See README for examples
+- **Per-Agent Context Window**: Each agent can now specify its own `context_window` setting
+  - Overrides global `SQUID_CONTEXT_WINDOW` for accurate per-agent token tracking
+  - Agents without specific context_window use the global default
+  - See [Agent Configuration](README.md#agents) for details
 
 ### Changed
 
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
+- **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use the default agent's model instead of global `API_MODEL`
+  - Ensures consistency between CLI and Web UI behavior
+  - All commands now respect agent-specific configurations (model, permissions, prompts)
+- **Environment Variable Renamed**: `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW` for clarity
+  - Makes it clear the variable is squid-specific
+  - Avoids potential conflicts with other tools
+
+### Deprecated
+
+- **`API_MODEL` Configuration**: Deprecated in favor of agent-specific model configuration
+  - CLI commands now use the default agent's model from `squid.config.json`
+  - Web UI always used agent-specific models
+  - **Migration**: Remove `API_MODEL` from `.env` and configure models per-agent in `squid.config.json`
+  - If `API_MODEL` is still set, a warning will be displayed
+  - See [Agent Configuration](README.md#agents) for how to configure agent models
 
 ### Removed
 
