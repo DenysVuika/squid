@@ -139,7 +139,7 @@ Create a `.env` file in the project root:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
-LOG_LEVEL=error
+SQUID_LOG_LEVEL=error
 ```
 
 ### For Ollama
@@ -148,7 +148,7 @@ LOG_LEVEL=error
 API_URL=http://localhost:11434/v1
 API_MODEL=qwen2.5-coder
 API_KEY=not-needed
-LOG_LEVEL=error
+SQUID_LOG_LEVEL=error
 ```
 
 ### For OpenAI
@@ -157,7 +157,7 @@ LOG_LEVEL=error
 API_URL=https://api.openai.com/v1
 API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
-LOG_LEVEL=error
+SQUID_LOG_LEVEL=error
 ```
 
 ### For Mistral API
@@ -166,7 +166,7 @@ LOG_LEVEL=error
 API_URL=https://api.mistral.ai/v1
 API_MODEL=devstral-2512
 API_KEY=your-mistral-api-key-here
-LOG_LEVEL=error
+SQUID_LOG_LEVEL=error
 ```
 
 ### For Other Providers

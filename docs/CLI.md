@@ -494,8 +494,8 @@ API_URL=http://127.0.0.1:1234/v1
 # API_MODEL=local-model  # DEPRECATED: Use agent-specific models in squid.config.json
 API_KEY=not-needed
 SQUID_CONTEXT_WINDOW=32768
-DATABASE_PATH=squid.db
-LOG_LEVEL=error
+SQUID_DATABASE_PATH=squid.db
+SQUID_LOG_LEVEL=error
 
 # Privacy Settings
 ENABLE_ENV_CONTEXT=true
