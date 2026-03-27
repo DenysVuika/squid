@@ -356,7 +356,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Local services (LM Studio, Ollama, Docker): `not-needed`
   - Cloud services (OpenAI, Mistral, etc.): Your actual API key
 
-- `CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
+- `SQUID_CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
   - Used to calculate context utilization and prevent exceeding limits
   - Set via `squid init --context-window 32768` or in config file
   - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models

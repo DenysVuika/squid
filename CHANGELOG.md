@@ -213,7 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `context_window` field in `squid.config.json` (e.g., `32768` for Qwen2.5-Coder)
   - Context utilization percentage displayed in web UI
   - Helps prevent API errors from exceeding context limits
-  - Can be set via `squid init --context-window 32768` or environment variable `CONTEXT_WINDOW`
+  - Can be set via `squid init --context-window 32768` or environment variable `SQUID_CONTEXT_WINDOW`
 - **Token Usage & Cost Tracking**: Real-time token counts and cost estimates
   - Visual token usage indicator in chat header with percentage and breakdown
   - Track input, output, reasoning, and cache tokens separately

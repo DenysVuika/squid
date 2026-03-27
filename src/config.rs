@@ -256,9 +256,9 @@ impl Config {
             config.api_key = Some(api_key);
         }
 
-        if let Ok(context_window) = std::env::var("CONTEXT_WINDOW") {
+        if let Ok(context_window) = std::env::var("SQUID_CONTEXT_WINDOW") {
             if let Ok(window) = context_window.parse() {
-                debug!("Overriding CONTEXT_WINDOW from environment");
+                debug!("Overriding SQUID_CONTEXT_WINDOW from environment");
                 config.context_window = window;
             }
         }

@@ -45,7 +45,7 @@ services:
     environment:
       - RUST_LOG=info
       - RUST_BACKTRACE=1
-      - CONTEXT_WINDOW=32768
+      - SQUID_CONTEXT_WINDOW=32768
       - LOG_LEVEL=info
       - DATABASE_PATH=/data/squid.db
       - RAG_ENABLED=true

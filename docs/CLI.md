@@ -471,7 +471,7 @@ Instead of `squid.config.json`, you can create a `.env` file:
 API_URL=http://127.0.0.1:1234/v1
 API_MODEL=local-model
 API_KEY=not-needed
-CONTEXT_WINDOW=32768
+SQUID_CONTEXT_WINDOW=32768
 DATABASE_PATH=squid.db
 LOG_LEVEL=error
 
