@@ -315,11 +315,17 @@ For manual installations (cargo install, from source), you need to configure Squ
 # Interactive configuration (recommended)
 squid init
 
-# Or use command-line flags
-squid init --url http://127.0.0.1:1234/v1 --model qwen2.5-coder
+# Or use command-line flags to skip prompts
+squid init --url http://127.0.0.1:1234/v1 --log-level info
 ```
 
-This creates a `squid.config.json` file with your LLM connection settings.
+This creates a `squid.config.json` file with:
+- **API endpoint configuration**: Connection to your LLM service
+- **Default agents**: Pre-configured `general-assistant` (full access) and `code-reviewer` (read-only)
+- **Context window settings**: Applied to each agent (can be customized per-agent later)
+- **Optional RAG setup**: Document search and retrieval features
+
+**Note**: CLI commands (`squid ask`, `squid review`) and Web UI will use these agent configurations. If no config exists, commands will suggest running `squid init` first.
 
 **For complete configuration documentation**, including:
 - Interactive and non-interactive `squid init` usage
@@ -539,13 +545,25 @@ You can create agents for different purposes:
 - ✅ Accurate token usage statistics displayed in web UI
 - ✅ Better planning for long conversations
 
-**Example configuration:**
-```bash
-# For Qwen2.5-Coder with 32K context
-squid init --context-window 32768
+**Setting agent-specific context windows:**
 
-# For GPT-4 with 128K context
-squid init --context-window 128000
+After running `squid init`, edit `squid.config.json` to set context windows per agent:
+
+```json
+{
+  "agents": {
+    "general-assistant": {
+      "model": "local-model",
+      "context_window": 32768,  // Qwen2.5-Coder: 32K
+      ...
+    },
+    "code-reviewer": {
+      "model": "gpt-4",
+      "context_window": 128000,  // GPT-4: 128K
+      ...
+    }
+  }
+}
 ```
 
 </details>
@@ -662,14 +680,22 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid logs`** - View application logs
 - **`squid init`** - Initialize project configuration
 
+**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require a `squid.config.json` file. If the file is not found, Squid will display a helpful message suggesting you run `squid init` first to set up your configuration and default agents.
+
 **Quick Examples:**
 
 ```bash
-# Ask a question
+# Ask a question (uses default agent)
 squid ask "What is Rust?"
 
-# Review a file
+# Ask with specific agent
+squid ask "What is Rust?" --agent code-reviewer
+
+# Review a file (uses default agent)
 squid review src/main.rs
+
+# Review with specific agent
+squid review src/main.rs --agent general-assistant
 
 # Initialize RAG for a project
 squid rag init

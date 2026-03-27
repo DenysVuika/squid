@@ -11,42 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
-- **Agent Pricing Configuration**: Added optional `pricing_model` field to agent configuration
-  - Allows local models to map to known cloud models for accurate cost estimation (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
-  - Frontend uses `tokenlens` library with pricing model for token cost calculations
-  - Cloud models use their own pricing automatically and don't need this field
-  - See README for examples
-- **Per-Agent Context Window**: Each agent can now specify its own `context_window` setting
-  - Overrides global `SQUID_CONTEXT_WINDOW` for accurate per-agent token tracking
-  - Agents without specific context_window use the global default
-  - See [Agent Configuration](README.md#agents) for details
+- **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation
+- **Per-Agent Context Window**: Agents can now specify their own `context_window` setting, overriding the global default
+- **Configuration Check for CLI**: Commands now suggest running `squid init` if `squid.config.json` is not found
+- **Improved Init Command**: `squid init` now creates two default agents (`general-assistant` and `code-reviewer`) with detailed setup summary
+- **Agent Selection in CLI**: Added `--agent` parameter to `ask` and `review` commands to specify which agent to use
 
 ### Changed
 
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
-- **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use the default agent's model instead of global `API_MODEL`
-  - Ensures consistency between CLI and Web UI behavior
-  - All commands now respect agent-specific configurations (model, permissions, prompts)
-- **Environment Variable Renamed**: `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW` for clarity
-  - Makes it clear the variable is squid-specific
-  - Avoids potential conflicts with other tools
+- **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use agent configurations instead of global `API_MODEL`
+- **Environment Variable Renamed**: `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW` for clarity and to avoid conflicts
 
 ### Deprecated
 
-- **`API_MODEL` Configuration**: Deprecated in favor of agent-specific model configuration
-  - CLI commands now use the default agent's model from `squid.config.json`
-  - Web UI always used agent-specific models
-  - **Migration**: Remove `API_MODEL` from `.env` and configure models per-agent in `squid.config.json`
-  - If `API_MODEL` is still set, a warning will be displayed
-  - See [Agent Configuration](README.md#agents) for how to configure agent models
+- **`API_MODEL` Configuration**: Deprecated in favor of agent-specific model configuration. Remove from `.env` and configure per-agent in `squid.config.json`
+- **`--context-window` CLI Parameter**: Removed from `squid init` command. Context windows are now configured per-agent in `squid.config.json`
 
 ### Removed
 
-- **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint
-  - Models API was replaced by agent-based architecture in v0.11.0
-  - `fetchModels()` function removed from frontend
-  - `model-metadata.json` file removed (pricing configuration moved to per-agent `pricing_model` field)
+- **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint. Models API replaced by agent-based architecture
 
 ## [0.11.0] - 2026-03-25
 

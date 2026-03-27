@@ -338,6 +338,11 @@ impl Config {
         config
     }
 
+    /// Check if a configuration file exists in the current directory or parent directories
+    pub fn config_file_exists() -> bool {
+        Self::find_config_file().is_some()
+    }
+
     /// Search for squid.config.json in current directory and parent directories
     fn find_config_file() -> Option<PathBuf> {
         let mut current_dir = std::env::current_dir().ok()?;

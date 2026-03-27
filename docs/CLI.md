@@ -22,8 +22,11 @@ This document covers the command-line interface for Squid. For most users, we re
 Ask the AI assistant a question with optional context.
 
 ```bash
-# Basic question (streaming by default)
+# Basic question (streaming by default, uses default agent)
 squid ask "What is Rust?"
+
+# Use a specific agent
+squid ask "What is Rust?" --agent code-reviewer
 
 # With additional context using -m
 squid ask "Explain Rust" -m "Focus on memory safety"
@@ -40,6 +43,7 @@ By default, responses are streamed in real-time, displaying tokens as they are g
 **Options:**
 - `-m, --message <TEXT>` - Additional context message
 - `-p, --prompt <FILE>` - Custom system prompt file
+- `--agent <NAME>` - Agent to use (defaults to default_agent from config)
 - `--no-stream` - Disable streaming, get complete response at once
 
 ### Ask About a File
@@ -47,8 +51,11 @@ By default, responses are streamed in real-time, displaying tokens as they are g
 Ask questions about a specific file's content.
 
 ```bash
-# Basic file question (streams by default)
+# Basic file question (streams by default, uses default agent)
 squid ask -f sample-files/sample.txt "What are the key features mentioned?"
+
+# Use specific agent for file analysis
+squid ask -f src/main.rs "What does this do?" --agent general-assistant
 
 # With additional context using -m
 squid ask -f src/main.rs "What does this do?" -m "Focus on error handling"
@@ -66,6 +73,7 @@ This will read the file content and include it in the prompt, allowing the AI to
 - `-f, --file <PATH>` - File to read and include in context
 - `-m, --message <TEXT>` - Additional context message
 - `-p, --prompt <FILE>` - Custom system prompt file
+- `--agent <NAME>` - Agent to use (defaults to default_agent from config)
 - `--no-stream` - Disable streaming
 
 ## Review Command
@@ -73,8 +81,11 @@ This will read the file content and include it in the prompt, allowing the AI to
 Review code files with language-specific analysis.
 
 ```bash
-# Review a file with language-specific prompts (streams by default)
+# Review a file with language-specific prompts (streams by default, uses default agent)
 squid review src/main.rs
+
+# Use a specific agent for review
+squid review src/main.rs --agent code-reviewer
 
 # Focus on specific aspects
 squid review styles.css -m "Focus on performance issues"
@@ -313,7 +324,7 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 
 ## Init Command
 
-Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings and preferences.
+Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant and code-reviewer), and preferences.
 
 ### Interactive Mode (Default)
 
@@ -330,33 +341,44 @@ squid init /path/to/project
 
 **Interactive prompts:**
 - **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
-- **API Model**: The model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 - **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
-- **Context Window**: Maximum context window size in tokens (e.g., `32768`)
 - **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
+- **RAG Setup**: Optional document search and retrieval features
+
+**What gets created:**
+- Default agents: `general-assistant` (full access) and `code-reviewer` (read-only)
+- Both agents configured with "local-model" and a 32768 token context window
+- Can be customized later by editing the `agents` section in `squid.config.json`
 
 **Example session:**
 ```
 $ squid init
 INFO: Initializing squid configuration in "."...
 ? API URL: http://127.0.0.1:1234/v1
-? API Model: local-model
 ? API Key (optional, press Enter to skip): 
-? Context Window (tokens): 32768
 ? Log Level: error
+? Enable RAG (Retrieval-Augmented Generation)? (y/N): n
 
-Configuration saved to: "squid.config.json"
+✅ Configuration saved to: "squid.config.json"
+
+Settings:
   API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
   API Key: [not set]
-  Context Window: 32768 tokens
   Log Level: error
+  RAG Enabled: no
 
-✓ Default permissions configured
-  Allowed: ["now"]
+Agents configured:
+  • general-assistant (default)
+    - Model: local-model
+    - Permissions: Full access (read, write, bash)
+  • code-reviewer
+    - Model: local-model
+    - Permissions: Read-only (no write, no bash)
 
-✓ Created .squidignore with default patterns
-  Edit this file to customize which files squid should ignore
+Next steps:
+  1. Start the server: squid serve
+  2. Or use CLI: squid ask "your question"
+  3. Open Web UI: http://localhost:3000
 ```
 
 ### Non-Interactive Mode
@@ -365,25 +387,25 @@ Provide configuration values via command-line arguments to skip interactive prom
 
 ```bash
 # Initialize with all parameters
-squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level error
+squid init --url http://127.0.0.1:1234/v1 --log-level error
 
 # Initialize in a specific directory with parameters
-squid init ./my-project --url http://localhost:11434/v1 --model qwen2.5-coder --log-level error
+squid init ./my-project --url http://localhost:11434/v1 --log-level error
 
 # Partial parameters (will prompt for missing values)
-squid init --url http://127.0.0.1:1234/v1 --model gpt-4
+squid init --url http://127.0.0.1:1234/v1
 # Will still prompt for API Key and Log Level
 
 # Include API key for cloud services
-squid init --url https://api.openai.com/v1 --model gpt-4 --key sk-your-key-here --log-level error
+squid init --url https://api.openai.com/v1 --key sk-your-key-here --log-level error
 ```
 
 **Available options:**
 - `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
-- `--model <MODEL>` - API Model (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 - `--key <KEY>` - API Key (optional for local models)
-- `--context-window <SIZE>` - Context window size in tokens (e.g., `32768`)
 - `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
+
+**Note**: Context windows and models are configured per-agent. The init command creates default agents with "local-model" and a 32768 token context window, which you can customize in `squid.config.json` after initialization.
 
 ### Re-running Init on Existing Config
 
@@ -394,28 +416,28 @@ When you run `squid init` on a directory that already has a config file, it will
 
 **Example:**
 ```
-$ squid init --url http://127.0.0.1:1234/v1 --model local-model --log-level info
+$ squid init --url http://127.0.0.1:1234/v1 --log-level info
 Found existing configuration, using current values as defaults...
 
-Configuration saved to: "./squid.config.json"
+✅ Configuration saved to: "./squid.config.json"
+
+Settings:
   API URL: http://127.0.0.1:1234/v1
-  API Model: local-model
   API Key: [configured]
   Log Level: info
 
-✓ Added new default permissions: ["now"]
-
-✓ Current tool permissions:
-  Allowed: ["bash:git status", "bash:ls", "now"]
-  Denied: ["write_file"]
-
-✓ Using existing .squidignore file
+Agents configured:
+  • general-assistant (default)
+    - Model: local-model
+    - Permissions: Full access
+  • code-reviewer
+    - Model: local-model
+    - Permissions: Read-only
 ```
 
 In this example:
-- User's existing permissions (`bash:git status`, `bash:ls`, `write_file` denial) are preserved
-- New default permission (`now`) was automatically added
-- Config version updated from 0.4.0 to 0.5.0
+- Existing agent configurations are preserved and updated
+- Config version updated to match current app version
 
 ### Configuration File Format
 
