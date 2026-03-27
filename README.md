@@ -315,11 +315,17 @@ For manual installations (cargo install, from source), you need to configure Squ
 # Interactive configuration (recommended)
 squid init
 
-# Or use command-line flags
-squid init --url http://127.0.0.1:1234/v1 --model qwen2.5-coder
+# Or use command-line flags to skip prompts
+squid init --url http://127.0.0.1:1234/v1 --log-level info
 ```
 
-This creates a `squid.config.json` file with your LLM connection settings.
+This creates a `squid.config.json` file with:
+- **API endpoint configuration**: Connection to your LLM service
+- **Default agents**: Pre-configured `general-assistant` (full access) and `code-reviewer` (read-only)
+- **Context window settings**: Applied to each agent (can be customized per-agent later)
+- **Optional RAG setup**: Document search and retrieval features
+
+**Note**: CLI commands (`squid ask`, `squid review`) and Web UI will use these agent configurations. If no config exists, commands will suggest running `squid init` first.
 
 **For complete configuration documentation**, including:
 - Interactive and non-interactive `squid init` usage
@@ -347,16 +353,17 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Other OpenAI-compatible services: Check provider's documentation
   
 - `API_MODEL`: The model identifier to use (can be overridden in Web UI)
-  - LM Studio/Ollama/Docker: Use the model name you loaded/pulled
-  - OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
-  - Mistral AI: `devstral-2512`, `mistral-large-latest`, etc.
-  - **Note**: The Web UI can fetch available agents via the `/api/agents` endpoint
+  - ~~`API_MODEL`~~ **DEPRECATED** (as of v0.12.0): Use agent-specific model configuration instead
+    - CLI commands (`ask`, `review`) now use the default agent's model from `squid.config.json`
+    - Web UI always used agent-specific models
+    - Configure models per-agent in the `agents` section (see [Agents](#agents) below)
+    - **Migration**: Remove `API_MODEL` from `.env` and configure models in `squid.config.json` agents
   
 - `API_KEY`: Your API key
   - Local services (LM Studio, Ollama, Docker): `not-needed`
   - Cloud services (OpenAI, Mistral, etc.): Your actual API key
 
-- `CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
+- `SQUID_CONTEXT_WINDOW`: Maximum context window size in tokens (optional, default: `8192`)
   - Used to calculate context utilization and prevent exceeding limits
   - Set via `squid init --context-window 32768` or in config file
   - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models
@@ -439,6 +446,7 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "enabled": true,
       "description": "Reviews code for best practices and potential issues",
       "model": "anthropic/claude-sonnet-4-5",
+      "context_window": 200000,
       "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
@@ -450,6 +458,7 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "enabled": true,
       "description": "Full-featured coding assistant",
       "model": "qwen2.5-coder-7b-instruct",
+      "context_window": 32768,
       "pricing_model": "gpt-4o",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
@@ -475,6 +484,11 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
   - Maps your local model to a known cloud model's pricing (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
   - Cloud models use their own pricing automatically and don't need this field
   - Example: Set to `"gpt-4o"` for high-capability models or `"gpt-4o-mini"` for smaller models
+- **context_window** (optional): Maximum context window size in tokens for this agent
+  - Overrides the global `context_window` setting for this specific agent
+  - Used for accurate token usage tracking and context utilization calculations
+  - If not specified, uses the global `context_window` from the root config
+  - Example: `32768` for Qwen2.5-Coder, `200000` for Claude 3.5 Sonnet, `128000` for GPT-4
 - **prompt** (optional): Custom system prompt for this agent
   - Overrides the default system prompt
   - Defines the agent's personality and behavior
@@ -497,7 +511,7 @@ You can create agents for different purposes:
 - **General Assistant** (full access): Makes code changes and runs commands
 - **Terminal Assistant** (command specialist): Focused on bash operations with specific command allowlists
 
-See `sample-files/agents-example.json` for a complete configuration with multiple agents.
+
 
 **Migration Note:** If you have an existing `squid.config.json` without agents, add the `agents` section to enable agent-based configuration. Legacy configurations continue to work but use the global model setting.
 
@@ -531,13 +545,25 @@ See `sample-files/agents-example.json` for a complete configuration with multipl
 - ✅ Accurate token usage statistics displayed in web UI
 - ✅ Better planning for long conversations
 
-**Example configuration:**
-```bash
-# For Qwen2.5-Coder with 32K context
-squid init --context-window 32768
+**Setting agent-specific context windows:**
 
-# For GPT-4 with 128K context
-squid init --context-window 128000
+After running `squid init`, edit `squid.config.json` to set context windows per agent:
+
+```json
+{
+  "agents": {
+    "general-assistant": {
+      "model": "local-model",
+      "context_window": 32768,  // Qwen2.5-Coder: 32K
+      ...
+    },
+    "code-reviewer": {
+      "model": "gpt-4",
+      "context_window": 128000,  // GPT-4: 128K
+      ...
+    }
+  }
+}
 ```
 
 </details>
@@ -654,14 +680,22 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid logs`** - View application logs
 - **`squid init`** - Initialize project configuration
 
+**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require a `squid.config.json` file. If the file is not found, Squid will display a helpful message suggesting you run `squid init` first to set up your configuration and default agents.
+
 **Quick Examples:**
 
 ```bash
-# Ask a question
+# Ask a question (uses default agent)
 squid ask "What is Rust?"
 
-# Review a file
+# Ask with specific agent
+squid ask "What is Rust?" --agent code-reviewer
+
+# Review a file (uses default agent)
 squid review src/main.rs
+
+# Review with specific agent
+squid review src/main.rs --agent general-assistant
 
 # Initialize RAG for a project
 squid rag init

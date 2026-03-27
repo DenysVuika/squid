@@ -11,23 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
-- **Agent Pricing Configuration**: Added optional `pricing_model` field to agent configuration
-  - Allows local models to map to known cloud models for accurate cost estimation (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
-  - Frontend uses `tokenlens` library with pricing model for token cost calculations
-  - Cloud models use their own pricing automatically and don't need this field
-  - See `sample-files/agents-example.json` and README for examples
+- **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation
+- **Per-Agent Context Window**: Agents can now specify their own `context_window` setting, overriding the global default
+- **Configuration Check for CLI**: Commands now suggest running `squid init` if `squid.config.json` is not found
+- **Improved Init Command**: `squid init` now creates two default agents (`general-assistant` and `code-reviewer`) with detailed setup summary
+- **Agent Selection in CLI**: Added `--agent` parameter to `ask` and `review` commands to specify which agent to use
 
 ### Changed
 
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
+- **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use agent configurations instead of global `API_MODEL`
+- **Environment Variable Renamed**: `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW` for clarity and to avoid conflicts
+
+### Deprecated
+
+- **`API_MODEL` Configuration**: Deprecated in favor of agent-specific model configuration. Remove from `.env` and configure per-agent in `squid.config.json`
+- **`--context-window` CLI Parameter**: Removed from `squid init` command. Context windows are now configured per-agent in `squid.config.json`
 
 ### Removed
 
-- **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint
-  - Models API was replaced by agent-based architecture in v0.11.0
-  - `fetchModels()` function removed from frontend
-  - `model-metadata.json` file removed (pricing configuration moved to per-agent `pricing_model` field)
+- **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint. Models API replaced by agent-based architecture
 
 ## [0.11.0] - 2026-03-25
 
@@ -39,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Per-agent tool permissions for fine-grained security control
   - New `/api/agents` endpoint returning available agents
   - Example configurations: code reviewer (read-only), general assistant (full access), safe explorer, terminal specialist
-  - See `sample-files/agents-example.json` for configuration examples
+  - See README for configuration examples
 - **Logs Reset Command**: Clear all logs from the database with `squid logs reset`
   - New subcommand structure: `squid logs show` (view) and `squid logs reset` (clear)
   - Increased default log limit from 50 to 100 entries for `logs show`
@@ -213,7 +217,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `context_window` field in `squid.config.json` (e.g., `32768` for Qwen2.5-Coder)
   - Context utilization percentage displayed in web UI
   - Helps prevent API errors from exceeding context limits
-  - Can be set via `squid init --context-window 32768` or environment variable `CONTEXT_WINDOW`
+  - Can be set via `squid init --context-window 32768` or environment variable `SQUID_CONTEXT_WINDOW`
 - **Token Usage & Cost Tracking**: Real-time token counts and cost estimates
   - Visual token usage indicator in chat header with percentage and breakdown
   - Track input, output, reasoning, and cache tokens separately

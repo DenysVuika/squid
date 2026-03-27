@@ -50,7 +50,7 @@ pub fn combine_prompts(task_prompt: &str) -> String {
 /// The model doesn't need to see its own past reasoning to continue the conversation.
 pub fn strip_reasoning_blocks(content: &str) -> String {
     let mut result = content.to_string();
-    
+
     // Remove all <think>...</think> blocks
     loop {
         if let Some(start) = result.find("<think>") {
@@ -71,7 +71,7 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
             break;
         }
     }
-    
+
     // Trim any extra whitespace that might result from removing blocks
     result.trim().to_string()
 }
@@ -89,14 +89,14 @@ fn compose_user_message(
     } else {
         String::new()
     };
-    
+
     if let Some(content) = file_content {
         let file_info = if let Some(path) = file_path {
             format!("the file '{}'", path)
         } else {
             "the file".to_string()
         };
-        
+
         if enable_env_context {
             format!(
                 "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
@@ -164,10 +164,11 @@ pub async fn ask_llm_streaming(
     file_content: Option<&str>,
     file_path: Option<&str>,
     system_prompt: Option<&str>,
+    model: &str,
     app_config: &config::Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using API Model: {}", app_config.api_model);
+    debug!("Using Model: {}", model);
 
     let config = OpenAIConfig::new()
         .with_api_base(&app_config.api_url)
@@ -197,7 +198,7 @@ pub async fn ask_llm_streaming(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(&app_config.api_model)
+        .model(model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .stream_options(ChatCompletionStreamOptions {
@@ -348,7 +349,7 @@ pub async fn ask_llm_streaming(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(&app_config.api_model)
+            .model(model)
             .messages(messages)
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
@@ -402,10 +403,11 @@ pub async fn ask_llm(
     file_content: Option<&str>,
     file_path: Option<&str>,
     system_prompt: Option<&str>,
+    model: &str,
     app_config: &config::Config,
 ) -> Result<String, Box<dyn std::error::Error>> {
     debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using API Model: {}", app_config.api_model);
+    debug!("Using Model: {}", model);
 
     let config = OpenAIConfig::new()
         .with_api_base(&app_config.api_url)
@@ -435,7 +437,7 @@ pub async fn ask_llm(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(&app_config.api_model)
+        .model(model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .build()?;
@@ -519,7 +521,7 @@ pub async fn ask_llm(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(&app_config.api_model)
+            .model(model)
             .messages(messages)
             .build()?;
 

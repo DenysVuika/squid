@@ -40,15 +40,9 @@ enum Commands {
         /// API URL (skips interactive prompt if provided)
         #[arg(long)]
         url: Option<String>,
-        /// API Model (skips interactive prompt if provided)
-        #[arg(long)]
-        model: Option<String>,
         /// API Key (skips interactive prompt if provided)
         #[arg(long)]
         key: Option<String>,
-        /// Context window size in tokens (skips interactive prompt if provided)
-        #[arg(long)]
-        context_window: Option<u32>,
         /// Log Level (skips interactive prompt if provided)
         #[arg(long)]
         log_level: Option<String>,
@@ -69,6 +63,9 @@ enum Commands {
         /// Optional custom system prompt file
         #[arg(short, long)]
         prompt: Option<PathBuf>,
+        /// Agent to use (defaults to default_agent from config)
+        #[arg(long)]
+        agent: Option<String>,
         /// Enable RAG (overrides config setting)
         #[arg(long)]
         rag: bool,
@@ -86,6 +83,9 @@ enum Commands {
         /// Disable streaming (return complete response at once)
         #[arg(long)]
         no_stream: bool,
+        /// Agent to use (defaults to default_agent from config)
+        #[arg(long)]
+        agent: Option<String>,
         /// Enable RAG (overrides config setting)
         #[arg(long)]
         rag: bool,
@@ -153,6 +153,22 @@ enum RagCommands {
     },
     /// Show RAG statistics
     Stats,
+}
+
+/// Check if configuration file exists and suggest running init
+fn check_config_or_suggest_init() -> bool {
+    if !config::Config::config_file_exists() {
+        eprintln!("⚠️  No squid.config.json found in current directory or parent directories.\n");
+        eprintln!("To get started, run:");
+        eprintln!("  squid init\n");
+        eprintln!("This will guide you through setting up:");
+        eprintln!("  • API endpoint configuration");
+        eprintln!("  • Default agents (general-assistant, code-reviewer)");
+        eprintln!("  • Context window settings");
+        eprintln!("  • Optional RAG (document search) features\n");
+        return false;
+    }
+    true
 }
 
 /// Initialize RAG system if needed based on config and CLI flags
@@ -238,9 +254,7 @@ async fn main() {
         Commands::Init {
             dir,
             url,
-            model,
             key: api_key,
-            context_window,
             log_level,
         } => {
             info!("Initializing squid configuration in {:?}...", dir);
@@ -296,45 +310,11 @@ async fn main() {
                 }
             };
 
-            let final_model = if let Some(m) = model {
-                m.clone()
-            } else {
-                match inquire::Text::new("API Model:")
-                    .with_default(&default_config.api_model)
-                    .with_help_message("The model identifier to use")
-                    .prompt()
-                {
-                    Ok(m) => m,
-                    Err(_) => {
-                        error!("Configuration initialization cancelled or failed");
-                        return;
-                    }
-                }
-            };
 
-            let final_context_window = if context_window.is_some() {
-                context_window.unwrap()
-            } else {
-                match inquire::Text::new("Context Window (tokens):")
-                    .with_default(&default_config.context_window.to_string())
-                    .with_help_message(
-                        "Max context window size for your model (e.g., 32768 for Qwen2.5-Coder, 128000 for GPT-4)",
-                    )
-                    .prompt()
-                {
-                    Ok(ctx_str) => match ctx_str.parse::<u32>() {
-                        Ok(ctx) => ctx,
-                        Err(_) => {
-                            eprintln!("Invalid context window size, using default: {}", default_config.context_window);
-                            default_config.context_window
-                        }
-                    },
-                    Err(_) => {
-                        error!("Configuration initialization cancelled or failed");
-                        return;
-                    }
-                }
-            };
+
+            // Use default context window (32768) for agents
+            let final_context_window = 32768u32;
+
 
             let final_api_key = if api_key.is_some() {
                 api_key.clone()
@@ -468,11 +448,69 @@ async fn main() {
                 false
             };
 
+            // Create default agents with proper configuration
+            let mut agents = std::collections::HashMap::new();
+
+            agents.insert(
+                "general-assistant".to_string(),
+                agent::AgentConfig {
+                    name: "General Assistant".to_string(),
+                    enabled: true,
+                    description: "Full-featured coding assistant with all tools".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: None,
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(32768),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "now".to_string(),
+                            "read_file".to_string(),
+                            "write_file".to_string(),
+                            "grep".to_string(),
+                            "bash:ls".to_string(),
+                            "bash:pwd".to_string(),
+                            "bash:git status".to_string(),
+                            "bash:cat".to_string(),
+                        ],
+                        deny: vec![],
+                    },
+                },
+            );
+
+            agents.insert(
+                "code-reviewer".to_string(),
+                agent::AgentConfig {
+                    name: "Code Reviewer".to_string(),
+                    enabled: true,
+                    description: "Reviews code for quality and security (read-only)".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(32768),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "now".to_string(),
+                            "read_file".to_string(),
+                            "grep".to_string(),
+                        ],
+                        deny: vec![
+                            "write_file".to_string(),
+                            "bash".to_string(),
+                        ],
+                    },
+                },
+            );
+
+            let agents_config = agent::AgentsConfig {
+                agents,
+                default_agent: "general-assistant".to_string(),
+            };
+
             let config = config::Config {
                 api_url: final_url,
-                api_model: final_model,
+                api_model: None, // Deprecated: use agent-specific models
                 api_key: final_api_key,
-                context_window: final_context_window,
+                context_window: 32768, // Global default fallback
                 log_level: final_log_level,
                 db_log_level: config::Config::default().db_log_level,
                 version: None, // Will be set automatically by save_to_dir()
@@ -480,16 +518,16 @@ async fn main() {
                 enable_env_context: config::Config::default().enable_env_context,
                 rag: final_rag_config,
                 server: config::Config::default().server,
-                agents: config::Config::default().agents,
+                agents: agents_config,
             };
 
             match config.save_to_dir(dir) {
                 Ok(_) => {
                     let config_path = dir.join("squid.config.json");
                     info!("✓ Configuration saved to {:?}", config_path);
-                    println!("\nConfiguration saved to: {:?}", config_path);
+                    println!("\n✅ Configuration saved to: {:?}", config_path);
+                    println!("\nSettings:");
                     println!("  API URL: {}", config.api_url);
-                    println!("  API Model: {}", config.api_model);
                     if config.api_key.is_some() {
                         println!("  API Key: [configured]");
                     } else {
@@ -498,6 +536,19 @@ async fn main() {
                     println!("  Context Window: {} tokens", config.context_window);
                     println!("  Log Level: {}", config.log_level);
                     println!("  RAG Enabled: {}", if config.rag.enabled { "yes" } else { "no" });
+
+                    println!("\nAgents configured:");
+                    println!("  • general-assistant (default)");
+                    println!("    - Model: {}", config.agents.agents.get("general-assistant").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Full access (read, write, bash)");
+                    println!("  • code-reviewer");
+                    println!("    - Model: {}", config.agents.agents.get("code-reviewer").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Read-only (no write, no bash)");
+
+                    println!("\nNext steps:");
+                    println!("  1. Start the server: squid serve");
+                    println!("  2. Or use CLI: squid ask \"your question\"");
+                    println!("  3. Open Web UI: http://localhost:3000");
                     if config.rag.enabled {
                         println!("    Embedding URL: {}", config.rag.embedding_url);
                         println!("    Embedding Model: {}", config.rag.embedding_model);
@@ -587,9 +638,14 @@ async fn main() {
             no_stream,
             file,
             prompt,
+            agent,
             rag,
             no_rag,
         } => {
+            if !check_config_or_suggest_init() {
+                return;
+            }
+
             let full_question = if let Some(m) = message {
                 format!("{} {}", question, m)
             } else {
@@ -708,12 +764,28 @@ async fn main() {
                 (None, file_opt) => file_opt,
             };
 
+            // Get agent's model (use specified agent or default)
+            let agent_id = agent.as_ref().unwrap_or(&app_config.agents.default_agent);
+            let model = match app_config.get_agent(agent_id) {
+                Some(agent_config) => {
+                    info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+                    agent_config.model.as_str()
+                }
+                None => {
+                    error!("Agent '{}' not found", agent_id);
+                    println!("🦑: Configuration error - agent '{}' not found", agent_id);
+                    println!("Available agents: {}", app_config.agents.agents.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+                    return;
+                }
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &full_question,
                     enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
+                    model,
                     &app_config,
                 )
                 .await
@@ -731,6 +803,7 @@ async fn main() {
                     enhanced_file_content.as_deref(),
                     file.as_ref().and_then(|p| p.to_str()),
                     custom_prompt.as_deref(),
+                    model,
                     &app_config,
                 )
                 .await
@@ -743,9 +816,14 @@ async fn main() {
             file,
             message,
             no_stream,
+            agent,
             rag,
             no_rag,
         } => {
+            if !check_config_or_suggest_init() {
+                return;
+            }
+
             info!("Reviewing file: {:?}", file);
 
             // Validate path before reading
@@ -843,12 +921,28 @@ async fn main() {
                 file_content
             };
 
+            // Get agent's model (use specified agent or default)
+            let agent_id = agent.as_ref().unwrap_or(&app_config.agents.default_agent);
+            let model = match app_config.get_agent(agent_id) {
+                Some(agent_config) => {
+                    info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+                    agent_config.model.as_str()
+                }
+                None => {
+                    error!("Agent '{}' not found", agent_id);
+                    println!("🦑: Configuration error - agent '{}' not found", agent_id);
+                    println!("Available agents: {}", app_config.agents.agents.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+                    return;
+                }
+            };
+
             if *no_stream {
                 match llm::ask_llm(
                     &question,
                     Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
+                    model,
                     &app_config,
                 )
                 .await
@@ -866,6 +960,7 @@ async fn main() {
                     Some(&enhanced_content),
                     file.to_str(),
                     Some(&combined_review_prompt),
+                    model,
                     &app_config,
                 )
                 .await
@@ -875,6 +970,10 @@ async fn main() {
             }
         }
         Commands::Serve { port, db, dir } => {
+            if !check_config_or_suggest_init() {
+                return;
+            }
+
             server::start_server(*port, db.clone(), dir.clone(), app_config.clone()).await;
         }
         Commands::Logs { command } => {

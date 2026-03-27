@@ -1,6 +1,6 @@
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model",
+  "context_window": 32768,
   "log_level": "error",
   "db_log_level": "debug",
   "enable_env_context": true,
@@ -22,6 +22,7 @@
       "enabled": true,
       "description": "Full-featured coding assistant with all tools",
       "model": "local-model",
+      "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:pwd", "bash:git status", "bash:cat"],
@@ -33,6 +34,7 @@
       "enabled": true,
       "description": "Reviews code for quality and security (read-only)",
       "model": "local-model",
+      "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
       "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
