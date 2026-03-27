@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Allows local models to map to known cloud models for accurate cost estimation (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
   - Frontend uses `tokenlens` library with pricing model for token cost calculations
   - Cloud models use their own pricing automatically and don't need this field
-  - See `sample-files/agents-example.json` and README for examples
+  - See README for examples
 
 ### Changed
 
@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Per-agent tool permissions for fine-grained security control
   - New `/api/agents` endpoint returning available agents
   - Example configurations: code reviewer (read-only), general assistant (full access), safe explorer, terminal specialist
-  - See `sample-files/agents-example.json` for configuration examples
+  - See README for configuration examples
 - **Logs Reset Command**: Clear all logs from the database with `squid logs reset`
   - New subcommand structure: `squid logs show` (view) and `squid logs reset` (clear)
   - Increased default log limit from 50 to 100 entries for `logs show`

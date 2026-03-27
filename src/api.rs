@@ -396,9 +396,12 @@ pub async fn chat_stream(
     let agent_id = body.agent_id.clone();
     let agent_id_for_stream = agent_id.clone(); // Clone for use inside stream
 
-    // Get agent to extract model_id for token estimation and session storage
-    let model_id = match app_config_clone.get_agent(&agent_id) {
-        Some(agent) => agent.model.clone(),
+    // Get agent to extract model_id and context_window for token estimation and session storage
+    let (model_id, context_window) = match app_config_clone.get_agent(&agent_id) {
+        Some(agent) => {
+            let ctx_window = agent.context_window.unwrap_or(app_config_clone.context_window);
+            (agent.model.clone(), ctx_window)
+        }
         None => {
             return Ok(HttpResponse::BadRequest().json(serde_json::json!({
                 "error": format!("Agent '{}' not found", agent_id)
@@ -778,7 +781,7 @@ pub async fn chat_stream(
                         total_output_tokens,
                         total_reasoning_tokens,
                         total_cache_tokens,
-                        app_config_clone.context_window,
+                        context_window,
                     ) {
                         debug!("Failed to update token usage: {}", e);
                     }
@@ -1414,6 +1417,8 @@ pub struct AgentInfo {
     pub permissions: crate::agent::AgentPermissions,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pricing_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1440,6 +1445,7 @@ pub async fn get_agents(
             enabled: agent.enabled,
             permissions: agent.permissions.clone(),
             pricing_model: agent.pricing_model.clone(),
+            context_window: agent.context_window,
         })
         .collect();
 

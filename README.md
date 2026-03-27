@@ -439,6 +439,7 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "enabled": true,
       "description": "Reviews code for best practices and potential issues",
       "model": "anthropic/claude-sonnet-4-5",
+      "context_window": 200000,
       "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
@@ -450,6 +451,7 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "enabled": true,
       "description": "Full-featured coding assistant",
       "model": "qwen2.5-coder-7b-instruct",
+      "context_window": 32768,
       "pricing_model": "gpt-4o",
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
@@ -475,6 +477,11 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
   - Maps your local model to a known cloud model's pricing (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
   - Cloud models use their own pricing automatically and don't need this field
   - Example: Set to `"gpt-4o"` for high-capability models or `"gpt-4o-mini"` for smaller models
+- **context_window** (optional): Maximum context window size in tokens for this agent
+  - Overrides the global `context_window` setting for this specific agent
+  - Used for accurate token usage tracking and context utilization calculations
+  - If not specified, uses the global `context_window` from the root config
+  - Example: `32768` for Qwen2.5-Coder, `200000` for Claude 3.5 Sonnet, `128000` for GPT-4
 - **prompt** (optional): Custom system prompt for this agent
   - Overrides the default system prompt
   - Defines the agent's personality and behavior
@@ -497,7 +504,7 @@ You can create agents for different purposes:
 - **General Assistant** (full access): Makes code changes and runs commands
 - **Terminal Assistant** (command specialist): Focused on bash operations with specific command allowlists
 
-See `sample-files/agents-example.json` for a complete configuration with multiple agents.
+
 
 **Migration Note:** If you have an existing `squid.config.json` without agents, add the `agents` section to enable agent-based configuration. Legacy configurations continue to work but use the global model setting.
 

@@ -26,6 +26,7 @@
       "enabled": true,
       "description": "Full-featured coding assistant with all tools",
       "model": "qwen3.5-4b",
+      "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
       "permissions": {
         "allow": [
@@ -44,6 +45,7 @@
       "enabled": true,
       "description": "Reviews code for quality and security (read-only)",
       "model": "qwen3.5-4b",
+      "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
       "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
@@ -56,6 +58,7 @@
       "enabled": true,
       "description": "Lightweight assistant with minimal permissions",
       "model": "liquid/lfm2.5-1.2b",
+      "context_window": 8192,
       "pricing_model": "gpt-4o-mini",
       "permissions": {
         "allow": ["now"],

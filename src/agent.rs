@@ -29,6 +29,8 @@ pub struct AgentConfig {
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pricing_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
     #[serde(default)]
     pub permissions: AgentPermissions,
 }

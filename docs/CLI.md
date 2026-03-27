@@ -435,6 +435,7 @@ The `squid.config.json` file created by `squid init`:
       "enabled": true,
       "description": "Full-featured coding assistant",
       "model": "qwen2.5-coder",
+      "context_window": 32768,
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
         "deny": []
@@ -453,7 +454,7 @@ The `squid.config.json` file created by `squid init`:
 | `api_url` | string | OpenAI-compatible API endpoint URL |
 | `api_model` | string | Model identifier to use |
 | `api_key` | string (optional) | API key for authentication |
-| `context_window` | number | Maximum context window in tokens |
+| `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
 | `enable_env_context` | boolean | Include system info in prompts (default: true) |
 | `database_path` | string | Path to SQLite database file |
