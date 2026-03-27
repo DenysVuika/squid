@@ -223,8 +223,8 @@ docker compose up -d
 ```
 
 The `.env` file configures:
-- **Model endpoints**: `API_URL`, `EMBEDDING_URL` (connect to Docker AI models)
-- **Model identifiers**: `API_MODEL`, `EMBEDDING_MODEL` (which models to use)
+- **Model endpoints**: `API_URL`, `SQUID_EMBEDDING_URL` (connect to Docker AI models)
+- **Model identifiers**: `API_MODEL`, `SQUID_EMBEDDING_MODEL` (which models to use)
 
 **Default configuration**:
 - LLM: Qwen2.5-Coder 7B via Docker AI at `http://llm:8080/v1`
@@ -246,8 +246,8 @@ services:
       # For LM Studio (running on host)
       - API_URL=http://host.docker.internal:1234/v1
       - API_MODEL=qwen2.5-coder
-      - EMBEDDING_URL=http://host.docker.internal:1234/v1
-      - EMBEDDING_MODEL=nomic-embed-text
+      - SQUID_EMBEDDING_URL=http://host.docker.internal:1234/v1
+      - SQUID_EMBEDDING_MODEL=nomic-embed-text
       
       # For Ollama (running on host)
       # - API_URL=http://host.docker.internal:11434/v1
@@ -325,7 +325,12 @@ This creates a `squid.config.json` file with:
 - **Context window settings**: Applied to each agent (can be customized per-agent later)
 - **Optional RAG setup**: Document search and retrieval features
 
-**Note**: CLI commands (`squid ask`, `squid review`) and Web UI will use these agent configurations. If no config exists, commands will suggest running `squid init` first.
+**Note**: CLI commands (`squid ask`, `squid review`) work with either:
+- A `squid.config.json` file (recommended for agent configurations)
+- Environment variables in a `.env` file (minimum: `API_URL`)
+- A combination of both (environment variables override config file)
+
+If neither is configured, commands will suggest running `squid init` or setting up environment variables.
 
 **For complete configuration documentation**, including:
 - Interactive and non-interactive `squid init` usage
@@ -368,14 +373,14 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Set via `squid init --context-window 32768` or in config file
   - See [Common Context Window Sizes](#common-context-window-sizes) below for popular models
 
-- `LOG_LEVEL`: Console logging verbosity (optional, default: `error`)
+- `SQUID_LOG_LEVEL`: Console logging verbosity (optional, default: `error`)
   - `error`: Only errors (default)
   - `warn`: Warnings and errors
   - `info`: Informational messages
   - `debug`: Detailed debugging information
   - `trace`: Very verbose output
 
-- `DB_LOG_LEVEL`: Database logging verbosity (optional, default: `debug`)
+- `SQUID_DB_LOG_LEVEL`: Database logging verbosity (optional, default: `debug`)
   - Controls what log levels are saved to the database (viewable in Web UI)
   - `error`: Only errors
   - `warn`: Warnings and errors
@@ -385,7 +390,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - **Note**: Only logs from the squid application are saved to the database (dependency logs are filtered out)
   - Independent from console logging - you can have different levels for console and database
 
-- `DATABASE_PATH`: Path to the SQLite database file (optional, default: `squid.db`)
+- `SQUID_DATABASE_PATH`: Path to the SQLite database file (optional, default: `squid.db`)
   - Used to store chat sessions, messages, and logs
   - Can be relative (e.g., `squid.db`) or absolute (e.g., `/path/to/squid.db`)
   - When relative, resolved based on:
@@ -394,7 +399,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     3. Current working directory (creates new database)
   - **Important**: The server automatically finds the correct database when running from subdirectories
   - Set via `.env` file to override automatic detection
-  - Example: `DATABASE_PATH=/Users/you/squid-data/squid.db`
+  - Example: `SQUID_DATABASE_PATH=/Users/you/squid-data/squid.db`
 
 - `enable_env_context`: Include environment context in LLM prompts (optional, default: `true`)
   - When enabled, the LLM receives system information (OS, platform, timezone, timestamps) to provide more accurate responses
@@ -680,7 +685,10 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid logs`** - View application logs
 - **`squid init`** - Initialize project configuration
 
-**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require a `squid.config.json` file. If the file is not found, Squid will display a helpful message suggesting you run `squid init` first to set up your configuration and default agents.
+**Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:
+- Run `squid init` to create a config file with agent configurations
+- Use a `.env` file with environment variables like `API_URL`, `API_KEY`, etc.
+- Mix both approaches (environment variables override config file settings)
 
 **Quick Examples:**
 
@@ -751,7 +759,7 @@ For complete RAG documentation including configuration, API endpoints, best prac
   - If `squid.config.json` exists, database is stored relative to the config file
   - If no config file, searches parent directories for existing `squid.db`
   - Falls back to current directory if no database found
-- You can override the location with `DATABASE_PATH` environment variable or in config file
+- You can override the location with `SQUID_DATABASE_PATH` environment variable or in config file
 - Run the server from any subdirectory - it will find and use the same database
 
 Press `Ctrl+C` to stop the server.

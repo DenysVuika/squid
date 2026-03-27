@@ -266,13 +266,18 @@ impl Config {
             }
         }
 
-        if let Ok(log_level) = std::env::var("LOG_LEVEL") {
-            debug!("Overriding LOG_LEVEL from environment");
+        if let Ok(log_level) = std::env::var("SQUID_LOG_LEVEL") {
+            debug!("Overriding SQUID_LOG_LEVEL from environment");
             config.log_level = log_level;
         }
 
-        if let Ok(db_path) = std::env::var("DATABASE_PATH") {
-            debug!("Overriding DATABASE_PATH from environment");
+        if let Ok(db_log_level) = std::env::var("SQUID_DB_LOG_LEVEL") {
+            debug!("Overriding SQUID_DB_LOG_LEVEL from environment");
+            config.db_log_level = db_log_level;
+        }
+
+        if let Ok(db_path) = std::env::var("SQUID_DATABASE_PATH") {
+            debug!("Overriding SQUID_DATABASE_PATH from environment");
             config.database_path = db_path;
         }
 
@@ -284,46 +289,46 @@ impl Config {
         }
 
         // RAG configuration overrides
-        if let Ok(rag_enabled) = std::env::var("RAG_ENABLED") {
+        if let Ok(rag_enabled) = std::env::var("SQUID_RAG_ENABLED") {
             if let Ok(enabled) = rag_enabled.parse() {
-                debug!("Overriding RAG_ENABLED from environment");
+                debug!("Overriding SQUID_RAG_ENABLED from environment");
                 config.rag.enabled = enabled;
             }
         }
 
-        if let Ok(embedding_model) = std::env::var("EMBEDDING_MODEL") {
-            debug!("Overriding EMBEDDING_MODEL from environment");
+        if let Ok(embedding_model) = std::env::var("SQUID_EMBEDDING_MODEL") {
+            debug!("Overriding SQUID_EMBEDDING_MODEL from environment");
             config.rag.embedding_model = embedding_model;
         }
 
-        if let Ok(embedding_url) = std::env::var("EMBEDDING_URL") {
-            debug!("Overriding EMBEDDING_URL from environment");
+        if let Ok(embedding_url) = std::env::var("SQUID_EMBEDDING_URL") {
+            debug!("Overriding SQUID_EMBEDDING_URL from environment");
             config.rag.embedding_url = embedding_url;
         }
 
-        if let Ok(chunk_size) = std::env::var("RAG_CHUNK_SIZE") {
+        if let Ok(chunk_size) = std::env::var("SQUID_RAG_CHUNK_SIZE") {
             if let Ok(size) = chunk_size.parse() {
-                debug!("Overriding RAG_CHUNK_SIZE from environment");
+                debug!("Overriding SQUID_RAG_CHUNK_SIZE from environment");
                 config.rag.chunk_size = size;
             }
         }
 
-        if let Ok(chunk_overlap) = std::env::var("RAG_CHUNK_OVERLAP") {
+        if let Ok(chunk_overlap) = std::env::var("SQUID_RAG_CHUNK_OVERLAP") {
             if let Ok(overlap) = chunk_overlap.parse() {
-                debug!("Overriding RAG_CHUNK_OVERLAP from environment");
+                debug!("Overriding SQUID_RAG_CHUNK_OVERLAP from environment");
                 config.rag.chunk_overlap = overlap;
             }
         }
 
-        if let Ok(top_k) = std::env::var("RAG_TOP_K") {
+        if let Ok(top_k) = std::env::var("SQUID_RAG_TOP_K") {
             if let Ok(k) = top_k.parse() {
-                debug!("Overriding RAG_TOP_K from environment");
+                debug!("Overriding SQUID_RAG_TOP_K from environment");
                 config.rag.top_k = k;
             }
         }
 
-        if let Ok(docs_path) = std::env::var("RAG_DOCUMENTS_PATH") {
-            debug!("Overriding RAG_DOCUMENTS_PATH from environment");
+        if let Ok(docs_path) = std::env::var("SQUID_RAG_DOCUMENTS_PATH") {
+            debug!("Overriding SQUID_RAG_DOCUMENTS_PATH from environment");
             config.rag.documents_path = docs_path;
         }
 

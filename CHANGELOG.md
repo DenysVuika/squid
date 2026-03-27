@@ -13,16 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
 - **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation
 - **Per-Agent Context Window**: Agents can now specify their own `context_window` setting, overriding the global default
-- **Configuration Check for CLI**: Commands now suggest running `squid init` if `squid.config.json` is not found
+- **Environment-Only Configuration Support**: CLI commands now work with just environment variables (no `squid.config.json` required if `API_URL` is set)
 - **Improved Init Command**: `squid init` now creates two default agents (`general-assistant` and `code-reviewer`) with detailed setup summary
 - **Agent Selection in CLI**: Added `--agent` parameter to `ask` and `review` commands to specify which agent to use
 
 ### Changed
 
+- **Relaxed Configuration Check**: CLI commands no longer require `squid.config.json` if essential environment variables like `API_URL` are set
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
 - **CLI Commands Use Default Agent**: `squid ask` and `squid review` now use agent configurations instead of global `API_MODEL`
-- **Environment Variable Renamed**: `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW` for clarity and to avoid conflicts
+- **Environment Variables Renamed**: Standardized with `SQUID_` prefix for clarity and to avoid conflicts
+  - `LOG_LEVEL` → `SQUID_LOG_LEVEL`
+  - `DB_LOG_LEVEL` → `SQUID_DB_LOG_LEVEL`
+  - `DATABASE_PATH` → `SQUID_DATABASE_PATH`
+  - `RAG_ENABLED` → `SQUID_RAG_ENABLED`
+  - `RAG_CHUNK_SIZE` → `SQUID_RAG_CHUNK_SIZE`
+  - `RAG_CHUNK_OVERLAP` → `SQUID_RAG_CHUNK_OVERLAP`
+  - `RAG_TOP_K` → `SQUID_RAG_TOP_K`
+  - `RAG_DOCUMENTS_PATH` → `SQUID_RAG_DOCUMENTS_PATH`
+  - `EMBEDDING_MODEL` → `SQUID_EMBEDDING_MODEL`
+  - `EMBEDDING_URL` → `SQUID_EMBEDDING_URL`
+  - `CONTEXT_WINDOW` → `SQUID_CONTEXT_WINDOW`
 
 ### Deprecated
 
@@ -109,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RAG Embedding Configuration in Docker**: Fixed RAG not using Docker AI embedding service
   - Environment variables now override `squid.config.json` settings
   - Prevents config file in workspace from interfering with Docker configuration
-  - Docker Compose sets `RAG_ENABLED=true` and `RAG_DOCUMENTS_PATH=documents` by default
+  - Docker Compose sets `SQUID_RAG_ENABLED=true` and `SQUID_RAG_DOCUMENTS_PATH=documents` by default
   - Added debug logging to display RAG configuration and overrides on server startup
   - Fixed trailing slash in embedding URL causing double `/v1/` in API paths
   - Increased embedding model batch size to 1024 tokens (via `--ubatch-size`)

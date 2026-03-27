@@ -46,19 +46,19 @@ services:
       - RUST_LOG=info
       - RUST_BACKTRACE=1
       - SQUID_CONTEXT_WINDOW=32768
-      - LOG_LEVEL=info
-      - DATABASE_PATH=/data/squid.db
-      - RAG_ENABLED=true
-      - RAG_DOCUMENTS_PATH=documents
-      - RAG_CHUNK_SIZE=512
+      - SQUID_LOG_LEVEL=info
+      - SQUID_DATABASE_PATH=/data/squid.db
+      - SQUID_RAG_ENABLED=true
+      - SQUID_RAG_DOCUMENTS_PATH=documents
+      - SQUID_RAG_CHUNK_SIZE=512
     # Model bindings - Docker AI automatically injects these environment variables
     models:
       llm:
         endpoint_var: API_URL # OpenAI-compatible LLM endpoint
         model_var: API_MODEL # Model identifier for LLM
       embedding:
-        endpoint_var: EMBEDDING_URL # OpenAI-compatible embedding endpoint
-        model_var: EMBEDDING_MODEL # Model identifier for embeddings
+        endpoint_var: SQUID_EMBEDDING_URL # OpenAI-compatible embedding endpoint
+        model_var: SQUID_EMBEDDING_MODEL # Model identifier for embeddings
 
     restart: unless-stopped
     healthcheck:
