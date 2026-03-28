@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::{debug, info, trace};
 use rusqlite::{params, Connection, Result as SqliteResult};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -154,7 +154,7 @@ impl Database {
     pub fn save_session(&self, session: &ChatSession) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
 
-        debug!("Saving session: {}", session.id);
+        trace!("Saving session: {}", session.id);
 
         // Try to update existing session first
         let updated = conn.execute(
@@ -205,7 +205,7 @@ impl Database {
     pub fn load_session(&self, session_id: &str) -> SqliteResult<Option<ChatSession>> {
         let conn = self.conn.lock().unwrap();
 
-        debug!("Loading session: {}", session_id);
+        trace!("Loading session: {}", session_id);
 
         // Load session metadata
         let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window FROM sessions WHERE id = ?1")?;
@@ -253,8 +253,8 @@ impl Database {
 
         // Convert to ChatMessages and load sources for each
         let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
-            debug!("Processing message_id {} for session {}", message_id, session_id);
-            
+            trace!("Processing message_id {} for session {}", message_id, session_id);
+
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -301,12 +301,12 @@ impl Database {
                  ORDER BY step_order ASC"
             )?;
 
-            debug!("Loading thinking steps for message_id: {}", message_id);
-            
+            trace!("Loading thinking steps for message_id: {}", message_id);
+
             let thinking_steps = steps_stmt.query_map(params![message_id], |row| {
                 let tool_args_json: Option<String> = row.get(4)?;
                 let tool_arguments = tool_args_json.and_then(|json| serde_json::from_str(&json).ok());
-                
+
                 Ok(crate::session::ThinkingStep {
                     step_order: row.get(0)?,
                     step_type: row.get(1)?,
@@ -319,12 +319,12 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
 
-            debug!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
-            
+            trace!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
+
             let thinking_steps = if thinking_steps.is_empty() {
                 None
             } else {
-                debug!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
+                trace!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
                 Some(thinking_steps)
             };
 
@@ -346,7 +346,7 @@ impl Database {
     pub fn save_message(&self, session_id: &str, message: &ChatMessage) -> SqliteResult<i64> {
         let conn = self.conn.lock().unwrap();
 
-        debug!("Saving message for session: {} (role: {})", session_id, message.role);
+        trace!("Saving message for session: {} (role: {})", session_id, message.role);
 
         // Insert message
         conn.execute(
@@ -380,7 +380,7 @@ impl Database {
 
             let content_id = if let Some(id) = content_id {
                 // Content already exists, reuse it
-                debug!("Reusing existing content (hash: {})", hash);
+                trace!("Reusing existing content (hash: {})", hash);
                 id
             } else {
                 // Compress content
@@ -395,7 +395,7 @@ impl Database {
                 let original_size = source.content.len() as i64;
                 let compressed_size = compressed.len() as i64;
 
-                debug!("Compressed content from {} to {} bytes ({:.1}% reduction)",
+                trace!("Compressed content from {} to {} bytes ({:.1}% reduction)",
                     original_size, compressed_size,
                     100.0 * (1.0 - compressed_size as f64 / original_size as f64));
 
@@ -427,9 +427,9 @@ impl Database {
             for step in thinking_steps {
                 let tool_args_json = step.tool_arguments.as_ref()
                     .map(|args| serde_json::to_string(args).unwrap_or_default());
-                
+
                 conn.execute(
-                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool, created_at) 
+                    "INSERT INTO thinking_steps (message_id, step_order, step_type, content, tool_name, tool_arguments, tool_result, tool_error, content_before_tool, created_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     params![
                         message_id,
@@ -445,7 +445,7 @@ impl Database {
                     ],
                 )?;
             }
-            debug!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
+            trace!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
         }
 
         Ok(message_id)
@@ -557,7 +557,7 @@ impl Database {
         if updated == 0 {
             // Insert new document
             conn.execute(
-                "INSERT INTO rag_documents (filename, content, content_hash, file_size, created_at, updated_at) 
+                "INSERT INTO rag_documents (filename, content, content_hash, file_size, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![filename, content, content_hash, file_size, now, now],
             )?;
@@ -584,7 +584,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
-            "INSERT INTO rag_chunks (document_id, chunk_index, chunk_text, chunk_tokens) 
+            "INSERT INTO rag_chunks (document_id, chunk_index, chunk_text, chunk_tokens)
              VALUES (?1, ?2, ?3, ?4)",
             params![document_id, chunk_index, chunk_text, chunk_tokens],
         )?;
@@ -966,7 +966,7 @@ mod tests {
     #[test]
     fn test_tool_invocations_persist() {
         use serde_json::json;
-        
+
         // Test that tool invocations are correctly saved and loaded
         let db = Database::new(":memory:").unwrap();
         let mut session = ChatSession::new();
@@ -1013,12 +1013,12 @@ mod tests {
             "Tools executed".to_string(),
             vec![],
         );
-        
+
         // Set thinking steps on the message
         if let Some(message) = session.messages.last_mut() {
             message.thinking_steps = Some(thinking_steps.clone());
         }
-        
+
         let assistant_msg = session.messages.last().unwrap();
         db.save_message(&session_id, assistant_msg).unwrap();
 

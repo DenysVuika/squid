@@ -324,7 +324,7 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 
 ## Init Command
 
-Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant and code-reviewer), and preferences.
+Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant, code-reviewer, and light), and preferences.
 
 ### Interactive Mode (Default)
 
@@ -346,8 +346,9 @@ squid init /path/to/project
 - **RAG Setup**: Optional document search and retrieval features
 
 **What gets created:**
-- Default agents: `general-assistant` (full access) and `code-reviewer` (read-only)
-- Both agents configured with "local-model" and a 32768 token context window
+- Default agents: `general-assistant` (full access), `code-reviewer` (read-only), `light` (minimal permissions), and `pirate` (demo agent with custom personality)
+- All agents configured with "local-model" (general-assistant and code-reviewer use 32768 token context, light and pirate use 8192)
+- Code-reviewer and light agents use `{{persona}}` to include base personality; pirate agent demonstrates fully custom prompt without `{{persona}}`
 - Can be customized later by editing the `agents` section in `squid.config.json`
 
 **Example session:**
@@ -449,7 +450,6 @@ The `squid.config.json` file created by `squid init`:
   "api_model": "qwen2.5-coder",
   "context_window": 32768,
   "log_level": "error",
-  "enable_env_context": true,
   "database_path": "squid.db",
   "agents": {
     "general-assistant": {
@@ -478,7 +478,6 @@ The `squid.config.json` file created by `squid init`:
 | `api_key` | string (optional) | API key for authentication |
 | `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
-| `enable_env_context` | boolean | Include system info in prompts (default: true) |
 | `database_path` | string | Path to SQLite database file |
 | `agents` | object | Agent configurations (see Agents section in README) |
 | `default_agent` | string | Default agent to use |
@@ -496,9 +495,6 @@ API_KEY=not-needed
 SQUID_CONTEXT_WINDOW=32768
 SQUID_DATABASE_PATH=squid.db
 SQUID_LOG_LEVEL=error
-
-# Privacy Settings
-ENABLE_ENV_CONTEXT=true
 ```
 
 **Important Notes:**

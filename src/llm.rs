@@ -16,13 +16,11 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use crate::config;
-use crate::envinfo;
+use crate::template;
 use crate::tools;
 
 // Prompt constants
 const PERSONA: &str = include_str!("./assets/persona.md");
-const TOOLS: &str = include_str!("./assets/tools.md");
-const ENV_TEMPLATE: &str = include_str!("./assets/env.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
@@ -40,9 +38,22 @@ const CODE_REVIEW_MAKEFILE_PROMPT: &str = include_str!("./assets/review-makefile
 const CODE_REVIEW_MARKDOWN_PROMPT: &str = include_str!("./assets/review-md.md");
 const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 
-/// Combines persona, tools, and task-specific prompt into a complete system prompt
+/// Combines persona and task-specific prompt into a complete system prompt
+/// Renders templates with secure context variables
 pub fn combine_prompts(task_prompt: &str) -> String {
-    format!("{}\n\n{}\n\n{}", PERSONA, TOOLS, task_prompt)
+    let renderer = template::TemplateRenderer::new();
+
+    let persona = renderer.render_string(PERSONA).unwrap_or_else(|e| {
+        log::warn!("Failed to render persona template: {}", e);
+        PERSONA.to_string()
+    });
+
+    let task = renderer.render_string(task_prompt).unwrap_or_else(|e| {
+        log::warn!("Failed to render task prompt template: {}", e);
+        task_prompt.to_string()
+    });
+
+    format!("{}\n\n{}", persona, task)
 }
 
 /// Strip <think>...</think> blocks from content
@@ -76,19 +87,14 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
     result.trim().to_string()
 }
 
-/// Composes the user message by injecting environment context and optional file content
+/// Composes the user message with optional file content
+/// Uses template rendering for variable substitution
 fn compose_user_message(
     question: &str,
     file_content: Option<&str>,
     file_path: Option<&str>,
-    enable_env_context: bool,
 ) -> String {
-    let env_section = if enable_env_context {
-        let env_context = envinfo::get_env_context();
-        ENV_TEMPLATE.replace("{{ENV_CONTEXT}}", &env_context)
-    } else {
-        String::new()
-    };
+    let renderer = template::TemplateRenderer::new();
 
     if let Some(content) = file_content {
         let file_info = if let Some(path) = file_path {
@@ -97,23 +103,15 @@ fn compose_user_message(
             "the file".to_string()
         };
 
-        if enable_env_context {
-            format!(
-                "{}\n\nHere is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
-                env_section, file_info, content, question
-            )
-        } else {
-            format!(
-                "Here is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
-                file_info, content, question
-            )
-        }
+        let template = format!(
+            "Here is the content of {}:\n\n```\n{}\n```\n\nUser query: {}",
+            file_info, content, question
+        );
+
+        renderer.render_string(&template).unwrap_or(template)
     } else {
-        if enable_env_context {
-            format!("{}\n\nUser query: {}", env_section, question)
-        } else {
-            format!("User query: {}", question)
-        }
+        let template = format!("User query: {}", question);
+        renderer.render_string(&template).unwrap_or(template)
     }
 }
 
@@ -176,17 +174,25 @@ pub async fn ask_llm_streaming(
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path, app_config.enable_env_context);
+    let user_message = compose_user_message(question, file_content, file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_message = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+
+    // Render template variables in system message
+    let renderer = template::TemplateRenderer::new();
+    let system_message = renderer.render_string(system_prompt_str)
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to render system prompt template: {}", e);
+            system_prompt_str.to_string()
+        });
 
     debug!("System message:\n{}", system_message);
     debug!("User message:\n{}", user_message);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
-            content: system_message.to_string().into(),
+            content: system_message.into(),
             ..Default::default()
         }
         .into(),
@@ -415,17 +421,25 @@ pub async fn ask_llm(
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path, app_config.enable_env_context);
+    let user_message = compose_user_message(question, file_content, file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_message = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+
+    // Render template variables in system message
+    let renderer = template::TemplateRenderer::new();
+    let system_message = renderer.render_string(system_prompt_str)
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to render system prompt template: {}", e);
+            system_prompt_str.to_string()
+        });
 
     debug!("System message:\n{}", system_message);
     debug!("User message:\n{}", user_message);
 
     let initial_messages = vec![
         ChatCompletionRequestSystemMessage {
-            content: system_message.to_string().into(),
+            content: system_message.into(),
             ..Default::default()
         }
         .into(),

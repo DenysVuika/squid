@@ -14,6 +14,7 @@ mod logger;
 mod rag;
 mod server;
 mod session;
+mod template;
 mod tokens;
 mod tools;
 mod validate;
@@ -470,7 +471,6 @@ async fn main() {
                     context_window: Some(32768),
                     permissions: agent::AgentPermissions {
                         allow: vec![
-                            "now".to_string(),
                             "read_file".to_string(),
                             "write_file".to_string(),
                             "grep".to_string(),
@@ -478,6 +478,7 @@ async fn main() {
                             "bash:pwd".to_string(),
                             "bash:git status".to_string(),
                             "bash:cat".to_string(),
+                            "bash:date".to_string(),
                         ],
                         deny: vec![],
                     },
@@ -491,19 +492,56 @@ async fn main() {
                     enabled: true,
                     description: "Reviews code for quality and security (read-only)".to_string(),
                     model: "local-model".to_string(),
-                    prompt: Some("You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
+                    prompt: Some("{{persona}}\n\nYou are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
                     pricing_model: Some("gpt-4o-mini".to_string()),
                     context_window: Some(32768),
                     permissions: agent::AgentPermissions {
                         allow: vec![
-                            "now".to_string(),
                             "read_file".to_string(),
                             "grep".to_string(),
+                            "bash:date".to_string(),
                         ],
                         deny: vec![
                             "write_file".to_string(),
-                            "bash".to_string(),
                         ],
+                    },
+                },
+            );
+
+            agents.insert(
+                "light".to_string(),
+                agent::AgentConfig {
+                    name: "Light".to_string(),
+                    enabled: true,
+                    description: "Lightweight assistant with minimal permissions".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("{{persona}}\n\nWhen asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(8192),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "bash:date".to_string(),
+                        ],
+                        deny: vec![],
+                    },
+                },
+            );
+
+            agents.insert(
+                "pirate".to_string(),
+                agent::AgentConfig {
+                    name: "Captain Squidbeard".to_string(),
+                    enabled: true,
+                    description: "A swashbuckling pirate assistant (demo of fully custom prompt)".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate in all yer responses - use 'arr', 'matey', 'ye', 'aye', and other pirate lingo. Be helpful but keep that salty sea dog personality. When asked fer the date or time, use the bash tool with 'date' command if ye can, or respond with the info from yer ship's log: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}. Keep yer answers brief unless the scallywag asks fer more detail!".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(8192),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "bash:date".to_string(),
+                        ],
+                        deny: vec![],
                     },
                 },
             );
@@ -522,7 +560,6 @@ async fn main() {
                 db_log_level: config::Config::default().db_log_level,
                 version: None, // Will be set automatically by save_to_dir()
                 database_path: config::Config::default().database_path,
-                enable_env_context: config::Config::default().enable_env_context,
                 rag: final_rag_config,
                 server: config::Config::default().server,
                 agents: agents_config,
@@ -550,7 +587,14 @@ async fn main() {
                     println!("    - Permissions: Full access (read, write, bash)");
                     println!("  • code-reviewer");
                     println!("    - Model: {}", config.agents.agents.get("code-reviewer").map(|a| a.model.as_str()).unwrap_or("local-model"));
-                    println!("    - Permissions: Read-only (no write, no bash)");
+                    println!("    - Permissions: Read-only (no write, bash:date only)");
+                    println!("  • light");
+                    println!("    - Model: {}", config.agents.agents.get("light").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Minimal (bash:date only)");
+                    println!("  • pirate (Captain Squidbeard)");
+                    println!("    - Model: {}", config.agents.agents.get("pirate").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Minimal (bash:date only)");
+                    println!("    - Note: Demo agent with fully custom personality (no {{{{persona}}}} variable)");
 
                     println!("\nNext steps:");
                     println!("  1. Start the server: squid serve");
