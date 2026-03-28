@@ -44,15 +44,13 @@ Only maintain these files:
 ## System Prompts (`src/assets/*.md`)
 
 ### **Modular Architecture**
-- **`persona.md`**: Shared personality (auto-prepended).
-- **`tools.md`**: Tool instructions (auto-included).
+- **`persona.md`**: Shared personality and tool usage guidelines (auto-prepended).
 - **Task-specific**: `ask-prompt.md`, `code-review.md`, `review-*.md`.
 
-**Composition**: `persona.md` + `tools.md` + task-specific prompt.
+**Composition**: `persona.md` + task-specific prompt.
 
 **Update Rules**:
-- **`persona.md`**: Role, tone, and personality.
-- **`tools.md`**: Tool availability and usage.
+- **`persona.md`**: Role, tone, personality, and tool usage guidelines.
 - **Task prompts**: Command-specific instructions.
 
 ---
@@ -78,9 +76,10 @@ Only maintain these files:
 
 ## Tool Development
 1. Add tool to `src/tools.rs` (`get_tools()`, `call_tool()`).
-2. Update `src/assets/tools.md` with instructions.
-3. Update **README.md** and **CHANGELOG.md**.
-4. Update security docs if needed (`docs/SECURITY*.md`).
+2. Update **README.md** and **CHANGELOG.md**.
+3. Update security docs if needed (`docs/SECURITY*.md`).
+
+**Note**: Tool definitions are sent via OpenAI API (name, description, parameters). General tool usage guidelines are in `persona.md`.
 
 ---
 

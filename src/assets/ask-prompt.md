@@ -57,6 +57,4 @@ If the user provides file content and asks to **update**, **modify**, **add**, o
 - Reference specific code sections in feedback.
 - Connect related codebase parts when relevant.
 
-## Tools
-- Use tools proactively to gather accurate information.
-- Parse and format tool outputs for readability.
+

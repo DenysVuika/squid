@@ -21,7 +21,6 @@ use crate::tools;
 
 // Prompt constants
 const PERSONA: &str = include_str!("./assets/persona.md");
-const TOOLS: &str = include_str!("./assets/tools.md");
 const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
 const CODE_REVIEW_PROMPT: &str = include_str!("./assets/code-review.md");
 const CODE_REVIEW_RUST_PROMPT: &str = include_str!("./assets/review-rust.md");
@@ -39,7 +38,7 @@ const CODE_REVIEW_MAKEFILE_PROMPT: &str = include_str!("./assets/review-makefile
 const CODE_REVIEW_MARKDOWN_PROMPT: &str = include_str!("./assets/review-md.md");
 const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 
-/// Combines persona, tools, and task-specific prompt into a complete system prompt
+/// Combines persona and task-specific prompt into a complete system prompt
 /// Renders templates with secure context variables
 pub fn combine_prompts(task_prompt: &str) -> String {
     let renderer = template::TemplateRenderer::new();
@@ -49,17 +48,12 @@ pub fn combine_prompts(task_prompt: &str) -> String {
         PERSONA.to_string()
     });
 
-    let tools = renderer.render_string(TOOLS).unwrap_or_else(|e| {
-        log::warn!("Failed to render tools template: {}", e);
-        TOOLS.to_string()
-    });
-
     let task = renderer.render_string(task_prompt).unwrap_or_else(|e| {
         log::warn!("Failed to render task prompt template: {}", e);
         task_prompt.to_string()
     });
 
-    format!("{}\n\n{}\n\n{}", persona, tools, task)
+    format!("{}\n\n{}", persona, task)
 }
 
 /// Strip <think>...</think> blocks from content
