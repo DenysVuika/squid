@@ -52,7 +52,7 @@ sysinfo = "0.38.1"
 tera = "1.20"
 thiserror = "2.0"
 tokio = { version = "1.0", features = ["full"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { version = "1.23", features = ["v4", "serde"] }
 walkdir = "2.5"
 rusqlite = { version = "0.39.0", features = ["bundled", "load_extension"] }
 tiktoken-rs = "0.9.1"
