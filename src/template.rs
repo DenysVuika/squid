@@ -21,6 +21,9 @@ use sysinfo::System;
 use tera::{Context, Tera};
 use uuid::Uuid;
 
+// Load persona content for template variable
+const PERSONA: &str = include_str!("./assets/persona.md");
+
 /// Template renderer with built-in secure context variables
 pub struct TemplateRenderer {
     tera: Tera,
@@ -43,6 +46,9 @@ impl TemplateRenderer {
     /// Builds the default context with secure, privacy-safe variables
     fn build_default_context() -> Context {
         let mut context = Context::new();
+
+        // Base persona (available as {{persona}} in agent prompts)
+        context.insert("persona", PERSONA);
 
         // Current timestamp in ISO 8601 format
         let now = Local::now();
@@ -272,5 +278,18 @@ mod tests {
         assert!(result.contains("Year:"));
         assert!(result.contains("TZ:"));
         assert!(!result.contains("{{"));
+    }
+
+    #[test]
+    fn test_persona_variable() {
+        let renderer = TemplateRenderer::new();
+
+        let template = "{{persona}}\n\nAdditional instructions: Be concise.";
+        let result = renderer.render_string(template).unwrap();
+
+        // Verify persona content is included
+        assert!(result.contains("squid"));
+        assert!(result.contains("AI assistant"));
+        assert!(result.contains("Additional instructions: Be concise."));
     }
 }

@@ -492,7 +492,7 @@ async fn main() {
                     enabled: true,
                     description: "Reviews code for quality and security (read-only)".to_string(),
                     model: "local-model".to_string(),
-                    prompt: Some("You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
+                    prompt: Some("{{persona}}\n\nYou are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
                     pricing_model: Some("gpt-4o-mini".to_string()),
                     context_window: Some(32768),
                     permissions: agent::AgentPermissions {
@@ -515,7 +515,7 @@ async fn main() {
                     enabled: true,
                     description: "Lightweight assistant with minimal permissions".to_string(),
                     model: "local-model".to_string(),
-                    prompt: Some("When asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.".to_string()),
+                    prompt: Some("{{persona}}\n\nWhen asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.".to_string()),
                     pricing_model: Some("gpt-4o-mini".to_string()),
                     context_window: Some(8192),
                     permissions: agent::AgentPermissions {

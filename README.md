@@ -405,6 +405,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Variables are automatically available in agent prompts (in `squid.config.json`)
   - System prompts and built-in prompts also support template variables
   - Available variables (secure and privacy-safe by default):
+    - `{{persona}}` - Base AI personality and tool usage guidelines from `src/assets/persona.md` (use in custom agent prompts to include core behavior)
     - `{{now}}` - Current timestamp in ISO 8601 format (e.g., `2026-03-28T12:34:56+00:00`)
     - `{{date}}` - Current date (e.g., `2026-03-28`)
     - `{{time}}` - Current time (e.g., `12:34:56`)
@@ -422,11 +423,12 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     {
       "agents": {
         "code-reviewer": {
-          "prompt": "You are an expert code reviewer on {{os}} ({{arch}}) at {{now}}..."
+          "prompt": "{{persona}}\n\nYou are an expert code reviewer on {{os}} ({{arch}}) at {{now}}..."
         }
       }
     }
     ```
+    **Note**: Include `{{persona}}` at the start of custom agent prompts to preserve base personality and tool usage guidelines
   - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
 - `server.allow_network`: Allow server to be accessible from local network (optional, default: `false`)

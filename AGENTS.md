@@ -44,14 +44,24 @@ Only maintain these files:
 ## System Prompts (`src/assets/*.md`)
 
 ### **Modular Architecture**
-- **`persona.md`**: Shared personality and tool usage guidelines (auto-prepended).
+- **`persona.md`**: Shared personality and tool usage guidelines (available as `{{persona}}` template variable).
 - **Task-specific**: `ask-prompt.md`, `code-review.md`, `review-*.md`.
 
-**Composition**: `persona.md` + task-specific prompt.
+**Composition**: 
+- Built-in commands: `persona.md` + task-specific prompt
+- Agent custom prompts: Use `{{persona}}` variable to include base personality
 
 **Update Rules**:
 - **`persona.md`**: Role, tone, personality, and tool usage guidelines.
 - **Task prompts**: Command-specific instructions.
+- **Agent prompts**: Include `{{persona}}` at the start to preserve core behavior.
+
+**Example Agent Prompt**:
+```json
+{
+  "prompt": "{{persona}}\n\nYou are an expert code reviewer working on {{os}} ({{arch}}). Focus on security and performance."
+}
+```
 
 ---
 

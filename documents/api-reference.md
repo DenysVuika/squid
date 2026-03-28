@@ -159,6 +159,7 @@ Squid automatically includes system context:
 Agent prompts support variable substitution using the Tera template engine. Variables are automatically available in all prompts:
 
 **Available Variables:**
+- `{{persona}}` - Base AI personality and tool usage guidelines (include in custom agent prompts to preserve core behavior)
 - `{{now}}` - Current timestamp (ISO 8601)
 - `{{date}}` - Current date (YYYY-MM-DD)
 - `{{time}}` - Current time (HH:MM:SS)
@@ -178,11 +179,13 @@ Agent prompts support variable substitution using the Tera template engine. Vari
 {
   "agents": {
     "code-reviewer": {
-      "prompt": "You are an expert code reviewer on {{os}} ({{arch}}) at {{now}}. Focus on security and quality."
+      "prompt": "{{persona}}\n\nYou are an expert code reviewer on {{os}} ({{arch}}) at {{now}}. Focus on security and quality."
     }
   }
 }
 ```
+
+**Note**: Include `{{persona}}` at the start of custom agent prompts to preserve the base personality, response formatting rules, and tool usage guidelines from `src/assets/persona.md`.
 
 ## Rust Examples
 

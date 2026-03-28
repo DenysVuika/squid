@@ -43,7 +43,7 @@
       "model": "local-model",
       "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
-      "prompt": "You are an expert code reviewer working on {{os}} ({{arch}}) at {{now}}. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
+      "prompt": "{{persona}}\n\nYou are an expert code reviewer working on {{os}} ({{arch}}) at {{now}}. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
         "allow": ["read_file", "grep", "bash:date"],
         "deny": ["write_file"]
@@ -56,7 +56,7 @@
       "model": "local-model",
       "context_window": 8192,
       "pricing_model": "gpt-4o-mini",
-      "prompt": "When asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.",
+      "prompt": "{{persona}}\n\nWhen asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.",
       "permissions": {
         "allow": ["bash:date"],
         "deny": []
