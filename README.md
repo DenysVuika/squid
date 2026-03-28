@@ -1,4 +1,4 @@
-# squid 🦑
+# squid 🦑🏴‍☠️
 
 <div align="center">
   <img src="docs/squid.JPG" alt="Squid Logo" width="300" />
@@ -441,6 +441,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     }
     ```
     This creates an agent with no inherited guidelines—useful for demos, experiments, or highly specialized personalities.
+    ![Custom Prompt](docs/assets/custom-prompts-pirate.png)
   - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
 - `server.allow_network`: Allow server to be accessible from local network (optional, default: `false`)
