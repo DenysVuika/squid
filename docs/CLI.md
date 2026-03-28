@@ -346,9 +346,9 @@ squid init /path/to/project
 - **RAG Setup**: Optional document search and retrieval features
 
 **What gets created:**
-- Default agents: `general-assistant` (full access), `code-reviewer` (read-only), and `light` (minimal permissions)
-- All agents configured with "local-model" (general-assistant and code-reviewer use 32768 token context, light uses 8192)
-- Code-reviewer and light agents include example template variables in their prompts
+- Default agents: `general-assistant` (full access), `code-reviewer` (read-only), `light` (minimal permissions), and `pirate` (demo agent with custom personality)
+- All agents configured with "local-model" (general-assistant and code-reviewer use 32768 token context, light and pirate use 8192)
+- Code-reviewer and light agents use `{{persona}}` to include base personality; pirate agent demonstrates fully custom prompt without `{{persona}}`
 - Can be customized later by editing the `agents` section in `squid.config.json`
 
 **Example session:**

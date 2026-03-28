@@ -16,7 +16,6 @@ include = [
     "/migrations",
     "/documents",
     "/.squidignore.example",
-    "/squid.config.json.template",
     "/build.rs",
     "/Cargo.toml",
     "/Cargo.lock",

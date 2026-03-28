@@ -429,6 +429,18 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     }
     ```
     **Note**: Include `{{persona}}` at the start of custom agent prompts to preserve base personality and tool usage guidelines
+  - **Fully custom prompts** (without `{{persona}}`): For specialized agents with completely custom behavior, omit `{{persona}}`:
+    ```json
+    {
+      "agents": {
+        "pirate": {
+          "name": "Captain Squidbeard",
+          "prompt": "Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate..."
+        }
+      }
+    }
+    ```
+    This creates an agent with no inherited guidelines—useful for demos, experiments, or highly specialized personalities.
   - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
 - `server.allow_network`: Allow server to be accessible from local network (optional, default: `false`)

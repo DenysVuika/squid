@@ -26,7 +26,6 @@ COPY static ./static
 COPY migrations ./migrations
 COPY documents ./documents
 COPY .squidignore.example ./
-COPY squid.config.json.template ./
 
 # Build the actual application
 RUN touch src/main.rs && cargo build --release
@@ -56,7 +55,6 @@ COPY --from=builder /app/static ./static
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/documents ./documents
 COPY --from=builder /app/.squidignore.example ./.squidignore.example
-COPY --from=builder /app/squid.config.json.template ./squid.config.json.template
 
 # Set ownership
 RUN chown -R squid:squid /app

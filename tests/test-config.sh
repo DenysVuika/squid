@@ -67,15 +67,8 @@ run_test "Config has api_key" "grep -q '\"api_key\"' squid.config.json"
 run_test "Config has log_level" "grep -q '\"log_level\"' squid.config.json"
 echo
 
-# Test 3: Config template file exists
-echo "Test 3: Checking config template file"
-run_test "Config template exists" "[ -f squid.config.json.template ]"
-run_test "Config template is valid JSON" "cat squid.config.json.template | python3 -m json.tool > /dev/null"
-echo
-
-# Test 4: Config without api_key (optional field)
-# Test 4: Testing config without optional fields
-echo "Test 4: Testing config without optional fields (api_key)"
+# Test 3: Testing config without optional fields
+echo "Test 3: Testing config without optional fields (api_key)"
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://127.0.0.1:1234/v1",
@@ -87,16 +80,16 @@ run_test "Config without api_key is valid JSON" "cat squid.config.json | python3
 run_test "Config has log_level field" "grep -q '\"log_level\": \"info\"' squid.config.json"
 echo
 
-# Test 5: Config module exists
-echo "Test 5: Checking config module"
+# Test 4: Config module exists
+echo "Test 4: Checking config module"
 run_test "config.rs exists" "[ -f src/config.rs ]"
 run_test "config module has Config struct" "grep -q 'pub struct Config' src/config.rs"
 run_test "config module has load method" "grep -q 'pub fn load' src/config.rs"
 run_test "config module has save method" "grep -q 'pub fn save' src/config.rs"
 echo
 
-# Test 6: main.rs imports config
-echo "Test 6: Checking main.rs integration"
+# Test 5: main.rs imports config
+echo "Test 5: Checking main.rs integration"
 run_test "main.rs imports config module" "grep -q 'mod config' src/main.rs"
 run_test "main.rs has Init command" "grep -q 'Commands::Init' src/main.rs"
 echo

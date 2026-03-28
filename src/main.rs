@@ -527,6 +527,25 @@ async fn main() {
                 },
             );
 
+            agents.insert(
+                "pirate".to_string(),
+                agent::AgentConfig {
+                    name: "Captain Squidbeard".to_string(),
+                    enabled: true,
+                    description: "A swashbuckling pirate assistant (demo of fully custom prompt)".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate in all yer responses - use 'arr', 'matey', 'ye', 'aye', and other pirate lingo. Be helpful but keep that salty sea dog personality. When asked fer the date or time, use the bash tool with 'date' command if ye can, or respond with the info from yer ship's log: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}. Keep yer answers brief unless the scallywag asks fer more detail!".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(8192),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "bash:date".to_string(),
+                        ],
+                        deny: vec![],
+                    },
+                },
+            );
+
             let agents_config = agent::AgentsConfig {
                 agents,
                 default_agent: "general-assistant".to_string(),
@@ -572,6 +591,10 @@ async fn main() {
                     println!("  • light");
                     println!("    - Model: {}", config.agents.agents.get("light").map(|a| a.model.as_str()).unwrap_or("local-model"));
                     println!("    - Permissions: Minimal (bash:date only)");
+                    println!("  • pirate (Captain Squidbeard)");
+                    println!("    - Model: {}", config.agents.agents.get("pirate").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Minimal (bash:date only)");
+                    println!("    - Note: Demo agent with fully custom personality (no {{{{persona}}}} variable)");
 
                     println!("\nNext steps:");
                     println!("  1. Start the server: squid serve");
