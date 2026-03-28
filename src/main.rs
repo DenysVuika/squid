@@ -471,7 +471,6 @@ async fn main() {
                     context_window: Some(32768),
                     permissions: agent::AgentPermissions {
                         allow: vec![
-                            "now".to_string(),
                             "read_file".to_string(),
                             "write_file".to_string(),
                             "grep".to_string(),
@@ -479,6 +478,7 @@ async fn main() {
                             "bash:pwd".to_string(),
                             "bash:git status".to_string(),
                             "bash:cat".to_string(),
+                            "bash:date".to_string(),
                         ],
                         deny: vec![],
                     },
@@ -497,14 +497,32 @@ async fn main() {
                     context_window: Some(32768),
                     permissions: agent::AgentPermissions {
                         allow: vec![
-                            "now".to_string(),
                             "read_file".to_string(),
                             "grep".to_string(),
+                            "bash:date".to_string(),
                         ],
                         deny: vec![
                             "write_file".to_string(),
-                            "bash".to_string(),
                         ],
+                    },
+                },
+            );
+
+            agents.insert(
+                "light".to_string(),
+                agent::AgentConfig {
+                    name: "Light".to_string(),
+                    enabled: true,
+                    description: "Lightweight assistant with minimal permissions".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("When asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(8192),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![
+                            "bash:date".to_string(),
+                        ],
+                        deny: vec![],
                     },
                 },
             );
@@ -550,7 +568,10 @@ async fn main() {
                     println!("    - Permissions: Full access (read, write, bash)");
                     println!("  • code-reviewer");
                     println!("    - Model: {}", config.agents.agents.get("code-reviewer").map(|a| a.model.as_str()).unwrap_or("local-model"));
-                    println!("    - Permissions: Read-only (no write, no bash)");
+                    println!("    - Permissions: Read-only (no write, bash:date only)");
+                    println!("  • light");
+                    println!("    - Model: {}", config.agents.agents.get("light").map(|a| a.model.as_str()).unwrap_or("local-model"));
+                    println!("    - Permissions: Minimal (bash:date only)");
 
                     println!("\nNext steps:");
                     println!("  1. Start the server: squid serve");
