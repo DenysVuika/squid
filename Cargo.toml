@@ -59,7 +59,7 @@ tiktoken-rs = "0.9.1"
 flate2 = "1.0"
 sha2 = "0.10"
 reqwest = { version = "0.13", features = ["json"] }
-rig-core = "0.2"
+rig-core = "0.33"
 notify = "8.2"
 anyhow = "1.0"
 sqlite-vec = "0.1"
