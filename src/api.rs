@@ -64,6 +64,8 @@ pub struct ChatRequest {
     pub agent_id: String,
     #[serde(default)]
     pub use_rag: Option<bool>,
+    #[serde(default)]
+    pub use_tools: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -373,6 +375,7 @@ pub async fn chat_stream(
 
     let question = body.message.clone();
     let use_rag = body.use_rag.unwrap_or(false);
+    let use_tools = body.use_tools.unwrap_or(false);
 
     // Validate file sizes (10MB limit per file)
     const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
@@ -504,6 +507,7 @@ pub async fn chat_stream(
             &session_manager_clone,
             approval_map.get_ref(),
             if use_rag && !rag_sources.is_empty() { Some(rag_sources.clone()) } else { None },
+            use_tools,
         ).await {
             Ok(content_stream) => {
                 // Accumulate assistant content and token usage as we stream
@@ -824,6 +828,7 @@ async fn create_chat_stream(
     session_manager: &session::SessionManager,
     approval_map: &ApprovalStateMap,
     rag_sources: Option<Vec<Source>>,
+    use_tools: bool,
 ) -> Result<
     impl futures::Stream<Item = Result<StreamEvent, Box<dyn std::error::Error + Send + Sync>>>,
     Box<dyn std::error::Error + Send + Sync>,
@@ -1023,10 +1028,17 @@ async fn create_chat_stream(
 
     let output_stream = async_stream::stream! {
         loop {
-        let request = CreateChatCompletionRequestArgs::default()
+        let mut request_builder = CreateChatCompletionRequestArgs::default();
+        request_builder
             .model(model_id.clone())
-            .messages(messages.clone())
-            .tools(tools::get_tools())
+            .messages(messages.clone());
+
+        // Only add tools if enabled
+        if use_tools {
+            request_builder.tools(tools::get_tools());
+        }
+
+        let request = request_builder
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
                 include_obfuscation: None,

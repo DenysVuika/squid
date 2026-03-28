@@ -17,6 +17,7 @@ export interface ChatMessage {
   system_prompt?: string;
   agent_id: string;
   use_rag?: boolean;
+  use_tools?: boolean;
 }
 
 export type StreamEventType =

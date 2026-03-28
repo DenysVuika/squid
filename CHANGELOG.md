@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tools Toggle Button**: Added toggle button to enable/disable AI tools in chat sessions, disabled by default for user control
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
 - **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation

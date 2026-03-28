@@ -153,6 +153,7 @@ const Chatbot = () => {
     status,
     streamingMessageId,
     useRag,
+    useTools,
     addUserMessage,
     setStatus,
     stopStreaming,
@@ -161,6 +162,7 @@ const Chatbot = () => {
     respondToApproval,
     toolApprovalDecisions,
     toggleRag,
+    toggleTools,
   } = useChatStore();
   const { ragEnabled, isLoaded } = useConfigStore();
 
@@ -306,6 +308,10 @@ const Chatbot = () => {
   const handleRagToggle = useCallback(() => {
     toggleRag();
   }, [toggleRag]);
+
+  const handleToolsToggle = useCallback(() => {
+    toggleTools();
+  }, [toggleTools]);
 
   const handleFileUploadError = useCallback((error: { code: string; message: string }) => {
     if (error.code === 'max_file_size') {
@@ -827,6 +833,19 @@ const Chatbot = () => {
                     <span>RAG</span>
                   </PromptInputButton>
                 )}
+                <PromptInputButton
+                  onClick={handleToolsToggle}
+                  tooltip={{
+                    content: useTools
+                      ? 'Tools enabled - AI can use tools to help answer your questions'
+                      : 'Enable Tools to allow AI to use tools',
+                    side: 'top',
+                  }}
+                  variant={useTools ? 'default' : 'ghost'}
+                >
+                  <WrenchIcon size={16} />
+                  <span>Tools</span>
+                </PromptInputButton>
                 <ModelSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>

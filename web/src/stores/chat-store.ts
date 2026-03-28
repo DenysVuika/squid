@@ -63,6 +63,7 @@ interface ChatStore {
   abortController: AbortController | null;
   useWebSearch: boolean;
   useRag: boolean;
+  useTools: boolean;
   pendingApprovals: Map<string, ToolApproval>;
   toolApprovalDecisions: Map<string, ToolApprovalDecision>;
 
@@ -77,6 +78,7 @@ interface ChatStore {
   clearMessages: () => void;
   toggleWebSearch: () => void;
   toggleRag: () => void;
+  toggleTools: () => void;
   updateStreamingContent: (content: string) => void;
   setIsReasoningStreaming: (isStreaming: boolean) => void;
   addPendingApproval: (approval: ToolApproval) => void;
@@ -97,626 +99,629 @@ export const useChatStore = create<ChatStore>()(
       abortController: null,
       useWebSearch: false,
       useRag: false,
+      useTools: false,
       pendingApprovals: new Map(),
       toolApprovalDecisions: new Map(),
 
-  // Add user message and trigger streaming
-  addUserMessage: (content: string, files?: FileUIPart[]) => {
-    const userMessage: MessageType = {
-      from: 'user',
-      key: `user-${Date.now()}`,
-      versions: [
-        {
-          content,
-          id: `user-${Date.now()}`,
-        },
-      ],
-    };
+      // Add user message and trigger streaming
+      addUserMessage: (content: string, files?: FileUIPart[]) => {
+        const userMessage: MessageType = {
+          from: 'user',
+          key: `user-${Date.now()}`,
+          versions: [
+            {
+              content,
+              id: `user-${Date.now()}`,
+            },
+          ],
+        };
 
-    set((state) => ({ messages: [...state.messages, userMessage] }));
+        set((state) => ({ messages: [...state.messages, userMessage] }));
 
-    setTimeout(() => {
-      const assistantMessageId = `assistant-${Date.now()}`;
+        setTimeout(() => {
+          const assistantMessageId = `assistant-${Date.now()}`;
 
-      const assistantMessage: MessageType = {
-        from: 'assistant',
-        key: `assistant-${Date.now()}`,
-        versions: [
-          {
-            content: '',
-            id: assistantMessageId,
-          },
-        ],
-      };
-
-      set((state) => ({ messages: [...state.messages, assistantMessage] }));
-      get().streamResponse(assistantMessageId, content, files);
-    }, 500);
-  },
-
-  // Update message content
-  updateMessageContent: (messageId: string, newContent: string) => {
-    set((state) => ({
-      messages: state.messages.map((msg) => {
-        if (msg.versions.some((v) => v.id === messageId)) {
-          return {
-            ...msg,
-            versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: newContent } : v)),
+          const assistantMessage: MessageType = {
+            from: 'assistant',
+            key: `assistant-${Date.now()}`,
+            versions: [
+              {
+                content: '',
+                id: assistantMessageId,
+              },
+            ],
           };
-        }
-        return msg;
-      }),
-    }));
-  },
 
-  // Set status
-  setStatus: (status) => {
-    set({ status });
-  },
+          set((state) => ({ messages: [...state.messages, assistantMessage] }));
+          get().streamResponse(assistantMessageId, content, files);
+        }, 500);
+      },
 
-  // Set streaming message ID
-  setStreamingMessageId: (messageId) => {
-    set({ streamingMessageId: messageId });
-  },
-
-  // Update streaming content ref
-  updateStreamingContent: (content: string) => {
-    set({ streamingContentRef: content });
-  },
-
-  // Set reasoning streaming state
-  setIsReasoningStreaming: (isStreaming: boolean) => {
-    set({ isReasoningStreaming: isStreaming });
-  },
-
-  // Stream response from API
-  streamResponse: async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
-    // Create new abort controller
-    const abortController = new AbortController();
-    set({ 
-      abortController,
-      status: 'streaming',
-      streamingMessageId: messageId,
-      streamingContentRef: '',
-      streamingReasoningRef: '',
-      isReasoningStreaming: false,
-    });
-
-    const sessionStore = useSessionStore.getState();
-    const agentStore = useAgentStore.getState();
-
-    try {
-      // Read file contents if files are attached
-      const fileAttachments = [];
-      if (files && files.length > 0) {
-        for (const file of files) {
-          if (file.type === 'file' && file.url) {
-            const fileName = 'filename' in file ? String(file.filename) : 'attachment';
-            try {
-              const response = await fetch(file.url);
-              if (response.ok) {
-                const content = await response.text();
-                fileAttachments.push({
-                  filename: fileName,
-                  content,
-                });
-              } else {
-                console.error('Failed to fetch file:', response.statusText);
-                toast.error('Failed to read file', {
-                  description: `Could not read ${fileName}`,
-                });
-              }
-            } catch (e) {
-              console.error('Failed to read file:', e);
-              toast.error('Failed to read file', {
-                description: e instanceof Error ? e.message : String(e),
-              });
+      // Update message content
+      updateMessageContent: (messageId: string, newContent: string) => {
+        set((state) => ({
+          messages: state.messages.map((msg) => {
+            if (msg.versions.some((v) => v.id === messageId)) {
+              return {
+                ...msg,
+                versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: newContent } : v)),
+              };
             }
-          }
-        }
-      }
+            return msg;
+          }),
+        }));
+      },
 
-      await streamChat(
-        '',
-        {
-          message: userMessage,
-          session_id: sessionStore.activeSessionId || undefined,
-          files: fileAttachments,
-          agent_id: agentStore.selectedAgent,
-          use_rag: get().useRag || undefined,
-        },
-        {
-          signal: abortController.signal,
-          onSession: (newSessionId) => {
-            sessionStore.setActiveSession(newSessionId);
-          },
-          onSources: (sources: Source[]) => {
-            set((state) => ({
-              messages: state.messages.map((msg) => {
-                if (msg.versions.some((v) => v.id === messageId)) {
-                  return {
-                    ...msg,
-                    sources: sources.map((s) => ({
-                      href: '#',
-                      title: s.title,
-                      content: s.content,
-                    })),
-                  };
-                }
-                return msg;
-              }),
-            }));
-          },
-          onContent: (text) => {
-            const state = get();
-            const fullContent = state.streamingContentRef + text;
-            set({ streamingContentRef: fullContent });
+      // Set status
+      setStatus: (status) => {
+        set({ status });
+      },
 
-            // Parse out ALL <think> tags and build thinking steps
-            // Keep each <think> block as a SEPARATE step (don't merge)
-            let displayContent = '';
-            const thinkingSteps: ThinkingStep[] = [];
-            let hasOpenTag = false;
-            let currentPos = 0;
+      // Set streaming message ID
+      setStreamingMessageId: (messageId) => {
+        set({ streamingMessageId: messageId });
+      },
 
-            // Find all <think> and </think> tags
-            while (currentPos < fullContent.length) {
-              const thinkStart = fullContent.indexOf('<think>', currentPos);
-              
-              if (thinkStart === -1) {
-                // No more <think> tags, add remaining content
-                const remaining = fullContent.substring(currentPos);
-                if (!hasOpenTag) {
-                  displayContent += remaining;
-                }
-                break;
-              }
+      // Update streaming content ref
+      updateStreamingContent: (content: string) => {
+        set({ streamingContentRef: content });
+      },
 
-              // Add content before <think> to display (only if no open tag)
-              if (!hasOpenTag) {
-                displayContent += fullContent.substring(currentPos, thinkStart);
-              }
+      // Set reasoning streaming state
+      setIsReasoningStreaming: (isStreaming: boolean) => {
+        set({ isReasoningStreaming: isStreaming });
+      },
 
-              // Look for closing </think>
-              const thinkEnd = fullContent.indexOf('</think>', thinkStart);
-              
-              if (thinkEnd === -1) {
-                // Opening tag without closing - reasoning is streaming
-                let reasoningText = fullContent.substring(thinkStart + 7);
-                
-                // Remove any <tool_call>...</tool_call> tags from streaming reasoning
-                while (reasoningText.includes('<tool_call>')) {
-                  const toolStart = reasoningText.indexOf('<tool_call>');
-                  const toolEnd = reasoningText.indexOf('</tool_call>');
-                  if (toolEnd > toolStart) {
-                    reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+      // Stream response from API
+      streamResponse: async (messageId: string, userMessage: string, files?: FileUIPart[]) => {
+        // Create new abort controller
+        const abortController = new AbortController();
+        set({
+          abortController,
+          status: 'streaming',
+          streamingMessageId: messageId,
+          streamingContentRef: '',
+          streamingReasoningRef: '',
+          isReasoningStreaming: false,
+        });
+
+        const sessionStore = useSessionStore.getState();
+        const agentStore = useAgentStore.getState();
+
+        try {
+          // Read file contents if files are attached
+          const fileAttachments = [];
+          if (files && files.length > 0) {
+            for (const file of files) {
+              if (file.type === 'file' && file.url) {
+                const fileName = 'filename' in file ? String(file.filename) : 'attachment';
+                try {
+                  const response = await fetch(file.url);
+                  if (response.ok) {
+                    const content = await response.text();
+                    fileAttachments.push({
+                      filename: fileName,
+                      content,
+                    });
                   } else {
-                    // Incomplete tool_call tag, remove from start
-                    reasoningText = reasoningText.substring(0, toolStart);
-                    break;
+                    console.error('Failed to fetch file:', response.statusText);
+                    toast.error('Failed to read file', {
+                      description: `Could not read ${fileName}`,
+                    });
                   }
-                }
-                
-                if (reasoningText.trim()) {
-                  // Add as a new reasoning step (don't merge)
-                  thinkingSteps.push({
-                    type: 'reasoning',
-                    content: reasoningText.trim(),
+                } catch (e) {
+                  console.error('Failed to read file:', e);
+                  toast.error('Failed to read file', {
+                    description: e instanceof Error ? e.message : String(e),
                   });
                 }
-                hasOpenTag = true;
-                break;
               }
+            }
+          }
 
-              // Complete <think>...</think> block found
-              let reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
-              
-              // Remove any <tool_call>...</tool_call> tags from reasoning
-              while (reasoningText.includes('<tool_call>')) {
-                const toolStart = reasoningText.indexOf('<tool_call>');
-                const toolEnd = reasoningText.indexOf('</tool_call>');
-                if (toolEnd > toolStart) {
-                  reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
-                } else {
-                  // Incomplete tool_call tag, remove from start
-                  reasoningText = reasoningText.substring(0, toolStart);
-                  break;
+          await streamChat(
+            '',
+            {
+              message: userMessage,
+              session_id: sessionStore.activeSessionId || undefined,
+              files: fileAttachments,
+              agent_id: agentStore.selectedAgent,
+              use_rag: get().useRag || undefined,
+              use_tools: get().useTools || undefined,
+            },
+            {
+              signal: abortController.signal,
+              onSession: (newSessionId) => {
+                sessionStore.setActiveSession(newSessionId);
+              },
+              onSources: (sources: Source[]) => {
+                set((state) => ({
+                  messages: state.messages.map((msg) => {
+                    if (msg.versions.some((v) => v.id === messageId)) {
+                      return {
+                        ...msg,
+                        sources: sources.map((s) => ({
+                          href: '#',
+                          title: s.title,
+                          content: s.content,
+                        })),
+                      };
+                    }
+                    return msg;
+                  }),
+                }));
+              },
+              onContent: (text) => {
+                const state = get();
+                const fullContent = state.streamingContentRef + text;
+                set({ streamingContentRef: fullContent });
+
+                // Parse out ALL <think> tags and build thinking steps
+                // Keep each <think> block as a SEPARATE step (don't merge)
+                let displayContent = '';
+                const thinkingSteps: ThinkingStep[] = [];
+                let hasOpenTag = false;
+                let currentPos = 0;
+
+                // Find all <think> and </think> tags
+                while (currentPos < fullContent.length) {
+                  const thinkStart = fullContent.indexOf('<think>', currentPos);
+
+                  if (thinkStart === -1) {
+                    // No more <think> tags, add remaining content
+                    const remaining = fullContent.substring(currentPos);
+                    if (!hasOpenTag) {
+                      displayContent += remaining;
+                    }
+                    break;
+                  }
+
+                  // Add content before <think> to display (only if no open tag)
+                  if (!hasOpenTag) {
+                    displayContent += fullContent.substring(currentPos, thinkStart);
+                  }
+
+                  // Look for closing </think>
+                  const thinkEnd = fullContent.indexOf('</think>', thinkStart);
+
+                  if (thinkEnd === -1) {
+                    // Opening tag without closing - reasoning is streaming
+                    let reasoningText = fullContent.substring(thinkStart + 7);
+
+                    // Remove any <tool_call>...</tool_call> tags from streaming reasoning
+                    while (reasoningText.includes('<tool_call>')) {
+                      const toolStart = reasoningText.indexOf('<tool_call>');
+                      const toolEnd = reasoningText.indexOf('</tool_call>');
+                      if (toolEnd > toolStart) {
+                        reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                      } else {
+                        // Incomplete tool_call tag, remove from start
+                        reasoningText = reasoningText.substring(0, toolStart);
+                        break;
+                      }
+                    }
+
+                    if (reasoningText.trim()) {
+                      // Add as a new reasoning step (don't merge)
+                      thinkingSteps.push({
+                        type: 'reasoning',
+                        content: reasoningText.trim(),
+                      });
+                    }
+                    hasOpenTag = true;
+                    break;
+                  }
+
+                  // Complete <think>...</think> block found
+                  let reasoningText = fullContent.substring(thinkStart + 7, thinkEnd);
+
+                  // Remove any <tool_call>...</tool_call> tags from reasoning
+                  while (reasoningText.includes('<tool_call>')) {
+                    const toolStart = reasoningText.indexOf('<tool_call>');
+                    const toolEnd = reasoningText.indexOf('</tool_call>');
+                    if (toolEnd > toolStart) {
+                      reasoningText = reasoningText.substring(0, toolStart) + reasoningText.substring(toolEnd + 12);
+                    } else {
+                      // Incomplete tool_call tag, remove from start
+                      reasoningText = reasoningText.substring(0, toolStart);
+                      break;
+                    }
+                  }
+
+                  if (reasoningText.trim()) {
+                    // Add each closed <think> block as a SEPARATE reasoning step
+                    thinkingSteps.push({
+                      type: 'reasoning',
+                      content: reasoningText.trim(),
+                    });
+                  }
+
+                  // Reset hasOpenTag since we found the closing tag
+                  hasOpenTag = false;
+
+                  // Move past the closing tag
+                  currentPos = thinkEnd + 8;
                 }
-              }
-              
-              if (reasoningText.trim()) {
-                // Add each closed <think> block as a SEPARATE reasoning step
-                thinkingSteps.push({
-                  type: 'reasoning',
-                  content: reasoningText.trim(),
-                });
-              }
-              
-              // Reset hasOpenTag since we found the closing tag
-              hasOpenTag = false;
-              
-              // Move past the closing tag
-              currentPos = thinkEnd + 8;
-            }
 
-            const isReasoningStreamingNow = hasOpenTag;
+                const isReasoningStreamingNow = hasOpenTag;
 
-            // Control reasoning streaming state
-            if (thinkingSteps.length > 0 && !state.isReasoningStreaming && isReasoningStreamingNow) {
-              set({ isReasoningStreaming: true });
-            } else if (!isReasoningStreamingNow && state.isReasoningStreaming) {
-              set({ isReasoningStreaming: false });
-            }
+                // Control reasoning streaming state
+                if (thinkingSteps.length > 0 && !state.isReasoningStreaming && isReasoningStreamingNow) {
+                  set({ isReasoningStreaming: true });
+                } else if (!isReasoningStreamingNow && state.isReasoningStreaming) {
+                  set({ isReasoningStreaming: false });
+                }
 
-            set((state) => ({
-              messages: state.messages.map((msg) => {
-                const hasVersion = msg.versions.some((v) => v.id === messageId);
-                if (hasVersion) {
-                  // Build final thinking steps by intelligently merging:
-                  // 1. Keep existing steps that are already there (both reasoning and tools)
-                  // 2. Update reasoning steps with new content from current parse
-                  // 3. Preserve tool step positions
-                  
-                  const currentSteps = msg.thinkingSteps || [];
-                  const finalSteps: ThinkingStep[] = [];
-                  
-                  // Strategy: Replace reasoning steps, keep tool steps in their positions
-                  let reasoningIdx = 0;
-                  
-                  for (const step of currentSteps) {
-                    if (step.type === 'reasoning') {
-                      // Replace with new reasoning content if available
-                      if (reasoningIdx < thinkingSteps.length) {
+                set((state) => ({
+                  messages: state.messages.map((msg) => {
+                    const hasVersion = msg.versions.some((v) => v.id === messageId);
+                    if (hasVersion) {
+                      // Build final thinking steps by intelligently merging:
+                      // 1. Keep existing steps that are already there (both reasoning and tools)
+                      // 2. Update reasoning steps with new content from current parse
+                      // 3. Preserve tool step positions
+
+                      const currentSteps = msg.thinkingSteps || [];
+                      const finalSteps: ThinkingStep[] = [];
+
+                      // Strategy: Replace reasoning steps, keep tool steps in their positions
+                      let reasoningIdx = 0;
+
+                      for (const step of currentSteps) {
+                        if (step.type === 'reasoning') {
+                          // Replace with new reasoning content if available
+                          if (reasoningIdx < thinkingSteps.length) {
+                            finalSteps.push(thinkingSteps[reasoningIdx]);
+                            reasoningIdx++;
+                          }
+                        } else {
+                          // Keep tool steps in their original positions
+                          finalSteps.push(step);
+                        }
+                      }
+
+                      // Add any remaining new reasoning steps
+                      while (reasoningIdx < thinkingSteps.length) {
                         finalSteps.push(thinkingSteps[reasoningIdx]);
                         reasoningIdx++;
                       }
-                    } else {
-                      // Keep tool steps in their original positions
-                      finalSteps.push(step);
+
+                      return {
+                        ...msg,
+                        versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
+                        thinkingSteps: finalSteps.length > 0 ? finalSteps : undefined,
+                      };
                     }
-                  }
-                  
-                  // Add any remaining new reasoning steps
-                  while (reasoningIdx < thinkingSteps.length) {
-                    finalSteps.push(thinkingSteps[reasoningIdx]);
-                    reasoningIdx++;
-                  }
-                  
-                  return {
-                    ...msg,
-                    versions: msg.versions.map((v) => (v.id === messageId ? { ...v, content: displayContent } : v)),
-                    thinkingSteps: finalSteps.length > 0 ? finalSteps : undefined,
-                  };
-                }
-                return msg;
-              }),
-            }));
-          },
-          onUsage: (usage) => {
-            agentStore.updateTokenUsage({
-              total_tokens:
-                agentStore.tokenUsage.total_tokens +
-                usage.input_tokens +
-                usage.output_tokens +
-                usage.reasoning_tokens +
-                usage.cache_tokens,
-              input_tokens: agentStore.tokenUsage.input_tokens + usage.input_tokens,
-              output_tokens: agentStore.tokenUsage.output_tokens + usage.output_tokens,
-              reasoning_tokens: agentStore.tokenUsage.reasoning_tokens + usage.reasoning_tokens,
-              cache_tokens: agentStore.tokenUsage.cache_tokens + usage.cache_tokens,
-            });
-          },
-          onToolInvocationCompleted: (tool) => {
-            // Add tool step to thinking steps immediately when it completes
-            set((state) => ({
-              messages: state.messages.map((msg) => {
-                if (msg.versions.some((v) => v.id === messageId)) {
-                  const currentSteps = msg.thinkingSteps || [];
-                  const newToolStep: ThinkingStep = {
-                    type: 'tool',
-                    name: tool.name,
-                    description: '',
-                    status: tool.error ? 'error' : 'completed',
-                    parameters: tool.arguments,
-                    result: tool.result,
-                    error: tool.error,
-                  };
-                  
-                  return {
-                    ...msg,
-                    thinkingSteps: [...currentSteps, newToolStep],
-                  };
-                }
-                return msg;
-              }),
-            }));
-          },
-          onToolApprovalRequest: (approval) => {
-            // Capture the current content at the time of approval request
-            const currentContent = get().streamingContentRef;
-            
-            // Add pending approval with content snapshot
-            get().addPendingApproval({
-              ...approval,
-              message_id: messageId,
-              contentBeforeApproval: currentContent,
-            });
-          },
-          onToolApprovalResponse: (approval_id) => {
-            // Clear the approval from pending
-            get().clearApproval(approval_id);
-          },
-          onError: (error) => {
-            console.error('Stream error:', error);
-            get().updateMessageContent(messageId, `Error: ${error}`);
-            toast.error('Failed to get response', {
-              description: error,
-            });
-            set({ 
-              status: 'ready',
-              streamingMessageId: null,
-              abortController: null,
-            });
-          },
-          onDone: async () => {
-            set({
-              streamingContentRef: '',
-              streamingReasoningRef: '',
-              isReasoningStreaming: false,
-              abortController: null,
-              status: 'ready',
-              streamingMessageId: null,
-            });
+                    return msg;
+                  }),
+                }));
+              },
+              onUsage: (usage) => {
+                agentStore.updateTokenUsage({
+                  total_tokens:
+                    agentStore.tokenUsage.total_tokens +
+                    usage.input_tokens +
+                    usage.output_tokens +
+                    usage.reasoning_tokens +
+                    usage.cache_tokens,
+                  input_tokens: agentStore.tokenUsage.input_tokens + usage.input_tokens,
+                  output_tokens: agentStore.tokenUsage.output_tokens + usage.output_tokens,
+                  reasoning_tokens: agentStore.tokenUsage.reasoning_tokens + usage.reasoning_tokens,
+                  cache_tokens: agentStore.tokenUsage.cache_tokens + usage.cache_tokens,
+                });
+              },
+              onToolInvocationCompleted: (tool) => {
+                // Add tool step to thinking steps immediately when it completes
+                set((state) => ({
+                  messages: state.messages.map((msg) => {
+                    if (msg.versions.some((v) => v.id === messageId)) {
+                      const currentSteps = msg.thinkingSteps || [];
+                      const newToolStep: ThinkingStep = {
+                        type: 'tool',
+                        name: tool.name,
+                        description: '',
+                        status: tool.error ? 'error' : 'completed',
+                        parameters: tool.arguments,
+                        result: tool.result,
+                        error: tool.error,
+                      };
 
-            // Refresh sessions list (to update sidebar)
-            sessionStore.refreshSessions();
-            
-            // Reload the session to get updated token usage
-            if (sessionStore.activeSessionId) {
-              try {
-                const session = await loadSession('', sessionStore.activeSessionId);
-                if (session) {
-                  agentStore.updateTokenUsage(session.token_usage);
+                      return {
+                        ...msg,
+                        thinkingSteps: [...currentSteps, newToolStep],
+                      };
+                    }
+                    return msg;
+                  }),
+                }));
+              },
+              onToolApprovalRequest: (approval) => {
+                // Capture the current content at the time of approval request
+                const currentContent = get().streamingContentRef;
+
+                // Add pending approval with content snapshot
+                get().addPendingApproval({
+                  ...approval,
+                  message_id: messageId,
+                  contentBeforeApproval: currentContent,
+                });
+              },
+              onToolApprovalResponse: (approval_id) => {
+                // Clear the approval from pending
+                get().clearApproval(approval_id);
+              },
+              onError: (error) => {
+                console.error('Stream error:', error);
+                get().updateMessageContent(messageId, `Error: ${error}`);
+                toast.error('Failed to get response', {
+                  description: error,
+                });
+                set({
+                  status: 'ready',
+                  streamingMessageId: null,
+                  abortController: null,
+                });
+              },
+              onDone: async () => {
+                set({
+                  streamingContentRef: '',
+                  streamingReasoningRef: '',
+                  isReasoningStreaming: false,
+                  abortController: null,
+                  status: 'ready',
+                  streamingMessageId: null,
+                });
+
+                // Refresh sessions list (to update sidebar)
+                sessionStore.refreshSessions();
+
+                // Reload the session to get updated token usage
+                if (sessionStore.activeSessionId) {
+                  try {
+                    const session = await loadSession('', sessionStore.activeSessionId);
+                    if (session) {
+                      agentStore.updateTokenUsage(session.token_usage);
+                    }
+                  } catch (error) {
+                    console.error('Failed to reload session:', error);
+                  }
                 }
-              } catch (error) {
-                console.error('Failed to reload session:', error);
-              }
+              },
             }
-          },
+          );
+        } catch (error) {
+          const state = get();
+
+          // Don't show error if it was aborted by user
+          if (error instanceof Error && error.name === 'AbortError') {
+            get().updateMessageContent(messageId, state.streamingContentRef || 'Response stopped by user.');
+          } else {
+            console.error('Chat error:', error);
+            get().updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
+            toast.error('Failed to send message', {
+              description: error instanceof Error ? error.message : String(error),
+            });
+          }
+
+          set({
+            abortController: null,
+            status: 'ready',
+            streamingMessageId: null,
+          });
         }
-      );
-    } catch (error) {
-      const state = get();
-      
-      // Don't show error if it was aborted by user
-      if (error instanceof Error && error.name === 'AbortError') {
-        get().updateMessageContent(messageId, state.streamingContentRef || 'Response stopped by user.');
-      } else {
-        console.error('Chat error:', error);
-        get().updateMessageContent(messageId, `Error: ${error instanceof Error ? error.message : String(error)}`);
-        toast.error('Failed to send message', {
-          description: error instanceof Error ? error.message : String(error),
+      },
+
+      // Stop streaming
+      stopStreaming: () => {
+        const { abortController } = get();
+        if (abortController) {
+          abortController.abort();
+          set({
+            abortController: null,
+            status: 'ready',
+            streamingMessageId: null,
+          });
+        }
+      },
+
+      // Load session history
+      loadSessionHistory: async (sessionId: string) => {
+        console.log('[Session] Loading session:', sessionId);
+        const session = await loadSession('', sessionId);
+
+        if (!session) {
+          toast.error('Session not found');
+          return;
+        }
+
+        const sessionStore = useSessionStore.getState();
+        const agentStore = useAgentStore.getState();
+
+        // Update session ID
+        sessionStore.setActiveSession(sessionId);
+
+        // Convert session messages to UI format
+        const uiMessages: MessageType[] = [];
+        for (const msg of session.messages) {
+          // Build thinking steps from the message
+          const thinkingSteps: ThinkingStep[] = [];
+
+          msg.thinking_steps?.forEach((step) => {
+            if (step.step_type === 'reasoning') {
+              thinkingSteps.push({
+                type: 'reasoning',
+                content: step.content || '',
+              });
+            } else if (step.step_type === 'tool') {
+              thinkingSteps.push({
+                type: 'tool',
+                name: step.tool_name || '',
+                description: '',
+                status: step.tool_error ? 'error' : 'completed',
+                parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
+                result: step.tool_result,
+                error: step.tool_error,
+                contentBeforeTool: step.content_before_tool,
+              });
+            }
+          });
+
+          uiMessages.push({
+            from: msg.role as 'user' | 'assistant',
+            key: `${msg.role}-${msg.timestamp}`,
+            sources:
+              msg.sources.length > 0
+                ? msg.sources.map((s) => ({
+                    href: '#',
+                    title: s.title,
+                    content: s.content,
+                  }))
+                : undefined,
+            versions: [
+              {
+                id: `${msg.role}-${msg.timestamp}-v1`,
+                content: msg.content,
+              },
+            ],
+            thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
+          });
+        }
+
+        console.log(`[Session] Loaded session with ${uiMessages.length} messages`);
+        set({
+          messages: uiMessages,
+          status: 'ready',
         });
-      }
 
-      set({ 
-        abortController: null,
-        status: 'ready',
-        streamingMessageId: null,
-      });
-    }
-  },
+        // Load token usage from session
+        agentStore.updateTokenUsage(session.token_usage);
+        agentStore.setSessionAgentId(session.agent_id);
 
-  // Stop streaming
-  stopStreaming: () => {
-    const { abortController } = get();
-    if (abortController) {
-      abortController.abort();
-      set({ 
-        abortController: null,
-        status: 'ready',
-        streamingMessageId: null,
-      });
-    }
-  },
-
-  // Load session history
-  loadSessionHistory: async (sessionId: string) => {
-    console.log('[Session] Loading session:', sessionId);
-    const session = await loadSession('', sessionId);
-
-    if (!session) {
-      toast.error('Session not found');
-      return;
-    }
-
-    const sessionStore = useSessionStore.getState();
-    const agentStore = useAgentStore.getState();
-
-    // Update session ID
-    sessionStore.setActiveSession(sessionId);
-
-    // Convert session messages to UI format
-    const uiMessages: MessageType[] = [];
-    for (const msg of session.messages) {
-      // Build thinking steps from the message
-      const thinkingSteps: ThinkingStep[] = [];
-      
-      msg.thinking_steps?.forEach((step) => {
-        if (step.step_type === 'reasoning') {
-          thinkingSteps.push({
-            type: 'reasoning',
-            content: step.content || '',
-          });
-        } else if (step.step_type === 'tool') {
-          thinkingSteps.push({
-            type: 'tool',
-            name: step.tool_name || '',
-            description: '',
-            status: step.tool_error ? 'error' : 'completed',
-            parameters: typeof step.tool_arguments === 'object' ? step.tool_arguments : {},
-            result: step.tool_result,
-            error: step.tool_error,
-            contentBeforeTool: step.content_before_tool,
-          });
+        // Restore agent if session has an agent_id
+        if (session.agent_id && agentStore.agents.length > 0) {
+          const matchedAgent = agentStore.agents.find((a) => a.id === session.agent_id);
+          if (matchedAgent) {
+            agentStore.setSelectedAgent(matchedAgent.id);
+          }
         }
-      });
+      },
 
-      uiMessages.push({
-        from: msg.role as 'user' | 'assistant',
-        key: `${msg.role}-${msg.timestamp}`,
-        sources:
-          msg.sources.length > 0
-            ? msg.sources.map((s) => ({
-                href: '#',
-                title: s.title,
-                content: s.content,
-              }))
-            : undefined,
-        versions: [
-          {
-            id: `${msg.role}-${msg.timestamp}-v1`,
-            content: msg.content,
-          },
-        ],
-        thinkingSteps: thinkingSteps.length > 0 ? thinkingSteps : undefined,
-      });
-    }
+      // Clear all messages
+      clearMessages: () => {
+        set({
+          messages: [],
+          status: 'ready',
+          streamingMessageId: null,
+          streamingContentRef: '',
+          streamingReasoningRef: '',
+          isReasoningStreaming: false,
+        });
+      },
 
-    console.log(`[Session] Loaded session with ${uiMessages.length} messages`);
-    set({ 
-      messages: uiMessages,
-      status: 'ready',
-    });
+      // Toggle web search
+      toggleWebSearch: () => {
+        set((state) => ({ useWebSearch: !state.useWebSearch }));
+      },
 
-    // Load token usage from session
-    agentStore.updateTokenUsage(session.token_usage);
-    agentStore.setSessionAgentId(session.agent_id);
+      // Toggle RAG
+      toggleRag: () => {
+        set((state) => ({ useRag: !state.useRag }));
+      },
 
-    // Restore agent if session has an agent_id
-    if (session.agent_id && agentStore.agents.length > 0) {
-      const matchedAgent = agentStore.agents.find((a) => a.id === session.agent_id);
-      if (matchedAgent) {
-        agentStore.setSelectedAgent(matchedAgent.id);
-      }
-    }
-  },
+      // Toggle Tools
+      toggleTools: () => {
+        set((state) => ({ useTools: !state.useTools }));
+      },
 
-  // Clear all messages
-  clearMessages: () => {
-    set({ 
-      messages: [],
-      status: 'ready',
-      streamingMessageId: null,
-      streamingContentRef: '',
-      streamingReasoningRef: '',
-      isReasoningStreaming: false,
-    });
-  },
+      // Add pending tool approval
+      addPendingApproval: (approval: ToolApproval) => {
+        set((state) => {
+          const newPendingApprovals = new Map(state.pendingApprovals);
+          newPendingApprovals.set(approval.approval_id, approval);
 
-  // Toggle web search
-  toggleWebSearch: () => {
-    set((state) => ({ useWebSearch: !state.useWebSearch }));
-  },
+          // Add approval to the associated message
+          const messages = state.messages.map((msg) => {
+            if (msg.versions.some((v) => v.id === approval.message_id)) {
+              return {
+                ...msg,
+                toolApprovals: [...(msg.toolApprovals || []), approval],
+              };
+            }
+            return msg;
+          });
 
-  // Toggle RAG
-  toggleRag: () => {
-    set((state) => ({ useRag: !state.useRag }));
-  },
-
-  // Add pending tool approval
-  addPendingApproval: (approval: ToolApproval) => {
-    set((state) => {
-      const newPendingApprovals = new Map(state.pendingApprovals);
-      newPendingApprovals.set(approval.approval_id, approval);
-
-      // Add approval to the associated message
-      const messages = state.messages.map((msg) => {
-        if (msg.versions.some((v) => v.id === approval.message_id)) {
           return {
-            ...msg,
-            toolApprovals: [...(msg.toolApprovals || []), approval],
+            pendingApprovals: newPendingApprovals,
+            messages,
           };
+        });
+      },
+
+      // Respond to tool approval
+      respondToApproval: async (approval_id: string, approved: boolean, save_decision: boolean, scope?: string) => {
+        const state = get();
+        const approval = state.pendingApprovals.get(approval_id);
+
+        if (!approval) {
+          console.error('Approval not found:', approval_id);
+          return;
         }
-        return msg;
-      });
 
-      return {
-        pendingApprovals: newPendingApprovals,
-        messages,
-      };
-    });
-  },
+        // Send approval to backend
+        const success = await sendToolApproval('', approval_id, approved, save_decision, scope || '');
 
-  // Respond to tool approval
-  respondToApproval: async (
-    approval_id: string,
-    approved: boolean,
-    save_decision: boolean,
-    scope?: string
-  ) => {
-    const state = get();
-    const approval = state.pendingApprovals.get(approval_id);
+        if (success) {
+          // Record the decision
+          const decision: ToolApprovalDecision = {
+            approval_id,
+            approved,
+            timestamp: Date.now(),
+          };
 
-    if (!approval) {
-      console.error('Approval not found:', approval_id);
-      return;
-    }
+          set((state) => {
+            const newDecisions = new Map(state.toolApprovalDecisions);
+            newDecisions.set(approval_id, decision);
 
-    // Send approval to backend
-    const success = await sendToolApproval('', approval_id, approved, save_decision, scope || '');
+            return {
+              toolApprovalDecisions: newDecisions,
+            };
+          });
 
-    if (success) {
-      // Record the decision
-      const decision: ToolApprovalDecision = {
-        approval_id,
-        approved,
-        timestamp: Date.now(),
-      };
+          // Show toast
+          if (approved) {
+            toast.success('Tool execution approved', {
+              description: `${approval.tool_name} can now execute`,
+            });
+          } else {
+            toast.info('Tool execution rejected', {
+              description: `${approval.tool_name} was not executed`,
+            });
+          }
+        } else {
+          toast.error('Failed to send approval', {
+            description: 'Could not communicate with the server',
+          });
+        }
+      },
 
-      set((state) => {
-        const newDecisions = new Map(state.toolApprovalDecisions);
-        newDecisions.set(approval_id, decision);
+      // Clear approval
+      clearApproval: (approval_id: string) => {
+        set((state) => {
+          const newPendingApprovals = new Map(state.pendingApprovals);
+          newPendingApprovals.delete(approval_id);
 
-        return {
-          toolApprovalDecisions: newDecisions,
-        };
-      });
-
-      // Show toast
-      if (approved) {
-        toast.success('Tool execution approved', {
-          description: `${approval.tool_name} can now execute`,
+          return {
+            pendingApprovals: newPendingApprovals,
+          };
         });
-      } else {
-        toast.info('Tool execution rejected', {
-          description: `${approval.tool_name} was not executed`,
-        });
-      }
-    } else {
-      toast.error('Failed to send approval', {
-        description: 'Could not communicate with the server',
-      });
-    }
-  },
-
-  // Clear approval
-  clearApproval: (approval_id: string) => {
-    set((state) => {
-      const newPendingApprovals = new Map(state.pendingApprovals);
-      newPendingApprovals.delete(approval_id);
-
-      return {
-        pendingApprovals: newPendingApprovals,
-      };
-    });
-  },
+      },
     }),
     {
       name: 'chat-storage',
       partialize: (state) => ({
         useWebSearch: state.useWebSearch,
         useRag: state.useRag,
+        useTools: state.useTools,
       }),
     }
   )
