@@ -138,7 +138,8 @@ impl DocumentManager {
     pub fn calculate_content_hash(&self, content: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(content.as_bytes());
-        format!("{:x}", hasher.finalize())
+        let digest = hasher.finalize();
+        digest.iter().map(|b| format!("{:02x}", b)).collect()
     }
 
     /// Split text into chunks based on token count

@@ -369,7 +369,9 @@ impl Database {
             // Calculate hash of content
             let mut hasher = Sha256::new();
             hasher.update(source.content.as_bytes());
-            let hash = format!("{:x}", hasher.finalize());
+
+            let digest = hasher.finalize();
+            let hash: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
 
             // Check if content already exists
             let content_id: Option<i64> = conn.query_row(
