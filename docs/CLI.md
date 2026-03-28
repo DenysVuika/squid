@@ -324,7 +324,7 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 
 ## Init Command
 
-Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant and code-reviewer), and preferences.
+Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant, code-reviewer, and light), and preferences.
 
 ### Interactive Mode (Default)
 
@@ -346,8 +346,9 @@ squid init /path/to/project
 - **RAG Setup**: Optional document search and retrieval features
 
 **What gets created:**
-- Default agents: `general-assistant` (full access) and `code-reviewer` (read-only)
-- Both agents configured with "local-model" and a 32768 token context window
+- Default agents: `general-assistant` (full access), `code-reviewer` (read-only), and `light` (minimal permissions)
+- All agents configured with "local-model" (general-assistant and code-reviewer use 32768 token context, light uses 8192)
+- Code-reviewer and light agents include example template variables in their prompts
 - Can be customized later by editing the `agents` section in `squid.config.json`
 
 **Example session:**

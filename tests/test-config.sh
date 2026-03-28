@@ -67,10 +67,10 @@ run_test "Config has api_key" "grep -q '\"api_key\"' squid.config.json"
 run_test "Config has log_level" "grep -q '\"log_level\"' squid.config.json"
 echo
 
-# Test 3: Config example file exists
-echo "Test 3: Checking example config file"
-run_test "Example config exists" "[ -f squid.config.json.example ]"
-run_test "Example config is valid JSON" "cat squid.config.json.example | python3 -m json.tool > /dev/null"
+# Test 3: Config template file exists
+echo "Test 3: Checking config template file"
+run_test "Config template exists" "[ -f squid.config.json.template ]"
+run_test "Config template is valid JSON" "cat squid.config.json.template | python3 -m json.tool > /dev/null"
 echo
 
 # Test 4: Config without api_key (optional field)

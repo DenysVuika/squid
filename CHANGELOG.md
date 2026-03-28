@@ -16,11 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Agent Pricing Configuration**: Added optional `pricing_model` field to map local models to cloud pricing for cost estimation
 - **Per-Agent Context Window**: Agents can now specify their own `context_window` setting, overriding the global default
 - **Environment-Only Configuration Support**: CLI commands now work with just environment variables (no `squid.config.json` required if `API_URL` is set)
-- **Improved Init Command**: `squid init` now creates two default agents (`general-assistant` and `code-reviewer`) with detailed setup summary
+- **Improved Init Command**: `squid init` now creates three default agents (`general-assistant`, `code-reviewer`, and `light`) with detailed setup summary
 - **Agent Selection in CLI**: Added `--agent` parameter to `ask` and `review` commands to specify which agent to use
 
 ### Changed
 
+- **Config Template Renamed**: `squid.config.json.example` → `squid.config.json.template` for clarity (used by `squid init`)
+- **Config Template Updated**: Now includes 3 default agents (general-assistant, code-reviewer, light) with template variable examples, `log_level: "info"`, and `rag.enabled: false`
 - **Reduced Debug Log Noise**: Moved verbose session/message operations (loading, saving, processing) from `debug` to `trace` level for cleaner logs
 - **Relaxed Configuration Check**: CLI commands no longer require `squid.config.json` if essential environment variables like `API_URL` are set
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
