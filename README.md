@@ -401,22 +401,33 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - Set via `.env` file to override automatic detection
   - Example: `SQUID_DATABASE_PATH=/Users/you/squid-data/squid.db`
 
-- `enable_env_context`: Include environment context in LLM prompts (optional, default: `true`)
-  - When enabled, the LLM receives system information (OS, platform, timezone, timestamps) to provide more accurate responses
-  - When disabled, no environment information is shared with the LLM (enhanced privacy)
-  - Useful to disable when:
-    - Using cloud-based LLM APIs where privacy is a concern
-    - Working with sensitive projects that restrict system information sharing
-    - Compliance requirements prevent sharing environmental data
-    - Testing/debugging prompts without environmental variables
-  - Set via `squid.config.json`:
+- **Template Variables**: Agent prompts support variable substitution using the Tera template engine
+  - Variables are automatically available in agent prompts (in `squid.config.json`)
+  - System prompts and built-in prompts also support template variables
+  - Available variables (secure and privacy-safe by default):
+    - `{{now}}` - Current timestamp in ISO 8601 format (e.g., `2026-03-28T12:34:56+00:00`)
+    - `{{date}}` - Current date (e.g., `2026-03-28`)
+    - `{{time}}` - Current time (e.g., `12:34:56`)
+    - `{{year}}`, `{{month}}`, `{{day}}` - Date components
+    - `{{timestamp}}` - Unix timestamp
+    - `{{timezone}}` - Timezone name (e.g., `UTC`)
+    - `{{timezone_offset}}` - Timezone offset (e.g., `+0000`)
+    - `{{os}}` - Operating system name (e.g., `macOS`, `Linux`, `Windows`)
+    - `{{os_version}}` - OS version
+    - `{{kernel_version}}` - Kernel version
+    - `{{arch}}` - System architecture (e.g., `x86_64`, `aarch64`)
+    - `{{os_family}}` - OS family (e.g., `unix`, `windows`)
+  - Example usage in agent prompt:
     ```json
     {
-      "enable_env_context": false
+      "agents": {
+        "code-reviewer": {
+          "prompt": "You are an expert code reviewer on {{os}} ({{arch}}) at {{now}}..."
+        }
+      }
     }
     ```
-  - Or via environment variable: `ENABLE_ENV_CONTEXT=false`
-  - **Note**: Even when enabled, hostname and working directory are excluded by default for privacy
+  - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
 - `server.allow_network`: Allow server to be accessible from local network (optional, default: `false`)
   - When disabled (default), the server binds to `127.0.0.1` (localhost only)

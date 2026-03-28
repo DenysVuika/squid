@@ -138,8 +138,6 @@ pub struct Config {
     pub version: Option<String>,
     #[serde(default = "default_database_path")]
     pub database_path: String,
-    #[serde(default = "default_enable_env_context")]
-    pub enable_env_context: bool,
     #[serde(default)]
     pub rag: RagConfig,
     #[serde(default)]
@@ -166,9 +164,7 @@ fn default_database_path() -> String {
     "squid.db".to_string()
 }
 
-fn default_enable_env_context() -> bool {
-    true
-}
+
 
 impl Default for Config {
     fn default() -> Self {
@@ -181,7 +177,6 @@ impl Default for Config {
             db_log_level: default_db_log_level(),
             version: None,
             database_path: default_database_path(),
-            enable_env_context: default_enable_env_context(),
             rag: RagConfig::default(),
             server: ServerConfig::default(),
             agents: AgentsConfig::default(),
@@ -281,13 +276,7 @@ impl Config {
             config.database_path = db_path;
         }
 
-        if let Ok(enable_env) = std::env::var("ENABLE_ENV_CONTEXT") {
-            if let Ok(enabled) = enable_env.parse() {
-                debug!("Overriding ENABLE_ENV_CONTEXT from environment");
-                config.enable_env_context = enabled;
-            }
-        }
-
+        // Version management
         // RAG configuration overrides
         if let Ok(rag_enabled) = std::env::var("SQUID_RAG_ENABLED") {
             if let Ok(enabled) = rag_enabled.parse() {
@@ -507,7 +496,6 @@ mod tests {
         assert_eq!(config.log_level, "error");
         assert_eq!(config.version, None);
         assert_eq!(config.database_path, "squid.db");
-        assert_eq!(config.enable_env_context, true);
         assert_eq!(config.rag.enabled, true);
         assert_eq!(config.rag.embedding_model, "text-embedding-nomic-embed-text-v1.5");
         assert_eq!(config.rag.chunk_size, 512);

@@ -11,7 +11,7 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use std::time::Instant;
 
-use crate::{config, envinfo, llm, logger, session, tokens, tools};
+use crate::{config, llm, logger, session, template, tokens, tools};
 
 // Tool approval state management
 #[derive(Debug)]
@@ -220,14 +220,14 @@ pub async fn get_session(
     session_id: web::Path<String>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Getting session: {}", session_id);
+    trace!("Getting session: {}", session_id);
 
     match session_manager.get_session(&session_id) {
         Some(session) => {
             let response = SessionResponse {
                 session_id: session.id,
                 messages: session.messages.iter().map(|msg| {
-                    debug!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
+                    trace!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
                     SessionMessage {
                         role: msg.role.clone(),
                         content: msg.content.clone(),
@@ -266,7 +266,7 @@ pub async fn get_session(
 pub async fn list_sessions(
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Listing all sessions");
+    trace!("Listing all sessions");
 
     let session_ids = session_manager.list_sessions();
     let mut sessions = Vec::new();
@@ -687,7 +687,7 @@ pub async fn chat_stream(
                 }));
 
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
-                    debug!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
+                    trace!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
                         session_id, final_content_trimmed.len(),
                         thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
                         sources.len(), rag_sources.len(), all_sources.len());
@@ -698,11 +698,11 @@ pub async fn chat_stream(
                         all_sources,
                         thinking_steps_opt,
                     ) {
-                        Ok(_) => debug!("Assistant message saved successfully"),
+                        Ok(_) => trace!("Assistant message saved successfully"),
                         Err(e) => debug!("Failed to save assistant message: {}", e),
                     }
                 } else {
-                    debug!("Skipping empty assistant message for session {}", session_id);
+                    trace!("Skipping empty assistant message for session {}", session_id);
                 }
 
                 // If provider didn't send usage stats, estimate them client-side
@@ -776,7 +776,7 @@ pub async fn chat_stream(
 
                 // Update session with token usage and model info
                 if total_input_tokens > 0 || total_output_tokens > 0 {
-                    debug!("Updating session {} with token usage: input={}, output={}",
+                    trace!("Updating session {} with token usage: input={}, output={}",
                            session_id, total_input_tokens, total_output_tokens);
                     if let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
@@ -851,12 +851,8 @@ async fn create_chat_stream(
 
     let client = Client::with_config(config);
 
-    // Get environment context
-    let env_context = envinfo::get_env_context();
-
-    // Build user message with RAG context if provided
-    let mut user_message = env_context.clone();
-    user_message.push_str("\n\n");
+    // Build user message with template rendering support
+    let mut user_message = String::new();
 
     // Add RAG context first if available
     if let Some(ref sources) = rag_sources {
@@ -892,10 +888,17 @@ async fn create_chat_stream(
     let final_system_prompt = agent.prompt.as_deref()
         .or(system_prompt)
         .unwrap_or(&default_prompt);
-    let system_message = final_system_prompt;
 
-    debug!("System message:\n{}", system_message);
-    debug!("User message:\n{}", user_message);
+    // Render template variables in system message
+    let renderer = template::TemplateRenderer::new();
+    let system_message = renderer.render_string(final_system_prompt)
+        .unwrap_or_else(|e| {
+            warn!("Failed to render system prompt template: {}", e);
+            final_system_prompt.to_string()
+        });
+
+    trace!("System message:\n{}", system_message);
+    trace!("User message:\n{}", user_message);
 
     // Get conversation history from session
     let session = session_manager
@@ -907,7 +910,7 @@ async fn create_chat_stream(
 
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage {
-            content: system_message.to_string().into(),
+            content: system_message.into(),
             ..Default::default()
         }
         .into(),
@@ -953,7 +956,7 @@ async fn create_chat_stream(
                     // Strip reasoning blocks when sending back to model
                     let filtered_content = llm::strip_reasoning_blocks(&msg.content);
                     if filtered_content.len() != msg.content.len() {
-                        debug!("Filtered reasoning from assistant message: {} chars -> {} chars",
+                        trace!("Filtered reasoning from assistant message: {} chars -> {} chars",
                                msg.content.len(), filtered_content.len());
                     }
                     messages.push(

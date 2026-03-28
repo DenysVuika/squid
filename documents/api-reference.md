@@ -154,11 +154,33 @@ Squid automatically includes system context:
 }
 ```
 
-Disable with:
+## Template Variables
+
+Agent prompts support variable substitution using the Tera template engine. Variables are automatically available in all prompts:
+
+**Available Variables:**
+- `{{now}}` - Current timestamp (ISO 8601)
+- `{{date}}` - Current date (YYYY-MM-DD)
+- `{{time}}` - Current time (HH:MM:SS)
+- `{{year}}`, `{{month}}`, `{{day}}` - Date components
+- `{{timestamp}}` - Unix timestamp
+- `{{timezone}}` - Timezone name
+- `{{timezone_offset}}` - Timezone offset
+- `{{os}}` - Operating system name
+- `{{os_version}}` - OS version
+- `{{kernel_version}}` - Kernel version
+- `{{arch}}` - System architecture (x86_64, aarch64, etc.)
+- `{{os_family}}` - OS family (unix, windows)
+
+**Example Usage:**
 
 ```json
 {
-  "enable_env_context": false
+  "agents": {
+    "code-reviewer": {
+      "prompt": "You are an expert code reviewer on {{os}} ({{arch}}) at {{now}}. Focus on security and quality."
+    }
+  }
 }
 ```
 

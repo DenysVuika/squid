@@ -3,7 +3,6 @@
   "context_window": 32768,
   "log_level": "error",
   "db_log_level": "debug",
-  "enable_env_context": true,
   "server": {
     "allow_network": false
   },
@@ -36,7 +35,7 @@
       "model": "local-model",
       "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
-      "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
+      "prompt": "You are an expert code reviewer working on {{os}} ({{arch}}) at {{now}}. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
         "deny": ["write_file", "bash"]

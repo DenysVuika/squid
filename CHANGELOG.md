@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Template Variables in Agent Prompts**: Agent prompts now support variable substitution using the Tera template engine with secure, privacy-safe system variables like `{{now}}`, `{{os}}`, `{{arch}}`, `{{date}}`, etc.
 - **Tools Toggle Button**: Added toggle button to enable/disable AI tools in chat sessions, disabled by default for user control
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed
 - **Automatic Stats Refresh**: Document statistics in Web UI update automatically after uploads
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Reduced Debug Log Noise**: Moved verbose session/message operations (loading, saving, processing) from `debug` to `trace` level for cleaner logs
 - **Relaxed Configuration Check**: CLI commands no longer require `squid.config.json` if essential environment variables like `API_URL` are set
 - **Build Warnings**: More prominent error messages when npm/node is missing during build
 - **RAG Upload**: Files uploaded via Web UI are now indexed by the background watcher instead of immediately
@@ -44,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **`enable_env_context` Configuration**: Removed in favor of template variables in agent prompts. System context is now available via template variables that can be used selectively in prompts
+- **`ENABLE_ENV_CONTEXT` Environment Variable**: No longer needed with new template variable system
+- **`env.md` Template File**: Replaced by integrated template rendering in all prompts
 - **Deprecated `/api/models` endpoint**: Removed in favor of `/api/agents` endpoint. Models API replaced by agent-based architecture
 
 ## [0.11.0] - 2026-03-25

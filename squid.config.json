@@ -47,7 +47,7 @@
       "model": "qwen3.5-4b",
       "context_window": 32768,
       "pricing_model": "gpt-4o-mini",
-      "prompt": "You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
+      "prompt": "You are an expert code reviewer working on {{os}} ({{arch}}) at {{now}}. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.",
       "permissions": {
         "allow": ["now", "read_file", "grep"],
         "deny": ["write_file", "bash"]
@@ -60,6 +60,7 @@
       "model": "liquid/lfm2.5-1.2b",
       "context_window": 8192,
       "pricing_model": "gpt-4o-mini",
+      "prompt": "You are a helpful assistant. Current date: {{date}}, timezone: {{timezone}}.",
       "permissions": {
         "allow": ["now"],
         "deny": []

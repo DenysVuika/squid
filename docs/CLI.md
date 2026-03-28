@@ -449,7 +449,6 @@ The `squid.config.json` file created by `squid init`:
   "api_model": "qwen2.5-coder",
   "context_window": 32768,
   "log_level": "error",
-  "enable_env_context": true,
   "database_path": "squid.db",
   "agents": {
     "general-assistant": {
@@ -478,7 +477,6 @@ The `squid.config.json` file created by `squid init`:
 | `api_key` | string (optional) | API key for authentication |
 | `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
-| `enable_env_context` | boolean | Include system info in prompts (default: true) |
 | `database_path` | string | Path to SQLite database file |
 | `agents` | object | Agent configurations (see Agents section in README) |
 | `default_agent` | string | Default agent to use |
@@ -496,9 +494,6 @@ API_KEY=not-needed
 SQUID_CONTEXT_WINDOW=32768
 SQUID_DATABASE_PATH=squid.db
 SQUID_LOG_LEVEL=error
-
-# Privacy Settings
-ENABLE_ENV_CONTEXT=true
 ```
 
 **Important Notes:**
