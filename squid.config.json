@@ -11,8 +11,8 @@
   "rag": {
     "enabled": false,
     "embedding_model": "huggingface.co/nomic-ai/nomic-embed-text-v1.5-gguf:latest",
-    "embedding_url": "http://localhost:12434/engines/v1",
-    "chunk_size": 512,
+    "embedding_url": "http://localhost:12434/v1",
+    "chunk_size": 350,
     "chunk_overlap": 50,
     "top_k": 5,
     "documents_path": "documents"

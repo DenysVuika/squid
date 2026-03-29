@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
+use rig::client::EmbeddingsClient;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,14 +28,35 @@ pub struct RagEmbedder {
 
 impl RagEmbedder {
     /// Create a new RAG embedder with the specified configuration
+    ///
+    /// # Arguments
+    /// * `embedding_url` - Base URL for the embedding service (e.g., "http://localhost:1234")
+    /// * `model` - Model name to use for embeddings
+    ///
+    /// # Notes
+    /// This uses the rig-core 0.33.0+ builder pattern to set a custom base URL.
+    /// The builder pattern is required to properly override the OpenAI endpoint
+    /// for local services like LM Studio or Ollama.
     pub fn new(embedding_url: &str, model: &str) -> Result<Self> {
-        // For local services (LM Studio, Ollama), use a dummy API key
-        // The from_url method accepts: (api_key, base_url)
-        // Strip /v1 suffix and trailing slash since rig adds /v1/embeddings automatically
-        let normalized_url = embedding_url
-            .trim_end_matches('/')
-            .trim_end_matches("/v1");
-        let client = rig::providers::openai::Client::from_url("not-needed", normalized_url);
+        // For OpenAI-compatible APIs (LM Studio, Ollama, Docker model runner, etc.)
+        // Pass the full URL as-is, only removing trailing slashes
+        // Examples:
+        //   - http://localhost:1234/v1 (LM Studio)
+        //   - http://localhost:11434/v1 (Ollama)
+        //   - http://localhost:12434/engines/v1 (Docker model runner)
+        let normalized_url = embedding_url.trim_end_matches('/');
+
+        // Create client with custom base URL using builder pattern
+        // Note: In rig-core 0.33.0+, the builder() -> api_key() -> base_url() -> build()
+        // pattern is required to properly set a custom endpoint. The full URL path
+        // (including /v1 or /engines/v1) should be provided in the base_url.
+        // The API key "not-needed" works for local services that don't require authentication.
+        let client = rig::providers::openai::Client::builder()
+            .api_key("not-needed")
+            .base_url(normalized_url)
+            .build()
+            .context("Failed to create OpenAI client")?;
+
         Ok(Self {
             client,
             model: model.to_string(),
@@ -43,15 +65,12 @@ impl RagEmbedder {
 
     /// Generate embeddings for a single text
     pub async fn embed_text(&self, text: &str) -> Result<Vec<f32>> {
-        use rig::embeddings::EmbeddingsBuilder;
-
         debug!("Generating embedding using model: {}", self.model);
         debug!("Text length: {} characters", text.len());
 
-        let model = self.client.embedding_model(&self.model);
-
-        let embeddings = match EmbeddingsBuilder::new(model)
-            .simple_document("doc", text)
+        let embeddings = match self.client.embeddings(&self.model)
+            .document(text)
+            .context("Failed to create embedding document")?
             .build()
             .await
         {
@@ -70,12 +89,11 @@ impl RagEmbedder {
 
         debug!("Successfully generated embeddings");
 
-        if let Some(doc_embedding) = embeddings.first() {
-            if let Some(embedding) = doc_embedding.embeddings.first() {
-                Ok(embedding.vec.iter().map(|&x| x as f32).collect())
-            } else {
-                Err(anyhow::anyhow!("No embeddings in document"))
-            }
+        if let Some((_, embedding)) = embeddings.first() {
+            // Get the first embedding from OneOrMany
+            let emb = embedding.iter().next()
+                .context("No embeddings in response")?;
+            Ok(emb.vec.iter().map(|&x| x as f32).collect())
         } else {
             Err(anyhow::anyhow!("No embeddings returned"))
         }
@@ -143,42 +161,88 @@ impl DocumentManager {
     }
 
     /// Split text into chunks based on token count
+    ///
+    /// This implementation works with character positions rather than token slicing
+    /// to avoid UTF-8 decoding issues when token boundaries don't align with
+    /// character boundaries.
     pub fn chunk_text(&self, text: &str) -> Result<Vec<DocumentChunk>> {
         let bpe = cl100k_base()
             .context("Failed to load tokenizer")?;
 
-        let tokens = bpe.encode_with_special_tokens(text);
-        let total_tokens = tokens.len();
+        // Get total token count for the entire text
+        let total_tokens = bpe.encode_ordinary(text).len();
 
         if total_tokens == 0 {
             return Ok(vec![]);
         }
 
+        // If text is smaller than chunk size, return as single chunk
+        if total_tokens <= self.chunk_size {
+            return Ok(vec![DocumentChunk {
+                index: 0,
+                text: text.to_string(),
+                tokens: total_tokens,
+            }]);
+        }
+
         let mut chunks = Vec::new();
-        let mut start = 0;
         let mut chunk_index = 0;
 
-        while start < total_tokens {
-            let end = (start + self.chunk_size).min(total_tokens);
-            let chunk_tokens = &tokens[start..end];
+        // Estimate characters per token for initial sizing
+        let chars_per_token = text.chars().count() as f64 / total_tokens as f64;
 
-            let chunk_text = bpe
-                .decode(chunk_tokens.to_vec())
-                .context("Failed to decode tokens")?;
+        let mut start_char = 0;
+        let text_chars: Vec<char> = text.chars().collect();
+
+        while start_char < text_chars.len() {
+            // Estimate end position based on desired token count
+            let estimated_chars = (self.chunk_size as f64 * chars_per_token * 1.1) as usize;
+            let mut end_char = (start_char + estimated_chars).min(text_chars.len());
+
+            // Extract candidate chunk and measure tokens
+            let mut chunk_text: String = text_chars[start_char..end_char].iter().collect();
+            let mut chunk_tokens = bpe.encode_ordinary(&chunk_text).len();
+
+            // Adjust chunk size to meet token target
+            // Shrink if too large
+            while chunk_tokens > self.chunk_size && end_char > start_char + 1 {
+                let reduction = ((end_char - start_char) as f64 * 0.1).max(1.0) as usize;
+                end_char = end_char.saturating_sub(reduction);
+                chunk_text = text_chars[start_char..end_char].iter().collect();
+                chunk_tokens = bpe.encode_ordinary(&chunk_text).len();
+            }
+
+            // Grow if too small (and not at end)
+            while chunk_tokens < self.chunk_size && end_char < text_chars.len() {
+                let growth = ((end_char - start_char) as f64 * 0.1).max(1.0) as usize;
+                let new_end = (end_char + growth).min(text_chars.len());
+                let new_chunk_text: String = text_chars[start_char..new_end].iter().collect();
+                let new_tokens = bpe.encode_ordinary(&new_chunk_text).len();
+
+                if new_tokens <= self.chunk_size {
+                    end_char = new_end;
+                    chunk_text = new_chunk_text;
+                    chunk_tokens = new_tokens;
+                } else {
+                    break;
+                }
+            }
 
             chunks.push(DocumentChunk {
                 index: chunk_index,
                 text: chunk_text,
-                tokens: chunk_tokens.len(),
+                tokens: chunk_tokens,
             });
 
             chunk_index += 1;
 
-            if end == total_tokens {
+            if end_char >= text_chars.len() {
                 break;
             }
 
-            start = end.saturating_sub(self.chunk_overlap);
+            // Calculate overlap in characters
+            let overlap_chars = (self.chunk_overlap as f64 * chars_per_token) as usize;
+            start_char = end_char.saturating_sub(overlap_chars.max(1));
         }
 
         debug!(
@@ -673,6 +737,16 @@ impl RagSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    // ========== DocumentManager Tests ==========
+
+    #[test]
+    fn test_document_manager_new() {
+        let manager = DocumentManager::new(512, 50);
+        assert_eq!(manager.chunk_size, 512);
+        assert_eq!(manager.chunk_overlap, 50);
+    }
 
     #[test]
     fn test_document_manager_chunking() {
@@ -680,14 +754,70 @@ mod tests {
         let text = "This is a test document. ".repeat(50);
         let chunks = manager.chunk_text(&text).unwrap();
         assert!(!chunks.is_empty());
+
+        // Verify chunks have proper structure
+        for chunk in &chunks {
+            assert!(!chunk.text.is_empty());
+            assert!(chunk.tokens > 0);
+        }
+    }
+
+    #[test]
+    fn test_document_manager_chunking_with_overlap() {
+        let manager = DocumentManager::new(50, 10);
+        let text = "Word ".repeat(100); // Create text longer than chunk size
+        let chunks = manager.chunk_text(&text).unwrap();
+
+        // Should have multiple chunks
+        assert!(chunks.len() > 1);
+
+        // Verify indices are sequential
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(chunk.index, i);
+        }
+    }
+
+    #[test]
+    fn test_document_manager_empty_text() {
+        let manager = DocumentManager::new(512, 50);
+        let result = manager.chunk_text("");
+        assert!(result.is_ok(), "Empty text should return Ok with empty vector");
+        assert_eq!(result.unwrap().len(), 0, "Empty text should produce no chunks");
+    }
+
+    #[test]
+    fn test_document_manager_small_text() {
+        let manager = DocumentManager::new(1000, 100);
+        let text = "Small text.";
+        let chunks = manager.chunk_text(text).unwrap();
+
+        // Small text should result in single chunk
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].index, 0);
+        assert_eq!(chunks[0].text, text);
     }
 
     #[test]
     fn test_supported_extensions() {
         let manager = DocumentManager::new(512, 50);
+
+        // Test all supported extensions
         assert!(manager.is_supported_extension(Path::new("test.md")));
         assert!(manager.is_supported_extension(Path::new("test.rs")));
+        assert!(manager.is_supported_extension(Path::new("test.py")));
+        assert!(manager.is_supported_extension(Path::new("test.js")));
+        assert!(manager.is_supported_extension(Path::new("test.ts")));
+        assert!(manager.is_supported_extension(Path::new("test.jsx")));
+        assert!(manager.is_supported_extension(Path::new("test.tsx")));
+        assert!(manager.is_supported_extension(Path::new("test.json")));
+        assert!(manager.is_supported_extension(Path::new("test.yaml")));
+        assert!(manager.is_supported_extension(Path::new("test.yml")));
+
+        // Test unsupported extensions
         assert!(!manager.is_supported_extension(Path::new("test.exe")));
+        assert!(!manager.is_supported_extension(Path::new("test.bin")));
+        assert!(!manager.is_supported_extension(Path::new("test.pdf")));
+        assert!(!manager.is_supported_extension(Path::new("test")));
     }
 
     #[test]
@@ -696,7 +826,255 @@ mod tests {
         let hash1 = manager.calculate_content_hash("test content");
         let hash2 = manager.calculate_content_hash("test content");
         let hash3 = manager.calculate_content_hash("different content");
-        assert_eq!(hash1, hash2);
-        assert_ne!(hash1, hash3);
+
+        assert_eq!(hash1, hash2, "Same content should produce same hash");
+        assert_ne!(hash1, hash3, "Different content should produce different hash");
+
+        // Test empty content
+        let hash_empty = manager.calculate_content_hash("");
+        assert!(!hash_empty.is_empty());
+    }
+
+    #[test]
+    fn test_read_file_content() {
+        let manager = DocumentManager::new(512, 50);
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+
+        // Create test file
+        std::fs::write(&file_path, "Test file content").unwrap();
+
+        // Read it back
+        let content = manager.read_file_content(&file_path).unwrap();
+        assert_eq!(content, "Test file content");
+
+        // Test non-existent file
+        let result = manager.read_file_content(Path::new("/nonexistent/file.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_process_document() {
+        let manager = DocumentManager::new(100, 20);
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.md");
+
+        // Create test file with enough content to create multiple chunks
+        let content = "This is test content. ".repeat(50);
+        std::fs::write(&file_path, &content).unwrap();
+
+        // Process document
+        let (read_content, chunks) = manager.process_document(&file_path).unwrap();
+
+        assert_eq!(read_content, content);
+        assert!(!chunks.is_empty());
+
+        // Verify all chunks have content
+        for chunk in chunks {
+            assert!(!chunk.text.is_empty());
+            assert!(chunk.tokens > 0);
+        }
+    }
+
+    // ========== RagEmbedder Tests ==========
+    // Note: These tests verify the API structure but require a running embedding service
+
+    #[test]
+    fn test_rag_embedder_creation() {
+        // Test that embedder can be created with various URL formats
+        let result1 = RagEmbedder::new("http://localhost:1234", "text-embedding-3-small");
+        assert!(result1.is_ok(), "Should create embedder with http URL");
+
+        let result2 = RagEmbedder::new("http://localhost:1234/v1", "text-embedding-3-small");
+        assert!(result2.is_ok(), "Should create embedder with /v1 suffix");
+
+        let result3 = RagEmbedder::new("http://localhost:1234/v1/", "text-embedding-3-small");
+        assert!(result3.is_ok(), "Should create embedder with /v1/ suffix");
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running embedding service (e.g., LM Studio, Ollama)
+    async fn test_rag_embedder_embed_text() {
+        // This test requires a local embedding service running on port 1234
+        // Start LM Studio or Ollama with an embedding model before running
+        let embedder = RagEmbedder::new("http://localhost:1234", "text-embedding-3-small")
+            .expect("Failed to create embedder");
+
+        let result = embedder.embed_text("Hello, world!").await;
+        assert!(result.is_ok(), "Should successfully embed text");
+
+        let embedding = result.unwrap();
+        assert!(!embedding.is_empty(), "Embedding should not be empty");
+        assert!(embedding.len() > 100, "Embedding should have reasonable size");
+
+        // Verify all values are finite
+        for &value in &embedding {
+            assert!(value.is_finite(), "Embedding values should be finite");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running embedding service
+    async fn test_rag_embedder_embed_multiple_texts() {
+        let embedder = RagEmbedder::new("http://localhost:1234", "text-embedding-3-small")
+            .expect("Failed to create embedder");
+
+        // Embed same text twice - should produce similar embeddings
+        let embedding1 = embedder.embed_text("Test text").await.unwrap();
+        let embedding2 = embedder.embed_text("Test text").await.unwrap();
+
+        assert_eq!(embedding1.len(), embedding2.len());
+
+        // Embeddings should be very similar (cosine similarity should be high)
+        let similarity = cosine_similarity(&embedding1, &embedding2);
+        assert!(similarity > 0.99, "Same text should produce nearly identical embeddings");
+
+        // Different text should produce different embeddings
+        let embedding3 = embedder.embed_text("Completely different content").await.unwrap();
+        let similarity2 = cosine_similarity(&embedding1, &embedding3);
+        assert!(similarity2 < 0.95, "Different text should produce different embeddings");
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running embedding service
+    async fn test_rag_embedder_embed_batch() {
+        let embedder = RagEmbedder::new("http://localhost:1234", "text-embedding-3-small")
+            .expect("Failed to create embedder");
+
+        let texts = vec![
+            "First text".to_string(),
+            "Second text".to_string(),
+            "Third text".to_string(),
+        ];
+
+        let result = embedder.embed_batch(texts.clone()).await;
+        assert!(result.is_ok(), "Should successfully embed batch");
+
+        let embeddings = result.unwrap();
+        assert_eq!(embeddings.len(), texts.len());
+
+        // Verify each embedding
+        for embedding in embeddings {
+            assert!(!embedding.is_empty());
+            assert!(embedding.len() > 100);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires running embedding service
+    async fn test_rag_embedder_empty_text() {
+        let embedder = RagEmbedder::new("http://localhost:1234", "text-embedding-3-small")
+            .expect("Failed to create embedder");
+
+        // Test with empty string - behavior may vary by provider
+        let result = embedder.embed_text("").await;
+        // Most embedding services should handle empty text gracefully
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    // ========== Helper Functions ==========
+
+    /// Calculate cosine similarity between two vectors
+    fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+        assert_eq!(a.len(), b.len());
+
+        let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+        let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        dot_product / (magnitude_a * magnitude_b)
+    }
+
+    // ========== SearchResult Tests ==========
+
+    #[test]
+    fn test_search_result_creation() {
+        let result = SearchResult {
+            chunk_id: 1,
+            chunk_text: "Test chunk".to_string(),
+            filename: "test.md".to_string(),
+            distance: 0.5,
+        };
+
+        assert_eq!(result.chunk_id, 1);
+        assert_eq!(result.chunk_text, "Test chunk");
+        assert_eq!(result.filename, "test.md");
+        assert_eq!(result.distance, 0.5);
+    }
+
+    // ========== SUPPORTED_EXTENSIONS Tests ==========
+
+    #[test]
+    fn test_supported_extensions_constant() {
+        // Verify the constant contains expected extensions
+        assert!(SUPPORTED_EXTENSIONS.contains(&"md"));
+        assert!(SUPPORTED_EXTENSIONS.contains(&"rs"));
+        assert!(SUPPORTED_EXTENSIONS.contains(&"py"));
+        assert!(SUPPORTED_EXTENSIONS.contains(&"js"));
+        assert!(SUPPORTED_EXTENSIONS.contains(&"json"));
+
+        // Verify it doesn't contain binary formats
+        assert!(!SUPPORTED_EXTENSIONS.contains(&"exe"));
+        assert!(!SUPPORTED_EXTENSIONS.contains(&"bin"));
+        assert!(!SUPPORTED_EXTENSIONS.contains(&"pdf"));
+    }
+
+    #[test]
+    fn test_chunk_indices_are_sequential() {
+        let manager = DocumentManager::new(50, 10);
+        let text = "Word ".repeat(100);
+        let chunks = manager.chunk_text(&text).unwrap();
+
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(chunk.index, i, "Chunk index should match position");
+        }
+    }
+
+    #[test]
+    fn test_chunk_token_counts_are_positive() {
+        let manager = DocumentManager::new(100, 20);
+        let text = "This is a test. ".repeat(20);
+        let chunks = manager.chunk_text(&text).unwrap();
+
+        for chunk in chunks {
+            assert!(chunk.tokens > 0, "All chunks should have positive token count");
+        }
+    }
+
+    #[test]
+    fn test_document_manager_with_special_characters() {
+        let manager = DocumentManager::new(512, 50);
+        let text = "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?\n\t\r";
+        let chunks = manager.chunk_text(text).unwrap();
+
+        assert!(!chunks.is_empty());
+        assert!(chunks[0].text.contains("Special chars"));
+    }
+
+    #[test]
+    fn test_document_manager_with_unicode() {
+        let manager = DocumentManager::new(512, 50);
+        let text = "Unicode: 你好世界 🌍 émojis ñ café";
+        let chunks = manager.chunk_text(text).unwrap();
+
+        assert!(!chunks.is_empty());
+        assert!(chunks[0].text.contains("你好世界"));
+        assert!(chunks[0].text.contains("🌍"));
+    }
+
+    #[test]
+    fn test_hash_consistency_across_calls() {
+        let manager = DocumentManager::new(512, 50);
+        let content = "Consistent content";
+
+        // Generate hash multiple times
+        let hashes: Vec<String> = (0..5)
+            .map(|_| manager.calculate_content_hash(content))
+            .collect();
+
+        // All hashes should be identical
+        for hash in &hashes[1..] {
+            assert_eq!(hash, &hashes[0]);
+        }
     }
 }
