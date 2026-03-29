@@ -63,3 +63,6 @@ rig-core = "0.33"
 notify = "8.2"
 anyhow = "1.0"
 sqlite-vec = "0.1"
+
+[dev-dependencies]
+tempfile = "3.0"
