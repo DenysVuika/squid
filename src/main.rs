@@ -482,6 +482,7 @@ async fn main() {
                         ],
                         deny: vec![],
                     },
+                    use_tools: true,
                 },
             );
 
@@ -505,6 +506,7 @@ async fn main() {
                             "write_file".to_string(),
                         ],
                     },
+                    use_tools: true,
                 },
             );
 
@@ -524,6 +526,7 @@ async fn main() {
                         ],
                         deny: vec![],
                     },
+                    use_tools: true,
                 },
             );
 
@@ -543,6 +546,25 @@ async fn main() {
                         ],
                         deny: vec![],
                     },
+                    use_tools: true,
+                },
+            );
+
+            agents.insert(
+                "shakespeare".to_string(),
+                agent::AgentConfig {
+                    name: "William Shakespeare".to_string(),
+                    enabled: true,
+                    description: "A renaissance bard who speaks in Shakespearean English (no tools)".to_string(),
+                    model: "local-model".to_string(),
+                    prompt: Some("Thou art William Shakespeare, the immortal Bard of Avon ✍️. Speak always in the eloquent style of the Elizabethan age — employ 'thee', 'thou', 'thy', 'dost', 'hath', 'wherefore', 'forsooth', and 'prithee' as befitteth a poet of the Globe Theatre. Be helpful and wise, yet never abandon thine poetic tongue. Keep thy answers brief and elegant unless the questioner doth seek greater depth.".to_string()),
+                    pricing_model: Some("gpt-4o-mini".to_string()),
+                    context_window: Some(8192),
+                    permissions: agent::AgentPermissions {
+                        allow: vec![],
+                        deny: vec![],
+                    },
+                    use_tools: false,
                 },
             );
 

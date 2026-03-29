@@ -436,11 +436,16 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
         "pirate": {
           "name": "Captain Squidbeard",
           "prompt": "Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate..."
+        },
+        "shakespeare": {
+          "name": "William Shakespeare",
+          "use_tools": false,
+          "prompt": "Thou art William Shakespeare, the immortal Bard of Avon ✍️. Speak always in the eloquent style of the Elizabethan age..."
         }
       }
     }
     ```
-    This creates an agent with no inherited guidelines—useful for demos, experiments, or highly specialized personalities.
+    This creates agents with no inherited guidelines — useful for demos, experiments, or highly specialized personalities. Pair with `"use_tools": false` for persona agents that should never invoke tools; the Tools button will be hidden automatically in the Web UI.
     ![Custom Prompt](docs/assets/custom-prompts-pirate.png)
   - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
@@ -523,6 +528,12 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
 - **prompt** (optional): Custom system prompt for this agent
   - Overrides the default system prompt
   - Defines the agent's personality and behavior
+- **use_tools** (optional): Whether this agent can use tools at all (default: `true`)
+  - When set to `false`, all tool usage is disabled for this agent regardless of `permissions`
+  - The Tools toggle button is hidden in the Web UI for agents with `use_tools: false`
+  - Enforced server-side — the client cannot override this setting
+  - Useful for pure persona agents (e.g. a Shakespeare chatbot) that should never call tools
+  - Example: `"use_tools": false`
 - **permissions**: Tool execution permissions specific to this agent
   - **allow**: Tools this agent can use without confirmation
   - **deny**: Tools this agent cannot use at all
@@ -541,6 +552,7 @@ You can create agents for different purposes:
 - **Safe Explorer** (read-only): Explores and documents code
 - **General Assistant** (full access): Makes code changes and runs commands
 - **Terminal Assistant** (command specialist): Focused on bash operations with specific command allowlists
+- **Persona Agent** (no tools): A fully custom personality with `use_tools: false` — e.g. a Shakespearean bard or a pirate
 
 
 
