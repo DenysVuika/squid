@@ -554,6 +554,7 @@ export interface AgentInfo {
     deny: string[];
   };
   pricing_model?: string;
+  suggestions?: string[];
 }
 
 export interface AgentsResponse {

@@ -496,6 +496,11 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
       "model": "qwen2.5-coder-7b-instruct",
       "context_window": 32768,
       "pricing_model": "gpt-4o",
+      "suggestions": [
+        "Read and summarize the main source files",
+        "Show me the recent git log",
+        "Find all TODO comments in the codebase"
+      ],
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
         "deny": []
@@ -534,6 +539,12 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
   - Enforced server-side — the client cannot override this setting
   - Useful for pure persona agents (e.g. a Shakespeare chatbot) that should never call tools
   - Example: `"use_tools": false`
+- **suggestions** (optional): A list of suggested prompts displayed in the Web UI for this agent
+  - Shown as clickable chips above the input box when no messages have been sent yet
+  - Automatically updates when the user switches agents
+  - Agents with no `suggestions` field show no suggestion bar
+  - Tailor suggestions to each agent's capabilities (e.g. code-related prompts for a code reviewer)
+  - Example: `"suggestions": ["Review this file for security issues", "Find all TODOs"]`
 - **permissions**: Tool execution permissions specific to this agent
   - **allow**: Tools this agent can use without confirmation
   - **deny**: Tools this agent cannot use at all
@@ -873,6 +884,11 @@ Fetches available agents configured in your `squid.config.json` file. Each agent
       "model": "qwen2.5-coder-7b-instruct",
       "enabled": true,
       "pricing_model": "gpt-4o",
+      "suggestions": [
+        "Read and summarize the main source files",
+        "Show me the recent git log",
+        "Find all TODO comments in the codebase"
+      ],
       "permissions": {
         "allow": ["now", "read_file", "write_file", "grep", "bash"],
         "deny": []

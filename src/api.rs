@@ -1449,6 +1449,8 @@ pub struct AgentInfo {
     pub pricing_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1477,6 +1479,7 @@ pub async fn get_agents(
             permissions: agent.permissions.clone(),
             pricing_model: agent.pricing_model.clone(),
             context_window: agent.context_window,
+            suggestions: agent.suggestions.clone(),
         })
         .collect();
 

@@ -44,17 +44,6 @@ import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentStore } from '@/stores/agent-store';
 
-const suggestions = [
-  'Review this file for potential bugs',
-  'Explain what this code does',
-  'Suggest improvements for code quality',
-  'Check for security vulnerabilities',
-  'Analyze the code structure',
-  'Find performance optimization opportunities',
-  'Review coding standards compliance',
-  'Identify potential refactoring areas',
-];
-
 // Detect language from filename
 const getLanguageFromFilename = (filename: string): BundledLanguage => {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
@@ -128,6 +117,9 @@ export function FileViewer() {
   } = useAgentStore();
 
   const selectedAgentData = useMemo(() => agents.find((a) => a.id === selectedAgent), [selectedAgent, agents]);
+
+  // Suggestions for the currently selected agent
+  const suggestions = useMemo(() => selectedAgentData?.suggestions ?? [], [selectedAgentData]);
 
   // Fetch available agents on mount
   useEffect(() => {
@@ -264,9 +256,7 @@ export function FileViewer() {
         )}
         {error && (
           <div className="flex items-center justify-center flex-1">
-            <div className="text-sm text-destructive">
-              Error: {error}
-            </div>
+            <div className="text-sm text-destructive">Error: {error}</div>
           </div>
         )}
         {!loading && !error && content && (
@@ -282,27 +272,12 @@ export function FileViewer() {
                 <ArtifactDescription>{filePath}</ArtifactDescription>
               </div>
               <ArtifactActions>
-                <ArtifactAction
-                  icon={CopyIcon}
-                  label="Copy"
-                  onClick={handleCopy}
-                  tooltip="Copy to clipboard"
-                />
-                <ArtifactAction
-                  icon={DownloadIcon}
-                  label="Download"
-                  onClick={handleDownload}
-                  tooltip="Download file"
-                />
+                <ArtifactAction icon={CopyIcon} label="Copy" onClick={handleCopy} tooltip="Copy to clipboard" />
+                <ArtifactAction icon={DownloadIcon} label="Download" onClick={handleDownload} tooltip="Download file" />
               </ArtifactActions>
             </ArtifactHeader>
             <ArtifactContent className="p-0 flex-1 min-h-0">
-              <CodeBlock
-                className="border-none rounded-none"
-                code={content}
-                language={language}
-                showLineNumbers
-              />
+              <CodeBlock className="border-none rounded-none" code={content} language={language} showLineNumbers />
             </ArtifactContent>
           </Artifact>
         )}
@@ -310,15 +285,15 @@ export function FileViewer() {
 
       {/* Prompt Input Area */}
       <div className="grid shrink-0 gap-4 border-t pt-4">
-        <Suggestions className="px-4">
-          {suggestions.map((suggestion) => (
-            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
-          ))}
-        </Suggestions>
+        {suggestions.length > 0 && (
+          <Suggestions className="px-4">
+            {suggestions.map((suggestion) => (
+              <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+            ))}
+          </Suggestions>
+        )}
         <div className="w-full px-4 pb-4">
-          <PromptInput
-            onSubmit={handlePromptSubmit}
-          >
+          <PromptInput onSubmit={handlePromptSubmit}>
             <PromptInputBody>
               <PromptInputTextarea
                 onChange={handlePromptChange}
@@ -348,7 +323,12 @@ export function FileViewer() {
                               return agentProvider === provider;
                             })
                             .map((a) => (
-                              <AgentItem agent={a} isSelected={selectedAgent === a.id} key={a.id} onSelect={handleAgentSelect} />
+                              <AgentItem
+                                agent={a}
+                                isSelected={selectedAgent === a.id}
+                                key={a.id}
+                                onSelect={handleAgentSelect}
+                              />
                             ))}
                         </ModelSelectorGroup>
                       ))}

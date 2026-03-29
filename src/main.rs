@@ -483,6 +483,7 @@ async fn main() {
                         deny: vec![],
                     },
                     use_tools: true,
+                    suggestions: vec![],
                 },
             );
 
@@ -507,6 +508,7 @@ async fn main() {
                         ],
                     },
                     use_tools: true,
+                    suggestions: vec![],
                 },
             );
 
@@ -527,6 +529,7 @@ async fn main() {
                         deny: vec![],
                     },
                     use_tools: true,
+                    suggestions: vec![],
                 },
             );
 
@@ -547,6 +550,7 @@ async fn main() {
                         deny: vec![],
                     },
                     use_tools: true,
+                    suggestions: vec![],
                 },
             );
 
@@ -565,6 +569,7 @@ async fn main() {
                         deny: vec![],
                     },
                     use_tools: false,
+                    suggestions: vec![],
                 },
             );
 

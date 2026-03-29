@@ -37,6 +37,9 @@ pub struct AgentConfig {
     /// Set to false to disable all tool usage for this agent.
     #[serde(default = "default_true")]
     pub use_tools: bool,
+    /// Optional list of suggested prompts shown in the web UI for this agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
