@@ -81,17 +81,6 @@ import { useAgentStore } from '@/stores/agent-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useConfigStore } from '@/stores/config-store';
 
-const suggestions = [
-  'What are the latest trends in AI?',
-  'How does machine learning work?',
-  'Explain quantum computing',
-  'Best practices for React development',
-  'Tell me about TypeScript benefits',
-  'How to optimize database queries?',
-  'What is the difference between SQL and NoSQL?',
-  'Explain cloud computing basics',
-];
-
 const AttachmentItem = ({
   attachment,
   onRemove,
@@ -172,6 +161,9 @@ const Chatbot = () => {
   const [sourceContentData, setSourceContentData] = useState<{ title: string; content: string } | null>(null);
 
   const selectedAgentData = useMemo(() => agents.find((a) => a.id === selectedAgent), [selectedAgent, agents]);
+
+  // Suggestions for the currently selected agent
+  const suggestions = useMemo(() => selectedAgentData?.suggestions ?? [], [selectedAgentData]);
 
   // Whether the currently selected agent supports tools (defaults to true if not specified)
   const agentSupportsTools = useMemo(() => selectedAgentData?.use_tools !== false, [selectedAgentData]);
@@ -794,11 +786,13 @@ const Chatbot = () => {
         </Conversation>
       </div>
       <div className="grid shrink-0 gap-4 border-t pt-4">
-        <Suggestions className="px-4">
-          {suggestions.map((suggestion) => (
-            <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
-          ))}
-        </Suggestions>
+        {suggestions.length > 0 && (
+          <Suggestions className="px-4">
+            {suggestions.map((suggestion) => (
+              <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
+            ))}
+          </Suggestions>
+        )}
         <div className="w-full px-4 pb-4">
           <PromptInput
             globalDrop

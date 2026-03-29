@@ -38,7 +38,13 @@
           "bash:git"
         ],
         "deny": []
-      }
+      },
+      "suggestions": [
+        "Read and summarize the main source files in this project",
+        "Show me the recent git log",
+        "Find all TODO comments in the codebase",
+        "List all files in the current directory"
+      ]
     },
     "code-reviewer": {
       "name": "Code Reviewer",
@@ -51,7 +57,13 @@
       "permissions": {
         "allow": ["now", "read_file", "grep"],
         "deny": ["write_file", "bash"]
-      }
+      },
+      "suggestions": [
+        "Review this file for security vulnerabilities",
+        "What are the biggest code quality issues here?",
+        "Identify any performance bottlenecks",
+        "Check this code for common anti-patterns"
+      ]
     },
     "light": {
       "name": "Light",
@@ -63,7 +75,13 @@
       "permissions": {
         "allow": ["now"],
         "deny": []
-      }
+      },
+      "suggestions": [
+        "What time is it?",
+        "Give me a quick summary of what you can do",
+        "Explain recursion in simple terms",
+        "What's a good way to stay productive?"
+      ]
     },
     "pirate": {
       "name": "Captain Squidbeard",
@@ -76,7 +94,13 @@
       "permissions": {
         "allow": ["bash:date"],
         "deny": []
-      }
+      },
+      "suggestions": [
+        "What be the time, Captain?",
+        "Tell me a tale of the seven seas!",
+        "How do I navigate this codebase, matey?",
+        "What treasure lies hidden in these files, arr?"
+      ]
     },
     "shakespeare": {
       "name": "William Shakespeare",
@@ -90,7 +114,13 @@
       "permissions": {
         "allow": [],
         "deny": []
-      }
+      },
+      "suggestions": [
+        "Compose a sonnet about the art of coding",
+        "Explain what a function is in thy poetic tongue",
+        "What is the nature of a bug, good Bard?",
+        "Speak to me of the virtues of clean code"
+      ]
     }
   },
   "default_agent": "general-assistant"
