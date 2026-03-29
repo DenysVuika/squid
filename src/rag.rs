@@ -28,22 +28,35 @@ pub struct RagEmbedder {
 
 impl RagEmbedder {
     /// Create a new RAG embedder with the specified configuration
+    ///
+    /// # Arguments
+    /// * `embedding_url` - Base URL for the embedding service (e.g., "http://localhost:1234")
+    /// * `model` - Model name to use for embeddings
+    ///
+    /// # Notes
+    /// This uses the rig-core 0.33.0+ builder pattern to set a custom base URL.
+    /// The builder pattern is required to properly override the OpenAI endpoint
+    /// for local services like LM Studio or Ollama.
     pub fn new(embedding_url: &str, model: &str) -> Result<Self> {
-        // For local services (LM Studio, Ollama), set environment variables
-        // Strip /v1 suffix and trailing slash since rig adds /v1/embeddings automatically
-        let normalized_url = embedding_url
-            .trim_end_matches('/')
-            .trim_end_matches("/v1");
+        // For OpenAI-compatible APIs (LM Studio, Ollama, Docker model runner, etc.)
+        // Pass the full URL as-is, only removing trailing slashes
+        // Examples:
+        //   - http://localhost:1234/v1 (LM Studio)
+        //   - http://localhost:11434/v1 (Ollama)
+        //   - http://localhost:12434/engines/v1 (Docker model runner)
+        let normalized_url = embedding_url.trim_end_matches('/');
 
-        // Set environment variables for custom URL
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "not-needed");
-            std::env::set_var("OPENAI_API_BASE", normalized_url);
-        }
-
-        // Create client - it will read from environment variables
-        let client = rig::providers::openai::Client::new("not-needed")
+        // Create client with custom base URL using builder pattern
+        // Note: In rig-core 0.33.0+, the builder() -> api_key() -> base_url() -> build()
+        // pattern is required to properly set a custom endpoint. The full URL path
+        // (including /v1 or /engines/v1) should be provided in the base_url.
+        // The API key "not-needed" works for local services that don't require authentication.
+        let client = rig::providers::openai::Client::builder()
+            .api_key("not-needed")
+            .base_url(normalized_url)
+            .build()
             .context("Failed to create OpenAI client")?;
+
         Ok(Self {
             client,
             model: model.to_string(),
@@ -147,42 +160,88 @@ impl DocumentManager {
     }
 
     /// Split text into chunks based on token count
+    ///
+    /// This implementation works with character positions rather than token slicing
+    /// to avoid UTF-8 decoding issues when token boundaries don't align with
+    /// character boundaries.
     pub fn chunk_text(&self, text: &str) -> Result<Vec<DocumentChunk>> {
         let bpe = cl100k_base()
             .context("Failed to load tokenizer")?;
 
-        let tokens = bpe.encode_with_special_tokens(text);
-        let total_tokens = tokens.len();
+        // Get total token count for the entire text
+        let total_tokens = bpe.encode_ordinary(text).len();
 
         if total_tokens == 0 {
             return Ok(vec![]);
         }
 
+        // If text is smaller than chunk size, return as single chunk
+        if total_tokens <= self.chunk_size {
+            return Ok(vec![DocumentChunk {
+                index: 0,
+                text: text.to_string(),
+                tokens: total_tokens,
+            }]);
+        }
+
         let mut chunks = Vec::new();
-        let mut start = 0;
         let mut chunk_index = 0;
 
-        while start < total_tokens {
-            let end = (start + self.chunk_size).min(total_tokens);
-            let chunk_tokens = &tokens[start..end];
+        // Estimate characters per token for initial sizing
+        let chars_per_token = text.chars().count() as f64 / total_tokens as f64;
 
-            let chunk_text = bpe
-                .decode(chunk_tokens.to_vec())
-                .context("Failed to decode tokens")?;
+        let mut start_char = 0;
+        let text_chars: Vec<char> = text.chars().collect();
+
+        while start_char < text_chars.len() {
+            // Estimate end position based on desired token count
+            let estimated_chars = (self.chunk_size as f64 * chars_per_token * 1.1) as usize;
+            let mut end_char = (start_char + estimated_chars).min(text_chars.len());
+
+            // Extract candidate chunk and measure tokens
+            let mut chunk_text: String = text_chars[start_char..end_char].iter().collect();
+            let mut chunk_tokens = bpe.encode_ordinary(&chunk_text).len();
+
+            // Adjust chunk size to meet token target
+            // Shrink if too large
+            while chunk_tokens > self.chunk_size && end_char > start_char + 1 {
+                let reduction = ((end_char - start_char) as f64 * 0.1).max(1.0) as usize;
+                end_char = end_char.saturating_sub(reduction);
+                chunk_text = text_chars[start_char..end_char].iter().collect();
+                chunk_tokens = bpe.encode_ordinary(&chunk_text).len();
+            }
+
+            // Grow if too small (and not at end)
+            while chunk_tokens < self.chunk_size && end_char < text_chars.len() {
+                let growth = ((end_char - start_char) as f64 * 0.1).max(1.0) as usize;
+                let new_end = (end_char + growth).min(text_chars.len());
+                let new_chunk_text: String = text_chars[start_char..new_end].iter().collect();
+                let new_tokens = bpe.encode_ordinary(&new_chunk_text).len();
+
+                if new_tokens <= self.chunk_size {
+                    end_char = new_end;
+                    chunk_text = new_chunk_text;
+                    chunk_tokens = new_tokens;
+                } else {
+                    break;
+                }
+            }
 
             chunks.push(DocumentChunk {
                 index: chunk_index,
                 text: chunk_text,
-                tokens: chunk_tokens.len(),
+                tokens: chunk_tokens,
             });
 
             chunk_index += 1;
 
-            if end == total_tokens {
+            if end_char >= text_chars.len() {
                 break;
             }
 
-            start = end.saturating_sub(self.chunk_overlap);
+            // Calculate overlap in characters
+            let overlap_chars = (self.chunk_overlap as f64 * chars_per_token) as usize;
+            start_char = end_char.saturating_sub(overlap_chars.max(1));
         }
 
         debug!(

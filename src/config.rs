@@ -40,7 +40,7 @@ fn default_embedding_model() -> String {
 }
 
 fn default_embedding_url() -> String {
-    "http://127.0.0.1:1234".to_string()
+    "http://127.0.0.1:1234/v1".to_string()
 }
 
 fn default_chunk_size() -> usize {
