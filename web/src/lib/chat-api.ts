@@ -548,6 +548,7 @@ export interface AgentInfo {
   description: string;
   model: string;
   enabled: boolean;
+  use_tools: boolean;
   permissions: {
     allow: string[];
     deny: string[];

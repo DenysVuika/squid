@@ -33,6 +33,10 @@ pub struct AgentConfig {
     pub context_window: Option<u32>,
     #[serde(default)]
     pub permissions: AgentPermissions,
+    /// Whether this agent can use tools (default: true).
+    /// Set to false to disable all tool usage for this agent.
+    #[serde(default = "default_true")]
+    pub use_tools: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

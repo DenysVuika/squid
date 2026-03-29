@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-Agent `use_tools` Option**: Agents now support a `use_tools: false` boolean flag to disable all tool usage entirely for that agent. When disabled, the Tools toggle button is hidden in the Web UI and tool support is enforced off server-side regardless of the client request
+- **William Shakespeare Demo Agent**: Added a new `shakespeare` demo agent (alongside the existing `pirate`) showcasing a fully custom persona prompt with `use_tools: false` — the Bard speaks only in Elizabethan English with no tool access
 - **Template Variables in Agent Prompts**: Agent prompts now support variable substitution using the Tera template engine with secure, privacy-safe system variables like `{{persona}}` (base personality), `{{now}}`, `{{os}}`, `{{arch}}`, `{{date}}`, etc.
 - **Tools Toggle Button**: Added toggle button to enable/disable AI tools in chat sessions, disabled by default for user control
 - **Automatic Document Reindexing**: RAG system monitors documents folder and automatically reindexes files when changed

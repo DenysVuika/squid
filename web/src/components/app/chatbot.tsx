@@ -173,6 +173,9 @@ const Chatbot = () => {
 
   const selectedAgentData = useMemo(() => agents.find((a) => a.id === selectedAgent), [selectedAgent, agents]);
 
+  // Whether the currently selected agent supports tools (defaults to true if not specified)
+  const agentSupportsTools = useMemo(() => selectedAgentData?.use_tools !== false, [selectedAgentData]);
+
   // Deduplicate sources by filename and combine chunks
   const deduplicateSources = useCallback((sources: Array<{ href: string; title: string; content: string }>) => {
     if (!sources || sources.length === 0) {
@@ -833,19 +836,21 @@ const Chatbot = () => {
                     <span>RAG</span>
                   </PromptInputButton>
                 )}
-                <PromptInputButton
-                  onClick={handleToolsToggle}
-                  tooltip={{
-                    content: useTools
-                      ? 'Tools enabled - AI can use tools to help answer your questions'
-                      : 'Enable Tools to allow AI to use tools',
-                    side: 'top',
-                  }}
-                  variant={useTools ? 'default' : 'ghost'}
-                >
-                  <WrenchIcon size={16} />
-                  <span>Tools</span>
-                </PromptInputButton>
+                {agentSupportsTools && (
+                  <PromptInputButton
+                    onClick={handleToolsToggle}
+                    tooltip={{
+                      content: useTools
+                        ? 'Tools enabled - AI can use tools to help answer your questions'
+                        : 'Enable Tools to allow AI to use tools',
+                      side: 'top',
+                    }}
+                    variant={useTools ? 'default' : 'ghost'}
+                  >
+                    <WrenchIcon size={16} />
+                    <span>Tools</span>
+                  </PromptInputButton>
+                )}
                 <ModelSelector onOpenChange={setAgentSelectorOpen} open={agentSelectorOpen}>
                   <ModelSelectorTrigger asChild>
                     <PromptInputButton>

@@ -375,7 +375,7 @@ pub async fn chat_stream(
 
     let question = body.message.clone();
     let use_rag = body.use_rag.unwrap_or(false);
-    let use_tools = body.use_tools.unwrap_or(false);
+    let mut use_tools = body.use_tools.unwrap_or(false);
 
     // Validate file sizes (10MB limit per file)
     const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
@@ -403,6 +403,10 @@ pub async fn chat_stream(
     let (model_id, context_window) = match app_config_clone.get_agent(&agent_id) {
         Some(agent) => {
             let ctx_window = agent.context_window.unwrap_or(app_config_clone.context_window);
+            // Enforce agent-level use_tools setting: if the agent disables tools, override the client request
+            if !agent.use_tools {
+                use_tools = false;
+            }
             (agent.model.clone(), ctx_window)
         }
         None => {
@@ -1439,6 +1443,7 @@ pub struct AgentInfo {
     pub description: String,
     pub model: String,
     pub enabled: bool,
+    pub use_tools: bool,
     pub permissions: crate::agent::AgentPermissions,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pricing_model: Option<String>,
@@ -1468,6 +1473,7 @@ pub async fn get_agents(
             description: agent.description.clone(),
             model: agent.model.clone(),
             enabled: agent.enabled,
+            use_tools: agent.use_tools,
             permissions: agent.permissions.clone(),
             pricing_model: agent.pricing_model.clone(),
             context_window: agent.context_window,
