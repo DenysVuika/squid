@@ -285,10 +285,10 @@ fn execute_grep(
             }
 
             // Skip empty files
-            if let Ok(metadata) = entry_path.metadata() {
-                if metadata.len() == 0 {
-                    continue;
-                }
+            if let Ok(metadata) = entry_path.metadata()
+                && metadata.len() == 0
+            {
+                continue;
             }
 
             // Try to search the file
@@ -387,12 +387,12 @@ pub fn check_tool_permission(
     // Check if tool is allowed (with granular bash command support)
     let auto_allowed = if name == "bash" {
         let command = args["command"].as_str().unwrap_or("");
-        
+
         // Check if "bash" is in allow list (allows all bash commands)
         if permissions.allow.contains(&"bash".to_string()) {
             return ToolPermissionStatus::Allowed;
         }
-        
+
         // Check for granular bash permissions
         let command_trimmed = command.trim();
         permissions.allow.iter().any(|perm| {

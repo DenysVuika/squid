@@ -205,26 +205,21 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
 
     // Second pass: link children to parents
     for (path, _is_dir) in &entries {
-        if let Some(parent_path) = path.parent() {
-            if parent_path != root_path {
-                if let Some(child_node) = tree.get(path).cloned() {
-                    if let Some(parent_node) = tree.get_mut(parent_path) {
-                        if let Some(ref mut children) = parent_node.children {
-                            children.push(child_node);
-                        }
-                    }
-                }
-            }
+        if let Some(parent_path) = path.parent()
+            && parent_path != root_path
+            && let Some(child_node) = tree.get(path).cloned()
+            && let Some(parent_node) = tree.get_mut(parent_path)
+            && let Some(ref mut children) = parent_node.children
+        {
+            children.push(child_node);
         }
     }
 
     // Update root nodes with their populated children
     for root_node in &mut root_nodes {
         let full_path = root_path.join(&root_node.path);
-        if let Some(updated_node) = tree.get(&full_path) {
-            if let Some(ref children) = updated_node.children {
-                root_node.children = Some(children.clone());
-            }
+        if let Some(children) = tree.get(&full_path).and_then(|n| n.children.as_ref()) {
+            root_node.children = Some(children.clone());
         }
     }
 

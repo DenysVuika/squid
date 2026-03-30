@@ -859,20 +859,20 @@ async fn create_chat_stream(
     let mut user_message = String::new();
 
     // Add RAG context first if available
-    if let Some(ref sources) = rag_sources {
-        if !sources.is_empty() {
-            user_message.push_str("# Retrieved Context from Documents\n\n");
-            for (idx, source) in sources.iter().enumerate() {
-                user_message.push_str(&format!(
-                    "## Document {}: {}\n\n{}\n\n",
-                    idx + 1,
-                    source.title,
-                    source.content
-                ));
-            }
-            user_message.push_str("---\n\n");
-            debug!("✅ Added {} RAG sources to context", sources.len());
+    if let Some(ref sources) = rag_sources
+        && !sources.is_empty()
+    {
+        user_message.push_str("# Retrieved Context from Documents\n\n");
+        for (idx, source) in sources.iter().enumerate() {
+            user_message.push_str(&format!(
+                "## Document {}: {}\n\n{}\n\n",
+                idx + 1,
+                source.title,
+                source.content
+            ));
         }
+        user_message.push_str("---\n\n");
+        debug!("✅ Added {} RAG sources to context", sources.len());
     }
 
     // Add file contents if present
@@ -990,7 +990,6 @@ async fn create_chat_stream(
                             ChatCompletionRequestToolMessage {
                                 content: result_content.into(),
                                 tool_call_id: format!("call_{}", idx),
-                                ..Default::default()
                             }
                             .into(),
                         );
@@ -1374,7 +1373,7 @@ pub async fn get_logs(
     })?;
 
     let total = all_logs.len();
-    let total_pages = (total + query.page_size - 1) / query.page_size;
+    let total_pages = total.div_ceil(query.page_size);
 
     // Get the paginated subset
     let logs: Vec<LogEntryResponse> = all_logs
@@ -1788,13 +1787,13 @@ pub async fn rag_upload_document(
 
     let documents_path = PathBuf::from(&app_config.rag.documents_path);
 
-    if !documents_path.exists() {
-        if let Err(e) = fs::create_dir_all(&documents_path).await {
-            return Ok(HttpResponse::InternalServerError().json(RagResponse {
-                success: false,
-                message: format!("Failed to create documents directory: {}", e),
-            }));
-        }
+    if !documents_path.exists()
+        && let Err(e) = fs::create_dir_all(&documents_path).await
+    {
+        return Ok(HttpResponse::InternalServerError().json(RagResponse {
+            success: false,
+            message: format!("Failed to create documents directory: {}", e),
+        }));
     }
 
     let file_path = documents_path.join(&body.filename);

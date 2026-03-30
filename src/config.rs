@@ -1,7 +1,7 @@
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::agent::{AgentConfig, AgentPermissions, AgentsConfig};
 
@@ -254,11 +254,11 @@ impl Config {
             config.api_key = Some(api_key);
         }
 
-        if let Ok(context_window) = std::env::var("SQUID_CONTEXT_WINDOW") {
-            if let Ok(window) = context_window.parse() {
-                debug!("Overriding SQUID_CONTEXT_WINDOW from environment");
-                config.context_window = window;
-            }
+        if let Ok(context_window) = std::env::var("SQUID_CONTEXT_WINDOW")
+            && let Ok(window) = context_window.parse()
+        {
+            debug!("Overriding SQUID_CONTEXT_WINDOW from environment");
+            config.context_window = window;
         }
 
         if let Ok(log_level) = std::env::var("SQUID_LOG_LEVEL") {
@@ -278,11 +278,11 @@ impl Config {
 
         // Version management
         // RAG configuration overrides
-        if let Ok(rag_enabled) = std::env::var("SQUID_RAG_ENABLED") {
-            if let Ok(enabled) = rag_enabled.parse() {
-                debug!("Overriding SQUID_RAG_ENABLED from environment");
-                config.rag.enabled = enabled;
-            }
+        if let Ok(rag_enabled) = std::env::var("SQUID_RAG_ENABLED")
+            && let Ok(enabled) = rag_enabled.parse()
+        {
+            debug!("Overriding SQUID_RAG_ENABLED from environment");
+            config.rag.enabled = enabled;
         }
 
         if let Ok(embedding_model) = std::env::var("SQUID_EMBEDDING_MODEL") {
@@ -295,25 +295,25 @@ impl Config {
             config.rag.embedding_url = embedding_url;
         }
 
-        if let Ok(chunk_size) = std::env::var("SQUID_RAG_CHUNK_SIZE") {
-            if let Ok(size) = chunk_size.parse() {
-                debug!("Overriding SQUID_RAG_CHUNK_SIZE from environment");
-                config.rag.chunk_size = size;
-            }
+        if let Ok(chunk_size) = std::env::var("SQUID_RAG_CHUNK_SIZE")
+            && let Ok(size) = chunk_size.parse()
+        {
+            debug!("Overriding SQUID_RAG_CHUNK_SIZE from environment");
+            config.rag.chunk_size = size;
         }
 
-        if let Ok(chunk_overlap) = std::env::var("SQUID_RAG_CHUNK_OVERLAP") {
-            if let Ok(overlap) = chunk_overlap.parse() {
-                debug!("Overriding SQUID_RAG_CHUNK_OVERLAP from environment");
-                config.rag.chunk_overlap = overlap;
-            }
+        if let Ok(chunk_overlap) = std::env::var("SQUID_RAG_CHUNK_OVERLAP")
+            && let Ok(overlap) = chunk_overlap.parse()
+        {
+            debug!("Overriding SQUID_RAG_CHUNK_OVERLAP from environment");
+            config.rag.chunk_overlap = overlap;
         }
 
-        if let Ok(top_k) = std::env::var("SQUID_RAG_TOP_K") {
-            if let Ok(k) = top_k.parse() {
-                debug!("Overriding SQUID_RAG_TOP_K from environment");
-                config.rag.top_k = k;
-            }
+        if let Ok(top_k) = std::env::var("SQUID_RAG_TOP_K")
+            && let Ok(k) = top_k.parse()
+        {
+            debug!("Overriding SQUID_RAG_TOP_K from environment");
+            config.rag.top_k = k;
         }
 
         if let Ok(docs_path) = std::env::var("SQUID_RAG_DOCUMENTS_PATH") {
@@ -322,11 +322,11 @@ impl Config {
         }
 
         // Server configuration overrides
-        if let Ok(allow_network) = std::env::var("SQUID_SERVER_ALLOW_NETWORK") {
-            if let Ok(enabled) = allow_network.parse() {
-                debug!("Overriding SQUID_SERVER_ALLOW_NETWORK from environment");
-                config.server.allow_network = enabled;
-            }
+        if let Ok(allow_network) = std::env::var("SQUID_SERVER_ALLOW_NETWORK")
+            && let Ok(enabled) = allow_network.parse()
+        {
+            debug!("Overriding SQUID_SERVER_ALLOW_NETWORK from environment");
+            config.server.allow_network = enabled;
         }
 
         config
@@ -407,7 +407,7 @@ impl Config {
     }
 
     /// Save configuration to squid.config.json in the specified directory
-    pub fn save_to_dir(&self, dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_to_dir(&self, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let config_path = dir.join("squid.config.json");
 
         // Create a copy with the current version set

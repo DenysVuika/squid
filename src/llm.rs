@@ -63,22 +63,17 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
     let mut result = content.to_string();
 
     // Remove all <think>...</think> blocks
-    loop {
-        if let Some(start) = result.find("<think>") {
-            if let Some(end) = result[start..].find("</think>") {
-                let absolute_end = start + end;
-                // Remove the <think>...</think> section
-                result = format!(
-                    "{}{}",
-                    &result[..start],
-                    &result[absolute_end + 8..]
-                );
-            } else {
-                // Malformed tag - no closing tag found, leave as-is
-                break;
-            }
+    while let Some(start) = result.find("<think>") {
+        if let Some(end) = result[start..].find("</think>") {
+            let absolute_end = start + end;
+            // Remove the <think>...</think> section
+            result = format!(
+                "{}{}",
+                &result[..start],
+                &result[absolute_end + 8..]
+            );
         } else {
-            // No more <think> tags
+            // Malformed tag - no closing tag found, leave as-is
             break;
         }
     }
@@ -243,10 +238,10 @@ pub async fn ask_llm_streaming(
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
-            if let Some(prompt_details) = &usage.prompt_tokens_details {
-                if let Some(cached) = prompt_details.cached_tokens {
-                    debug!("Cached tokens: {}", cached);
-                }
+            if let Some(prompt_details) = &usage.prompt_tokens_details
+                && let Some(cached) = prompt_details.cached_tokens
+            {
+                debug!("Cached tokens: {}", cached);
             }
         }
 
@@ -348,7 +343,6 @@ pub async fn ask_llm_streaming(
                 ChatCompletionRequestToolMessage {
                     content: response.to_string().into(),
                     tool_call_id,
-                    ..Default::default()
                 }
                 .into(),
             );
@@ -377,10 +371,10 @@ pub async fn ask_llm_streaming(
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 );
 
-                if let Some(prompt_details) = &usage.prompt_tokens_details {
-                    if let Some(cached) = prompt_details.cached_tokens {
-                        debug!("Follow-up cached tokens: {}", cached);
-                    }
+                if let Some(prompt_details) = &usage.prompt_tokens_details
+                    && let Some(cached) = prompt_details.cached_tokens
+                {
+                    debug!("Follow-up cached tokens: {}", cached);
                 }
             }
 
@@ -467,10 +461,10 @@ pub async fn ask_llm(
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
 
-        if let Some(prompt_details) = &usage.prompt_tokens_details {
-            if let Some(cached) = prompt_details.cached_tokens {
-                debug!("Cached tokens: {}", cached);
-            }
+        if let Some(prompt_details) = &usage.prompt_tokens_details
+            && let Some(cached) = prompt_details.cached_tokens
+        {
+            debug!("Cached tokens: {}", cached);
         }
     }
     let response_message = response
@@ -527,7 +521,6 @@ pub async fn ask_llm(
                     ChatCompletionRequestToolMessage {
                         content: response_content.to_string().into(),
                         tool_call_id: tc.id.clone(),
-                        ..Default::default()
                     }
                     .into(),
                 );
@@ -548,10 +541,10 @@ pub async fn ask_llm(
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
-            if let Some(prompt_details) = &usage.prompt_tokens_details {
-                if let Some(cached) = prompt_details.cached_tokens {
-                    debug!("Follow-up cached tokens: {}", cached);
-                }
+            if let Some(prompt_details) = &usage.prompt_tokens_details
+                && let Some(cached) = prompt_details.cached_tokens
+            {
+                debug!("Follow-up cached tokens: {}", cached);
             }
         }
 

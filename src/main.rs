@@ -431,19 +431,17 @@ async fn main() {
                         error!("Failed to get response: {}", e);
                     }
                 }
-            } else {
-                if let Err(e) = llm::ask_llm_streaming(
-                    &full_question,
-                    enhanced_file_content.as_deref(),
-                    file.as_ref().and_then(|p| p.to_str()),
-                    custom_prompt.as_deref(),
-                    model,
-                    &app_config,
-                )
-                .await
-                {
-                    error!("Failed to get response: {}", e);
-                }
+            } else if let Err(e) = llm::ask_llm_streaming(
+                &full_question,
+                enhanced_file_content.as_deref(),
+                file.as_ref().and_then(|p| p.to_str()),
+                custom_prompt.as_deref(),
+                model,
+                &app_config,
+            )
+            .await
+            {
+                error!("Failed to get response: {}", e);
             }
         }
         Commands::Review {
@@ -588,19 +586,17 @@ async fn main() {
                         error!("Failed to get review: {}", e);
                     }
                 }
-            } else {
-                if let Err(e) = llm::ask_llm_streaming(
-                    &question,
-                    Some(&enhanced_content),
-                    file.to_str(),
-                    Some(&combined_review_prompt),
-                    model,
-                    &app_config,
-                )
-                .await
-                {
-                    error!("Failed to get review: {}", e);
-                }
+            } else if let Err(e) = llm::ask_llm_streaming(
+                &question,
+                Some(&enhanced_content),
+                file.to_str(),
+                Some(&combined_review_prompt),
+                model,
+                &app_config,
+            )
+            .await
+            {
+                error!("Failed to get review: {}", e);
             }
         }
         Commands::Serve { port, db, dir } => {
