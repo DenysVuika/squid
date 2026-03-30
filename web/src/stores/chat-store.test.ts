@@ -802,7 +802,7 @@ describe('useChatStore', () => {
     // ── onSources ────────────────────────────────────────────────────────────
 
     it('attaches sources to the matching message with href="#"', async () => {
-      mockStream((h) => h.onSources?.([{ title: 'Doc A', content: 'body', href: 'https://example.com' }]));
+      mockStream((h) => h.onSources?.([{ title: 'Doc A', content: 'body' }]));
       await useChatStore.getState().streamResponse(MSG_ID, 'Hello');
       const sources = useChatStore.getState().messages[0].sources;
       expect(sources).toHaveLength(1);

@@ -1,5 +1,4 @@
-/// <reference types="vitest" />
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import * as fs from 'fs';
 import * as path from 'path';
