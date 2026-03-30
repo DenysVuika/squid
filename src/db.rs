@@ -10,6 +10,9 @@ use sha2::{Sha256, Digest};
 
 use crate::session::{ChatMessage, ChatSession, Source};
 
+/// Row type returned by `list_rag_documents`: (id, filename, file_size, created_at, updated_at)
+pub type RagDocumentRow = (i64, String, i64, i64, i64);
+
 /// Database manager for SQLite operations
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -672,7 +675,7 @@ impl Database {
     }
 
     /// List all RAG documents
-    pub fn list_rag_documents(&self) -> SqliteResult<Vec<(i64, String, i64, i64, i64)>> {
+    pub fn list_rag_documents(&self) -> SqliteResult<Vec<RagDocumentRow>> {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
