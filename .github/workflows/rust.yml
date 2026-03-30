@@ -35,6 +35,10 @@ jobs:
         working-directory: web
         run: npm run lint
 
+      - name: Test web app
+        working-directory: web
+        run: npm test
+
       - name: Type-check web app
         working-directory: web
         run: npx tsc -b --noEmit
