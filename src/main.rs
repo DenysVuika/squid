@@ -133,6 +133,12 @@ enum LogCommands {
     },
     /// Clear all logs from the database
     Reset,
+    /// Remove logs older than a specified number of days
+    Cleanup {
+        /// Maximum age of logs to keep (in days)
+        #[arg(short, long, default_value = "30")]
+        max_age_days: u32,
+    },
 }
 
 #[derive(Subcommand)]
@@ -663,6 +669,24 @@ async fn main() {
                         Err(e) => {
                             error!("Failed to reset logs: {}", e);
                             println!("🦑: Failed to clear logs from database - {}", e);
+                            println!("    Database path: {}", db_path);
+                        }
+                    }
+                }
+                LogCommands::Cleanup { max_age_days } => {
+                    let max_age_seconds = (*max_age_days as i64) * 24 * 60 * 60;
+                    println!(
+                        "🦑: Removing logs older than {} day(s) from database: {}",
+                        max_age_days, db_path
+                    );
+
+                    match logger::cleanup_old_logs(db_path, max_age_seconds) {
+                        Ok(count) => {
+                            println!("✓ Successfully removed {} old log entries.", count);
+                        }
+                        Err(e) => {
+                            error!("Failed to clean up logs: {}", e);
+                            println!("🦑: Failed to remove old logs from database - {}", e);
                             println!("    Database path: {}", db_path);
                         }
                     }

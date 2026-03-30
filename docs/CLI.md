@@ -300,6 +300,27 @@ squid logs show --limit 20 --level error
 - `--level <LEVEL>` - Filter by log level (error, warn, info, debug, trace)
 - `--session-id <ID>` - Filter by session ID
 
+### Clean Up Old Logs
+
+```bash
+# Remove logs older than 30 days (default)
+squid logs cleanup
+
+# Remove logs older than 7 days
+squid logs cleanup --max-age-days 7
+
+# Remove logs older than 90 days
+squid logs cleanup --max-age-days 90
+```
+
+**Options:**
+- `-m, --max-age-days <DAYS>` - Maximum age of logs to keep in days (default: 30)
+
+This removes log entries older than the specified threshold, which is useful to:
+- Reclaim database space on long-running servers
+- Retain recent logs while discarding historical noise
+- Automate log rotation (e.g. via a cron job)
+
 ### Clear Logs
 
 ```bash
