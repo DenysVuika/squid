@@ -137,10 +137,10 @@ impl DocumentManager {
 
     /// Check if a file extension is supported
     pub fn is_supported_extension(&self, path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            if let Some(ext_str) = ext.to_str() {
-                return SUPPORTED_EXTENSIONS.contains(&ext_str);
-            }
+        if let Some(ext) = path.extension()
+            && let Some(ext_str) = ext.to_str()
+        {
+            return SUPPORTED_EXTENSIONS.contains(&ext_str);
         }
         false
     }
@@ -452,12 +452,12 @@ impl DocumentWatcher {
             }
             EventKind::Remove(_) => {
                 for path in event.paths {
-                    if let Some(filename) = path.file_name() {
-                        if let Some(filename_str) = filename.to_str() {
-                            info!("Detected removal of: {}", path.display());
-                            if let Err(e) = self.indexer.remove_document(filename_str) {
-                                error!("Failed to remove document {}: {}", filename_str, e);
-                            }
+                    if let Some(filename) = path.file_name()
+                        && let Some(filename_str) = filename.to_str()
+                    {
+                        info!("Detected removal of: {}", path.display());
+                        if let Err(e) = self.indexer.remove_document(filename_str) {
+                            error!("Failed to remove document {}: {}", filename_str, e);
                         }
                     }
                 }
@@ -469,10 +469,10 @@ impl DocumentWatcher {
     }
 
     fn is_supported_file(&self, path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            if let Some(ext_str) = ext.to_str() {
-                return SUPPORTED_EXTENSIONS.contains(&ext_str);
-            }
+        if let Some(ext) = path.extension()
+            && let Some(ext_str) = ext.to_str()
+        {
+            return SUPPORTED_EXTENSIONS.contains(&ext_str);
         }
         false
     }

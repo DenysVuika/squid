@@ -12,11 +12,11 @@ pub async fn run(
     info!("Initializing squid configuration in {:?}...", dir);
 
     // Create directory if it doesn't exist
-    if !dir.exists() {
-        if let Err(e) = std::fs::create_dir_all(dir) {
-            error!("Failed to create directory {:?}: {}", dir, e);
-            return;
-        }
+    if !dir.exists()
+        && let Err(e) = std::fs::create_dir_all(dir)
+    {
+        error!("Failed to create directory {:?}: {}", dir, e);
+        return;
     }
 
     // Try to load existing config, otherwise use defaults

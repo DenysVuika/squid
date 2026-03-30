@@ -731,7 +731,7 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid ask`** - Ask questions with optional file context
 - **`squid review`** - Review code with language-specific analysis
 - **`squid rag`** - Manage RAG document indexing
-- **`squid logs`** - View application logs
+- **`squid logs`** - View, clear, and clean up application logs
 - **`squid init`** - Initialize project configuration
 
 **Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:
@@ -762,6 +762,12 @@ squid logs show --level error
 
 # Clear all logs from database
 squid logs reset
+
+# Remove logs older than 30 days (default)
+squid logs cleanup
+
+# Remove logs older than 7 days
+squid logs cleanup --max-age-days 7
 ```
 
 For complete CLI documentation, examples, and advanced usage, see [docs/CLI.md](docs/CLI.md).

@@ -1,21 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AgentPermissions {
     #[serde(default)]
     pub allow: Vec<String>,
     #[serde(default)]
     pub deny: Vec<String>,
-}
-
-impl Default for AgentPermissions {
-    fn default() -> Self {
-        Self {
-            allow: vec![],
-            deny: vec![],
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

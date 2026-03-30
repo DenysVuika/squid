@@ -11,13 +11,15 @@ use async_openai::{
 };
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::debug;
+use log::{debug, error, info, warn};
 use std::io::{self, Write};
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::config;
 use crate::template;
 use crate::tools;
+use crate::{db, rag, validate};
 
 // Prompt constants
 const PERSONA: &str = include_str!("./assets/persona.md");
@@ -63,22 +65,17 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
     let mut result = content.to_string();
 
     // Remove all <think>...</think> blocks
-    loop {
-        if let Some(start) = result.find("<think>") {
-            if let Some(end) = result[start..].find("</think>") {
-                let absolute_end = start + end;
-                // Remove the <think>...</think> section
-                result = format!(
-                    "{}{}",
-                    &result[..start],
-                    &result[absolute_end + 8..]
-                );
-            } else {
-                // Malformed tag - no closing tag found, leave as-is
-                break;
-            }
+    while let Some(start) = result.find("<think>") {
+        if let Some(end) = result[start..].find("</think>") {
+            let absolute_end = start + end;
+            // Remove the <think>...</think> section
+            result = format!(
+                "{}{}",
+                &result[..start],
+                &result[absolute_end + 8..]
+            );
         } else {
-            // No more <think> tags
+            // Malformed tag - no closing tag found, leave as-is
             break;
         }
     }
@@ -243,10 +240,10 @@ pub async fn ask_llm_streaming(
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
-            if let Some(prompt_details) = &usage.prompt_tokens_details {
-                if let Some(cached) = prompt_details.cached_tokens {
-                    debug!("Cached tokens: {}", cached);
-                }
+            if let Some(prompt_details) = &usage.prompt_tokens_details
+                && let Some(cached) = prompt_details.cached_tokens
+            {
+                debug!("Cached tokens: {}", cached);
             }
         }
 
@@ -348,7 +345,6 @@ pub async fn ask_llm_streaming(
                 ChatCompletionRequestToolMessage {
                     content: response.to_string().into(),
                     tool_call_id,
-                    ..Default::default()
                 }
                 .into(),
             );
@@ -377,10 +373,10 @@ pub async fn ask_llm_streaming(
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 );
 
-                if let Some(prompt_details) = &usage.prompt_tokens_details {
-                    if let Some(cached) = prompt_details.cached_tokens {
-                        debug!("Follow-up cached tokens: {}", cached);
-                    }
+                if let Some(prompt_details) = &usage.prompt_tokens_details
+                    && let Some(cached) = prompt_details.cached_tokens
+                {
+                    debug!("Follow-up cached tokens: {}", cached);
                 }
             }
 
@@ -467,10 +463,10 @@ pub async fn ask_llm(
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
 
-        if let Some(prompt_details) = &usage.prompt_tokens_details {
-            if let Some(cached) = prompt_details.cached_tokens {
-                debug!("Cached tokens: {}", cached);
-            }
+        if let Some(prompt_details) = &usage.prompt_tokens_details
+            && let Some(cached) = prompt_details.cached_tokens
+        {
+            debug!("Cached tokens: {}", cached);
         }
     }
     let response_message = response
@@ -527,7 +523,6 @@ pub async fn ask_llm(
                     ChatCompletionRequestToolMessage {
                         content: response_content.to_string().into(),
                         tool_call_id: tc.id.clone(),
-                        ..Default::default()
                     }
                     .into(),
                 );
@@ -548,10 +543,10 @@ pub async fn ask_llm(
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
-            if let Some(prompt_details) = &usage.prompt_tokens_details {
-                if let Some(cached) = prompt_details.cached_tokens {
-                    debug!("Follow-up cached tokens: {}", cached);
-                }
+            if let Some(prompt_details) = &usage.prompt_tokens_details
+                && let Some(cached) = prompt_details.cached_tokens
+            {
+                debug!("Follow-up cached tokens: {}", cached);
             }
         }
 
@@ -567,6 +562,367 @@ pub async fn ask_llm(
     let answer = response_message.content.ok_or("No response from LLM")?;
 
     Ok(answer)
+}
+
+/// Initialize RAG system if needed based on config and CLI flags
+async fn initialize_rag_if_needed(
+    config_enabled: bool,
+    rag_flag: bool,
+    no_rag_flag: bool,
+    app_config: &config::Config,
+) -> Option<Arc<rag::RagSystem>> {
+    let should_enable = if no_rag_flag {
+        false
+    } else if rag_flag {
+        true
+    } else {
+        config_enabled
+    };
+
+    if !should_enable {
+        return None;
+    }
+
+    match db::Database::new(&app_config.database_path) {
+        Ok(db) => match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
+            Ok(system) => Some(Arc::new(system)),
+            Err(e) => {
+                warn!("RAG initialization failed: {}", e);
+                None
+            }
+        },
+        Err(e) => {
+            warn!("Failed to open database for RAG: {}", e);
+            None
+        }
+    }
+}
+
+/// Handles the `ask` command: resolves file content, custom prompt, RAG context,
+/// and agent model, then dispatches to the LLM (streaming or non-streaming).
+pub async fn run_ask_command(
+    question: &str,
+    message: Option<&str>,
+    no_stream: bool,
+    file: Option<&Path>,
+    prompt: Option<&Path>,
+    agent: Option<&str>,
+    rag_flag: bool,
+    no_rag_flag: bool,
+    app_config: &config::Config,
+) {
+    let full_question = if let Some(m) = message {
+        format!("{} {}", question, m)
+    } else {
+        question.to_string()
+    };
+
+    info!("Q: {}", full_question);
+
+    let file_content = if let Some(file_path) = file {
+        let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+        let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+        match validator.validate(file_path) {
+            Ok(_) => match std::fs::read_to_string(file_path) {
+                Ok(content) => {
+                    info!("Read file content ({} bytes)", content.len());
+                    Some(content)
+                }
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        println!("🦑: I can't find that file. Please check the path and try again.");
+                    } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        println!("🦑: I don't have permission to read that file.");
+                    } else {
+                        println!("🦑: I couldn't read that file - {}", e);
+                    }
+                    debug!("Failed to read file {}: {}", file_path.display(), e);
+                    return;
+                }
+            },
+            Err(validate::PathValidationError::PathIgnored(_)) => {
+                println!("🦑: I can't access that file - it's in your .squidignore list.");
+                return;
+            }
+            Err(validate::PathValidationError::PathNotAllowed(_)) => {
+                println!(
+                    "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+                );
+                return;
+            }
+            Err(e) => {
+                debug!("Path validation failed: {}", e);
+                println!("🦑: I can't access that file - {}", e);
+                return;
+            }
+        }
+    } else {
+        None
+    };
+
+    let custom_prompt = if let Some(prompt_path) = prompt {
+        match std::fs::read_to_string(prompt_path) {
+            Ok(content) => {
+                info!("Using custom system prompt ({} bytes)", content.len());
+                Some(content)
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    println!(
+                        "🦑: I can't find that custom prompt file. Please check the path and try again."
+                    );
+                } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    println!("🦑: I don't have permission to read that prompt file.");
+                } else {
+                    println!("🦑: I couldn't read that prompt file - {}", e);
+                }
+                debug!("Failed to read custom prompt file {}: {}", prompt_path.display(), e);
+                return;
+            }
+        }
+    } else {
+        None
+    };
+
+    let rag_system = initialize_rag_if_needed(
+        app_config.rag.enabled,
+        rag_flag,
+        no_rag_flag,
+        app_config,
+    )
+    .await;
+
+    let rag_context = if let Some(ref system) = rag_system {
+        println!("🦑: Using RAG for enhanced context...");
+        match system.query.execute(&full_question).await {
+            Ok(context) if !context.is_empty() => {
+                debug!("RAG retrieved {} bytes of context", context.len());
+                Some(context)
+            }
+            Ok(_) => {
+                debug!("RAG returned empty context");
+                None
+            }
+            Err(e) => {
+                warn!("RAG query failed: {}", e);
+                println!("🦑: RAG query failed, continuing without RAG context");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let enhanced_file_content = match (rag_context, file_content) {
+        (Some(rag), Some(file)) => Some(format!("{}\n\n# Provided File:\n\n{}", rag, file)),
+        (Some(rag), None) => Some(rag),
+        (None, file_opt) => file_opt,
+    };
+
+    let agent_id = agent.unwrap_or(app_config.agents.default_agent.as_str());
+    let model = match app_config.get_agent(agent_id) {
+        Some(agent_config) => {
+            info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+            agent_config.model.clone()
+        }
+        None => {
+            error!("Agent '{}' not found", agent_id);
+            println!("🦑: Configuration error - agent '{}' not found", agent_id);
+            println!(
+                "Available agents: {}",
+                app_config
+                    .agents
+                    .agents
+                    .keys()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return;
+        }
+    };
+
+    if no_stream {
+        match ask_llm(
+            &full_question,
+            enhanced_file_content.as_deref(),
+            file.and_then(|p| p.to_str()),
+            custom_prompt.as_deref(),
+            &model,
+            app_config,
+        )
+        .await
+        {
+            Ok(response) => println!("\n🦑: {}", response),
+            Err(e) => error!("Failed to get response: {}", e),
+        }
+    } else if let Err(e) = ask_llm_streaming(
+        &full_question,
+        enhanced_file_content.as_deref(),
+        file.and_then(|p| p.to_str()),
+        custom_prompt.as_deref(),
+        &model,
+        app_config,
+    )
+    .await
+    {
+        error!("Failed to get response: {}", e);
+    }
+}
+
+/// Handles the `review` command: validates and reads the file, initialises RAG,
+/// selects the language-specific prompt, and dispatches to the LLM.
+pub async fn run_review_command(
+    file: &Path,
+    message: Option<&str>,
+    no_stream: bool,
+    agent: Option<&str>,
+    rag_flag: bool,
+    no_rag_flag: bool,
+    app_config: &config::Config,
+) {
+    info!("Reviewing file: {:?}", file);
+
+    let ignore_patterns = validate::PathValidator::load_ignore_patterns();
+    let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
+
+    let file_content = match validator.validate(file) {
+        Ok(_) => match std::fs::read_to_string(file) {
+            Ok(content) => {
+                info!("Read file content ({} bytes)", content.len());
+                content
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    println!("🦑: I can't find that file. Please check the path and try again.");
+                } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    println!("🦑: I don't have permission to read that file.");
+                } else {
+                    println!("🦑: I couldn't read that file - {}", e);
+                }
+                debug!("Failed to read file {}: {}", file.display(), e);
+                return;
+            }
+        },
+        Err(validate::PathValidationError::PathIgnored(_)) => {
+            println!("🦑: I can't access that file - it's in your .squidignore list.");
+            return;
+        }
+        Err(validate::PathValidationError::PathNotAllowed(_)) => {
+            println!(
+                "🦑: I can't access that file - it's outside the project directory or in a protected system location."
+            );
+            return;
+        }
+        Err(e) => {
+            debug!("Path validation failed: {}", e);
+            println!("🦑: I can't access that file - {}", e);
+            return;
+        }
+    };
+
+    let review_prompt = get_review_prompt_for_file(file);
+    let combined_review_prompt = combine_prompts(review_prompt);
+    debug!("Using review prompt for file type");
+
+    let question = if let Some(msg) = message {
+        format!("Please review this code. {}", msg)
+    } else {
+        "Please review this code.".to_string()
+    };
+
+    let rag_system = initialize_rag_if_needed(
+        app_config.rag.enabled,
+        rag_flag,
+        no_rag_flag,
+        app_config,
+    )
+    .await;
+
+    let rag_context = if let Some(ref system) = rag_system {
+        println!("🦑: Using RAG for enhanced context...");
+        let file_extension = file.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+        let review_query = format!(
+            "code review best practices and common issues for {} files{}",
+            file_extension,
+            message.map(|m| format!(": {}", m)).unwrap_or_default()
+        );
+
+        match system.query.execute(&review_query).await {
+            Ok(context) if !context.is_empty() => {
+                debug!("RAG retrieved {} bytes of context for review", context.len());
+                Some(context)
+            }
+            Ok(_) => {
+                debug!("RAG returned empty context");
+                None
+            }
+            Err(e) => {
+                warn!("RAG query failed: {}", e);
+                println!("🦑: RAG query failed, continuing without RAG context");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let enhanced_content = if let Some(rag) = rag_context {
+        format!("{}\n\n# Code to Review:\n\n{}", rag, file_content)
+    } else {
+        file_content
+    };
+
+    let agent_id = agent.unwrap_or(app_config.agents.default_agent.as_str());
+    let model = match app_config.get_agent(agent_id) {
+        Some(agent_config) => {
+            info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+            agent_config.model.clone()
+        }
+        None => {
+            error!("Agent '{}' not found", agent_id);
+            println!("🦑: Configuration error - agent '{}' not found", agent_id);
+            println!(
+                "Available agents: {}",
+                app_config
+                    .agents
+                    .agents
+                    .keys()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return;
+        }
+    };
+
+    if no_stream {
+        match ask_llm(
+            &question,
+            Some(&enhanced_content),
+            file.to_str(),
+            Some(&combined_review_prompt),
+            &model,
+            app_config,
+        )
+        .await
+        {
+            Ok(response) => println!("\n🦑: {}", response),
+            Err(e) => error!("Failed to get review: {}", e),
+        }
+    } else if let Err(e) = ask_llm_streaming(
+        &question,
+        Some(&enhanced_content),
+        file.to_str(),
+        Some(&combined_review_prompt),
+        &model,
+        app_config,
+    )
+    .await
+    {
+        error!("Failed to get review: {}", e);
+    }
 }
 
 #[cfg(test)]

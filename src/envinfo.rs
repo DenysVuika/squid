@@ -25,10 +25,10 @@ impl Default for EnvContextConfig {
 
 /// Sanitizes a path by replacing the home directory with ~
 fn sanitize_path(path: &str) -> String {
-    if let Ok(home) = env::var("HOME") {
-        if path.starts_with(&home) {
-            return path.replacen(&home, "~", 1);
-        }
+    if let Ok(home) = env::var("HOME")
+        && path.starts_with(&home)
+    {
+        return path.replacen(&home, "~", 1);
     }
     path.to_string()
 }
@@ -82,23 +82,23 @@ Family: {}"#,
     );
 
     // Optional: Add hostname (privacy concern)
-    if config.include_hostname {
-        if let Some(hostname) = System::host_name() {
-            context.push_str(&format!("\nHostname: {}", hostname));
-        }
+    if config.include_hostname
+        && let Some(hostname) = System::host_name()
+    {
+        context.push_str(&format!("\nHostname: {}", hostname));
     }
 
     // Optional: Add working directory (privacy concern)
-    if config.include_working_dir {
-        if let Ok(working_dir) = env::current_dir() {
-            let dir_str = working_dir.display().to_string();
-            let dir_display = if config.sanitize_paths {
-                sanitize_path(&dir_str)
-            } else {
-                dir_str
-            };
-            context.push_str(&format!("\nWorking Directory: {}", dir_display));
-        }
+    if config.include_working_dir
+        && let Ok(working_dir) = env::current_dir()
+    {
+        let dir_str = working_dir.display().to_string();
+        let dir_display = if config.sanitize_paths {
+            sanitize_path(&dir_str)
+        } else {
+            dir_str
+        };
+        context.push_str(&format!("\nWorking Directory: {}", dir_display));
     }
 
     // Add time information (safe to share)
@@ -112,7 +112,7 @@ Timezone: {}
         now.format("%Y-%m-%d %H:%M:%S%.3f %:z"),
         utc_now.format("%Y-%m-%d %H:%M:%S%.3f +00:00"),
         now.timestamp(),
-        now.offset().to_string(),
+        now.offset(),
     ));
 
     context
