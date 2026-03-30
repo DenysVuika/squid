@@ -36,7 +36,7 @@ pub async fn get_workspace_files() -> Result<HttpResponse, Error> {
 /// Check if a file is a supported code/text file based on extension
 fn is_supported_file(path: &std::path::Path) -> bool {
     // Extensions to include (code and documentation files)
-    let code_extensions = vec![
+    let code_extensions = [
         "rs", "toml", "lock", "json", "js", "jsx", "ts", "tsx", "css", "scss", "html",
         "md", "txt", "yaml", "yml", "sh", "py", "go", "java", "c", "cpp", "h", "hpp",
         "vue", "svelte", "rb", "php", "swift", "kt", "sql", "graphql", "proto",
@@ -51,7 +51,7 @@ fn is_supported_file(path: &std::path::Path) -> bool {
         code_extensions.contains(&ext)
     } else {
         // Files without extension - only include certain names
-        let allowed_no_ext = vec!["Dockerfile", "Makefile", "README", "LICENSE"];
+        let allowed_no_ext = ["Dockerfile", "Makefile", "README", "LICENSE"];
         allowed_no_ext.iter().any(|&name| file_name.starts_with(name))
     }
 }
@@ -104,14 +104,14 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
     use std::collections::HashMap;
 
     // Directories to exclude
-    let excluded_dirs = vec![
+    let excluded_dirs = [
         "node_modules", "target", "dist", "build", ".git", ".next", ".nuxt",
         "vendor", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache",
         "coverage", ".nyc_output", "tmp", "temp", ".cache",
     ];
 
     // Files to exclude
-    let excluded_files = vec![
+    let excluded_files = [
         ".DS_Store", "Thumbs.db", ".gitignore", ".gitattributes", "package-lock.json",
         "yarn.lock", "pnpm-lock.yaml", "Cargo.lock",
     ];
@@ -125,12 +125,12 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
         .into_iter()
         .filter_entry(|e| {
             let file_name = e.file_name().to_string_lossy();
-            
+
             // Skip hidden files/directories (starting with .)
             if file_name.starts_with('.') {
                 return false;
             }
-            
+
             // Skip excluded directories
             if e.file_type().is_dir() {
                 !excluded_dirs.iter().any(|&excluded| file_name == excluded)
@@ -141,20 +141,20 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
     {
         let entry = entry?;
         let path = entry.path();
-        
+
         // Skip root itself
         if path == root_path {
             continue;
         }
 
         let is_dir = entry.file_type().is_dir();
-        
+
         // For files, check if they should be included
         if !is_dir {
             let file_name = path.file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("");
-            
+
             // Skip excluded files
             if excluded_files.contains(&file_name) {
                 continue;
@@ -182,7 +182,7 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
-        
+
         let relative_path = path.strip_prefix(root_path)
             .unwrap_or(path)
             .to_string_lossy()
