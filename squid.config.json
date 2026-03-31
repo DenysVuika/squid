@@ -17,6 +17,13 @@
     "top_k": 5,
     "documents_path": "documents"
   },
+  "plugins": {
+    "enabled": true,
+    "load_global": true,
+    "load_workspace": true,
+    "default_timeout_seconds": 30,
+    "max_memory_mb": 128
+  },
   "server": {
     "allow_network": false
   },
@@ -35,7 +42,8 @@
           "write_file",
           "grep",
           "bash:ls",
-          "bash:git"
+          "bash:git",
+          "plugin:*"
         ],
         "deny": []
       },

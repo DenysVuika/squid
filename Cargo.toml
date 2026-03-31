@@ -15,6 +15,8 @@ include = [
     "/static",
     "/migrations",
     "/documents",
+    "/plugins",
+    "/docs",
     "/.squidignore.example",
     "/build.rs",
     "/Cargo.toml",
@@ -63,6 +65,9 @@ rig-core = "0.33"
 notify = "8.2"
 anyhow = "1.0"
 sqlite-vec = "0.1"
+rquickjs = { version = "0.9", features = ["full-async", "loader"] }
+jsonschema = "0.27"
+dirs = "6.0"
 
 [dev-dependencies]
 tempfile = "3.0"

@@ -339,6 +339,7 @@ pub async fn run(
         version: None, // Will be set automatically by save_to_dir()
         database_path: crate::config::Config::default().database_path,
         rag: final_rag_config,
+        plugins: crate::config::PluginsConfig::default(),
         server: crate::config::Config::default().server,
         agents: agents_config,
     };

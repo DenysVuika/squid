@@ -1,0 +1,49 @@
+{
+  "id": "http-fetcher",
+  "title": "HTTP Fetcher",
+  "description": "Fetches content from URLs and returns the response",
+  "version": "0.1.0",
+  "api_version": "1.0",
+  "security": {
+    "requires": [],
+    "network": true,
+    "file_write": false
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "URL to fetch"
+      },
+      "timeout": {
+        "type": "number",
+        "default": 5000,
+        "description": "Request timeout in milliseconds"
+      }
+    },
+    "required": ["url"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "Whether the request was successful"
+      },
+      "data": {
+        "type": "string",
+        "description": "Response body"
+      },
+      "error": {
+        "type": "string",
+        "description": "Error message if request failed"
+      },
+      "url": {
+        "type": "string",
+        "description": "The URL that was fetched"
+      }
+    },
+    "required": ["success", "url"]
+  }
+}

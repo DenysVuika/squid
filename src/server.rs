@@ -92,6 +92,22 @@ pub async fn start_server(
     };
 
     let session_manager = Arc::new(session::SessionManager::new(database));
+    
+    // Initialize plugin system
+    info!("Initializing plugin system...");
+    match crate::plugins::initialize(Arc::clone(&app_config)) {
+        Ok(()) => {
+            let plugin_count = crate::plugins::plugin_count();
+            info!("Plugin system initialized with {} plugin(s)", plugin_count);
+            if plugin_count > 0 {
+                println!("🦑: Loaded {} plugin(s)", plugin_count);
+            }
+        }
+        Err(e) => {
+            warn!("Failed to initialize plugin system: {}", e);
+            println!("🦑: Warning - Plugin system initialization failed: {}", e);
+        }
+    }
 
     // Initialize RAG system if enabled
     let rag_system = if app_config.rag.enabled {

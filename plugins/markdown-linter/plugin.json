@@ -1,0 +1,58 @@
+{
+  "id": "markdown-linter",
+  "title": "Markdown Linter",
+  "description": "Lints markdown files for style issues like excessive line length and missing headings",
+  "version": "0.1.0",
+  "api_version": "1.0",
+  "security": {
+    "requires": ["read_file"],
+    "network": false,
+    "file_write": false
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Path to the markdown file to lint"
+      },
+      "max_line_length": {
+        "type": "number",
+        "default": 120,
+        "description": "Maximum allowed line length"
+      }
+    },
+    "required": ["path"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "issues": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "List of linting issues found"
+      },
+      "stats": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "number",
+            "description": "Total number of lines"
+          },
+          "headings": {
+            "type": "number",
+            "description": "Number of headings"
+          },
+          "code_blocks": {
+            "type": "number",
+            "description": "Number of code blocks"
+          }
+        },
+        "required": ["lines", "headings", "code_blocks"]
+      }
+    },
+    "required": ["issues", "stats"]
+  }
+}
