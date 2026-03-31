@@ -17,7 +17,7 @@ include = [
     "/documents",
     "/plugins",
     "/docs",
-    "/.squidignore.example",
+    "/.squidignore.template",
     "/build.rs",
     "/Cargo.toml",
     "/Cargo.lock",
