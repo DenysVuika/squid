@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-31
+
 ### Added
 
 - **Plugin System**: Extend Squid with custom JavaScript-based tools
