@@ -73,6 +73,58 @@ impl Default for RagConfig {
     }
 }
 
+/// Plugin system configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginsConfig {
+    /// Enable plugin system
+    #[serde(default = "default_plugins_enabled")]
+    pub enabled: bool,
+    /// Load global plugins from ~/.squid/plugins
+    #[serde(default = "default_load_global")]
+    pub load_global: bool,
+    /// Load workspace plugins from ./plugins
+    #[serde(default = "default_load_workspace")]
+    pub load_workspace: bool,
+    /// Default timeout for plugin execution in seconds
+    #[serde(default = "default_plugin_timeout")]
+    pub default_timeout_seconds: u64,
+    /// Maximum memory per plugin in MB
+    #[serde(default = "default_max_memory_mb")]
+    pub max_memory_mb: usize,
+}
+
+fn default_plugins_enabled() -> bool {
+    true
+}
+
+fn default_load_global() -> bool {
+    true
+}
+
+fn default_load_workspace() -> bool {
+    true
+}
+
+fn default_plugin_timeout() -> u64 {
+    30
+}
+
+fn default_max_memory_mb() -> usize {
+    128
+}
+
+impl Default for PluginsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_plugins_enabled(),
+            load_global: default_load_global(),
+            load_workspace: default_load_workspace(),
+            default_timeout_seconds: default_plugin_timeout(),
+            max_memory_mb: default_max_memory_mb(),
+        }
+    }
+}
+
 /// Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -141,6 +193,8 @@ pub struct Config {
     #[serde(default)]
     pub rag: RagConfig,
     #[serde(default)]
+    pub plugins: PluginsConfig,
+    #[serde(default)]
     pub server: ServerConfig,
     #[serde(default, flatten)]
     pub agents: AgentsConfig,
@@ -178,6 +232,7 @@ impl Default for Config {
             version: None,
             database_path: default_database_path(),
             rag: RagConfig::default(),
+            plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
             agents: AgentsConfig::default(),
         }

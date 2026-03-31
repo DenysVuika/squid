@@ -14,6 +14,7 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 - 🌐 **Web UI** - Modern chat interface with persistent sessions and conversation management
 - 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
 - 🔧 **Tool Calling** - File operations, code search, and bash commands with built-in security
+- 🔌 **Plugin System** - Extend capabilities with JavaScript plugins (NEW!)
 - 🔍 **AI Code Reviews** - Language-specific analysis and suggestions
 - 🌍 **Environment Awareness** - LLM receives system context for smarter responses
 - 🔒 **Security First** - Path validation, .squidignore support, and user approval for all operations
@@ -1069,10 +1070,124 @@ For complete security documentation and tool usage examples, see:
 - [Security Features](docs/SECURITY.md) - Detailed security layers and best practices
 - [CLI Reference](docs/CLI.md#tool-calling) - Tool calling examples and usage
 
+## Plugin System
+
+Squid supports a powerful JavaScript-based plugin system that lets you extend its capabilities with custom tools. Plugins are invoked by the LLM alongside built-in tools.
+
+### Quick Start
+
+**1. Create a plugin:**
+
+```bash
+mkdir -p plugins/my-plugin
+cd plugins/my-plugin
+```
+
+**2. Add `plugin.json`:**
+
+```json
+{
+  "id": "my-plugin",
+  "title": "My Plugin",
+  "description": "Does something useful",
+  "version": "0.1.0",
+  "api_version": "1.0",
+  "security": {
+    "requires": ["read_file"],
+    "network": false,
+    "file_write": false
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "message": { "type": "string" }
+    },
+    "required": ["message"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "result": { "type": "string" }
+    },
+    "required": ["result"]
+  }
+}
+```
+
+**3. Add `index.js`:**
+
+```javascript
+function execute(context, input) {
+    context.log(`Processing: ${input.message}`);
+    return { result: input.message.toUpperCase() };
+}
+globalThis.execute = execute;
+```
+
+**4. Enable in config:**
+
+```json
+{
+  "agents": {
+    "general-assistant": {
+      "permissions": {
+        "allow": ["read_file", "plugin:*"]
+      }
+    }
+  }
+}
+```
+
+### Features
+
+- **🔌 Sandboxed Execution** - QuickJS runtime with memory and CPU limits
+- **🔒 Hybrid Security** - Plugins declare needs, agents control access
+- **✅ Schema Validation** - JSON Schema for input/output
+- **📁 Dual Location** - Workspace (`./plugins/`) and global (`~/.squid/plugins/`)
+- **🛠️ Context API** - Safe file operations, logging, and HTTP (when permitted)
+
+### Example Plugins
+
+Three example plugins are included:
+- **markdown-linter** - Analyzes markdown files for style issues
+- **code-formatter** - Formats code with basic rules
+- **http-fetcher** - Fetches content from URLs
+
+### Testing Plugins
+
+**Test code-formatter** (fully functional):
+```bash
+squid chat
+> Format this JSON: {"name":"test","age":30}
+```
+
+**Test markdown-linter** (fully functional, reads files):
+```bash
+squid chat
+> Lint the README.md file
+```
+
+**Test http-fetcher** (requires network permission):
+```bash
+squid chat
+> Fetch content from https://api.github.com
+```
+
+**Note**: The http-fetcher plugin requires `network: true` permission in its `plugin.json`. All context APIs (`readFile`, `writeFile`, `httpGet`) are now fully implemented and functional.
+
+### Documentation
+
+See **[docs/PLUGINS.md](docs/PLUGINS.md)** for complete documentation including:
+- Plugin structure and API reference
+- Security model and permissions
+- Complete examples
+- Best practices and troubleshooting
+
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
 - **[CLI Reference](docs/CLI.md)** - Complete command-line interface documentation
+- **[Plugin Development Guide](docs/PLUGINS.md)** - Create custom JavaScript tools (NEW!)
 - **[RAG Guide](docs/RAG.md)** - Retrieval-Augmented Generation (semantic document search)
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization

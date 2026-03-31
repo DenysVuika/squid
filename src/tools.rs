@@ -15,7 +15,7 @@ use crate::validate::PathValidator;
 
 /// Get the list of available tools for the LLM
 pub fn get_tools() -> Vec<ChatCompletionTools> {
-    vec![
+    let mut tools = vec![
         ChatCompletionTools::Function(ChatCompletionTool {
             function: FunctionObjectArgs::default()
                 .name("read_file")
@@ -130,7 +130,14 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 .build()
                 .expect("Failed to build demo_tool function"),
         }),
-    ]
+    ];
+    
+    // Add dynamically loaded plugin tools
+    if let Ok(plugin_tools) = crate::plugins::get_plugin_tools() {
+        tools.extend(plugin_tools);
+    }
+    
+    tools
 }
 
 // Helper function to search in a single file
@@ -375,6 +382,44 @@ pub fn check_tool_permission(
             };
         }
     };
+    
+    // Check plugin permissions
+    if name.starts_with("plugin:") {
+        // Check if plugin exists
+        if let Some(plugin_meta) = crate::plugins::get_plugin_metadata(name) {
+            // Verify agent has permission for plugin's required capabilities
+            for required in &plugin_meta.security.requires {
+                if !permissions.allow.contains(required) {
+                    return ToolPermissionStatus::Denied {
+                        reason: format!(
+                            "Plugin '{}' requires '{}' permission which is not granted to agent",
+                            name, required
+                        ),
+                    };
+                }
+            }
+            
+            // Check if plugin itself is explicitly denied
+            if permissions.deny.contains(&name.to_string()) {
+                return ToolPermissionStatus::Denied {
+                    reason: format!("Plugin '{}' is denied by agent configuration", name),
+                };
+            }
+            
+            // Check if plugin is explicitly allowed or wildcard allowed
+            if permissions.allow.contains(&name.to_string()) 
+                || permissions.allow.contains(&"plugin:*".to_string()) {
+                return ToolPermissionStatus::Allowed;
+            }
+            
+            // Otherwise needs approval
+            return ToolPermissionStatus::NeedsApproval;
+        } else {
+            return ToolPermissionStatus::Denied {
+                reason: format!("Plugin '{}' not found", name),
+            };
+        }
+    }
 
     // Check if tool is denied
     if permissions.deny.contains(&name.to_string()) {
@@ -421,6 +466,17 @@ pub async fn execute_tool_direct(
     args: &serde_json::Value,
     _config: &Config,
 ) -> serde_json::Value {
+    // Check if this is a plugin tool
+    if crate::plugins::is_plugin_tool(name) {
+        match crate::plugins::execute_plugin_tool(name, args).await {
+            Ok(result) => return result,
+            Err(e) => {
+                warn!("Plugin execution failed: {}", e);
+                return json!({"error": format!("Plugin execution failed: {}", e)});
+            }
+        }
+    }
+    
     // Validate paths for file operations
     let ignore_patterns = PathValidator::load_ignore_patterns();
     let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
@@ -580,6 +636,19 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
             return json!({"error": format!("Invalid arguments: {}", e)});
         }
     };
+    
+    // Check if this is a plugin tool
+    if crate::plugins::is_plugin_tool(name) {
+        // Plugin tools are executed directly without CLI approval prompts
+        // (Web UI will handle approval via the standard approval flow)
+        match crate::plugins::execute_plugin_tool(name, &args).await {
+            Ok(result) => return result,
+            Err(e) => {
+                error!("Plugin execution failed: {}", e);
+                return json!({"error": format!("Plugin execution failed: {}", e)});
+            }
+        }
+    }
 
     // Use provided agent_id or default agent
     let agent_id_str = agent_id.unwrap_or(&config.agents.default_agent);

@@ -12,6 +12,7 @@ mod envinfo;
 mod init;
 mod llm;
 mod logger;
+mod plugins;
 mod rag;
 mod server;
 mod session;

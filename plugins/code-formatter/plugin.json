@@ -1,0 +1,50 @@
+{
+  "id": "code-formatter",
+  "title": "Code Formatter",
+  "description": "Formats code snippets with basic indentation and style rules",
+  "version": "0.1.0",
+  "api_version": "1.0",
+  "security": {
+    "requires": [],
+    "network": false,
+    "file_write": false
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "description": "Code to format"
+      },
+      "language": {
+        "type": "string",
+        "enum": ["javascript", "json", "markdown"],
+        "description": "Programming language of the code"
+      },
+      "indent_size": {
+        "type": "number",
+        "default": 2,
+        "description": "Number of spaces for indentation"
+      }
+    },
+    "required": ["code", "language"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "formatted": {
+        "type": "string",
+        "description": "Formatted code"
+      },
+      "changes": {
+        "type": "number",
+        "description": "Number of formatting changes made"
+      },
+      "language": {
+        "type": "string",
+        "description": "Language that was formatted"
+      }
+    },
+    "required": ["formatted", "changes", "language"]
+  }
+}

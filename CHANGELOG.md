@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Plugin System**: Extend Squid with custom JavaScript-based tools
+  - Create plugins using JavaScript (QuickJS runtime with sandboxing)
+  - Plugins are dynamically registered as LLM tools alongside built-in tools
+  - Hybrid security model: plugins declare requirements, agents control access
+  - JSON Schema validation for plugin inputs and outputs
+  - Two plugin locations: workspace (`./plugins/`) and global (`~/.squid/plugins/`)
+  - Fully functional Context API: `readFile`, `writeFile`, `httpGet`, `log`, `config.projectDir`
+  - Console.log() output captured and saved to database logs
+  - Configurable memory limits and execution timeouts
+  - Three example plugins included: code-formatter, markdown-linter, http-fetcher
+  - Permission syntax: `"plugin:*"` (all plugins) or `"plugin:plugin-id"` (specific plugin)
+  - See `docs/PLUGINS.md` for plugin development guide
 - **`logs cleanup` CLI Command**: New subcommand to remove log entries older than a configurable number of days (`--max-age-days`, default: 30). Useful for reclaiming database space on long-running servers and automating log rotation
 - **Per-Agent Suggestions**: Agents can now define a `suggestions` list in their config — curated prompt suggestions shown in the Web UI that change automatically when switching agents. Agents with no suggestions configured show no suggestion bar
 - **Per-Agent `use_tools` Option**: Agents now support a `use_tools: false` boolean flag to disable all tool usage entirely for that agent. When disabled, the Tools toggle button is hidden in the Web UI and tool support is enforced off server-side regardless of the client request
