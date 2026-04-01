@@ -320,22 +320,27 @@ export const MessageBranchPage = ({
   );
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  preserveWhitespace?: boolean;
+};
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, preserveWhitespace, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        preserveWhitespace && "whitespace-pre-wrap",
         className
       )}
       plugins={streamdownPlugins}
       {...props}
     />
   ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children
+  (prevProps, nextProps) =>
+    prevProps.children === nextProps.children &&
+    prevProps.preserveWhitespace === nextProps.preserveWhitespace
 );
 
 MessageResponse.displayName = "MessageResponse";
