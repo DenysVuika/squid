@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::config;
+use crate::session::{ChatSession, Source, ThinkingStep};
 use crate::template;
 use crate::tools;
 use crate::{db, rag, validate};
@@ -154,6 +155,7 @@ pub fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
 }
 
 /// Sends a streaming request to the LLM and handles tool calls
+/// Optionally saves the conversation to a session if session_id and db are provided
 pub async fn ask_llm_streaming(
     question: &str,
     file_content: Option<&str>,
@@ -161,7 +163,9 @@ pub async fn ask_llm_streaming(
     system_prompt: Option<&str>,
     model: &str,
     app_config: &config::Config,
-) -> Result<(), Box<dyn std::error::Error>> {
+    session: Option<&mut ChatSession>,
+    db: Option<&db::Database>,
+) -> Result<String, Box<dyn std::error::Error>> {
     debug!("Using API URL: {}", app_config.api_url);
     debug!("Using Model: {}", model);
 
@@ -228,6 +232,15 @@ pub async fn ask_llm_streaming(
     let mut lock = io::stdout().lock();
     let mut first_content = true;
     let mut spinner_active = true;
+    
+    // Accumulate response content and thinking steps for session saving
+    let mut accumulated_content = String::new();
+    let mut thinking_steps: Vec<ThinkingStep> = Vec::new();
+    let mut step_order = 0i32;
+    let mut total_input_tokens = 0i64;
+    let mut total_output_tokens = 0i64;
+    let mut total_reasoning_tokens = 0i64;
+    let mut total_cache_tokens = 0i64;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -239,6 +252,11 @@ pub async fn ask_llm_streaming(
                 "Token usage - Prompt: {}, Completion: {}, Total: {}",
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
+
+            total_input_tokens = usage.prompt_tokens as i64;
+            total_output_tokens = usage.completion_tokens as i64;
+            // reasoning_tokens and cache_tokens are not directly available in CompletionUsage
+            // They may be in completion_tokens_details depending on the API provider
 
             if let Some(prompt_details) = &usage.prompt_tokens_details
                 && let Some(cached) = prompt_details.cached_tokens
@@ -264,6 +282,43 @@ pub async fn ask_llm_streaming(
                     content.as_str()
                 };
                 write!(lock, "{}", content_to_write)?;
+                accumulated_content.push_str(content);
+                
+                // Check for <think>...</think> blocks in the content
+                loop {
+                    if let Some(think_start) = accumulated_content.find("<think>") {
+                        if let Some(think_end) = accumulated_content.find("</think>") {
+                            if think_end > think_start {
+                                let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
+                                if !reasoning_text.trim().is_empty() {
+                                    thinking_steps.push(ThinkingStep {
+                                        step_type: "reasoning".to_string(),
+                                        step_order,
+                                        content: Some(reasoning_text),
+                                        tool_name: None,
+                                        tool_arguments: None,
+                                        tool_result: None,
+                                        tool_error: None,
+                                        content_before_tool: None,
+                                    });
+                                    step_order += 1;
+                                }
+                                // Remove the <think> block from accumulated content for final display
+                                accumulated_content = format!(
+                                    "{}{}",
+                                    &accumulated_content[..think_start],
+                                    &accumulated_content[think_end + 8..]
+                                );
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
             }
 
             if let Some(tool_call_chunks) = choice.delta.tool_calls {
@@ -286,7 +341,7 @@ pub async fn ask_llm_streaming(
                             tool_call.function.name = name;
                         }
                         if let Some(arguments) = function_chunk.arguments {
-                            tool_call.function.arguments.push_str(&arguments);
+                            tool_call.function.arguments.push_str(&arguments.to_string());
                         }
                     }
                 }
@@ -373,6 +428,10 @@ pub async fn ask_llm_streaming(
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 );
 
+                total_input_tokens += usage.prompt_tokens as i64;
+                total_output_tokens += usage.completion_tokens as i64;
+                // reasoning_tokens and cache_tokens are not directly available in CompletionUsage
+
                 if let Some(prompt_details) = &usage.prompt_tokens_details
                     && let Some(cached) = prompt_details.cached_tokens
                 {
@@ -389,6 +448,7 @@ pub async fn ask_llm_streaming(
                         content.as_str()
                     };
                     write!(lock, "{}", content_to_write)?;
+                    accumulated_content.push_str(content);
                 }
             }
             lock.flush()?;
@@ -396,10 +456,82 @@ pub async fn ask_llm_streaming(
     }
 
     writeln!(lock)?;
-    Ok(())
+    
+    // Save to session if provided
+    if let Some(sess) = session {
+        if let Some(database) = db {
+            // Save session metadata FIRST (before messages, due to foreign key constraint)
+            if sess.title.is_none() {
+                // Generate title from first user message
+                let title = if question.len() > 100 {
+                    format!("{}...", &question[..97])
+                } else {
+                    question.to_string()
+                };
+                sess.title = Some(title);
+            }
+            
+            if let Err(e) = database.save_session(sess) {
+                debug!("Failed to save session: {}", e);
+            } else {
+                debug!("Session saved successfully: {}", sess.id);
+            }
+            
+            // Save user message
+            let user_msg = crate::session::ChatMessage {
+                role: "user".to_string(),
+                content: question.to_string(),
+                sources: if let Some(path) = file_path {
+                    if let Some(content) = file_content {
+                        vec![Source {
+                            title: path.to_string(),
+                            content: content.to_string(),
+                        }]
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                },
+                timestamp: chrono::Utc::now().timestamp(),
+                thinking_steps: None,
+            };
+
+            if let Err(e) = database.save_message(&sess.id, &user_msg) {
+                debug!("Failed to save user message to session: {}", e);
+            } else {
+                debug!("User message saved successfully to session {}", sess.id);
+            }
+
+            // Save assistant message
+            let thinking_steps_opt = if thinking_steps.is_empty() { None } else { Some(thinking_steps) };
+            let assistant_msg = crate::session::ChatMessage {
+                role: "assistant".to_string(),
+                content: accumulated_content.trim().to_string(),
+                sources: vec![],
+                timestamp: chrono::Utc::now().timestamp(),
+                thinking_steps: thinking_steps_opt,
+            };
+
+            if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+                debug!("Failed to save assistant message to session: {}", e);
+            } else {
+                debug!("Assistant message saved successfully to session {}", sess.id);
+            }
+
+            // Update session token usage
+            sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
+            if let Err(e) = database.save_session(sess) {
+                debug!("Failed to update session: {}", e);
+            }
+        }
+    }
+    
+    Ok(accumulated_content.trim().to_string())
 }
 
 /// Sends a non-streaming request to the LLM and handles tool calls
+/// Optionally saves the conversation to a session if session_id and db are provided
 pub async fn ask_llm(
     question: &str,
     file_content: Option<&str>,
@@ -407,6 +539,8 @@ pub async fn ask_llm(
     system_prompt: Option<&str>,
     model: &str,
     app_config: &config::Config,
+    session: Option<&mut ChatSession>,
+    db: Option<&db::Database>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     debug!("Using API URL: {}", app_config.api_url);
     debug!("Using Model: {}", model);
@@ -457,11 +591,20 @@ pub async fn ask_llm(
     let response = client.chat().create(request).await?;
 
     // Log token usage statistics
+    let mut total_input_tokens = 0i64;
+    let mut total_output_tokens = 0i64;
+    let mut total_reasoning_tokens = 0i64;
+    let mut total_cache_tokens = 0i64;
+    
     if let Some(usage) = &response.usage {
         debug!(
             "Token usage - Prompt: {}, Completion: {}, Total: {}",
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
+
+        total_input_tokens = usage.prompt_tokens as i64;
+        total_output_tokens = usage.completion_tokens as i64;
+        // reasoning_tokens and cache_tokens are not directly available in CompletionUsage
 
         if let Some(prompt_details) = &usage.prompt_tokens_details
             && let Some(cached) = prompt_details.cached_tokens
@@ -543,6 +686,10 @@ pub async fn ask_llm(
                 usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
             );
 
+            total_input_tokens += usage.prompt_tokens as i64;
+            total_output_tokens += usage.completion_tokens as i64;
+            // reasoning_tokens and cache_tokens are not directly available in CompletionUsage
+
             if let Some(prompt_details) = &usage.prompt_tokens_details
                 && let Some(cached) = prompt_details.cached_tokens
             {
@@ -556,12 +703,151 @@ pub async fn ask_llm(
             .and_then(|choice| choice.message.content.as_ref())
             .ok_or("No response from LLM")?;
 
-        return Ok(answer.to_string());
+        let answer_str = answer.to_string();
+
+        // Save to session if provided
+        if let Some(sess) = session {
+            if let Some(database) = db {
+                // Save session metadata FIRST (before messages, due to foreign key constraint)
+                if sess.title.is_none() {
+                    let title = if question.len() > 100 {
+                        format!("{}...", &question[..97])
+                    } else {
+                        question.to_string()
+                    };
+                    sess.title = Some(title);
+                }
+
+                if let Err(e) = database.save_session(sess) {
+                    debug!("Failed to save session: {}", e);
+                } else {
+                    debug!("Session saved successfully: {}", sess.id);
+                }
+
+                // Save user message
+                let user_msg = crate::session::ChatMessage {
+                    role: "user".to_string(),
+                    content: question.to_string(),
+                    sources: if let Some(path) = file_path {
+                        if let Some(content) = file_content {
+                            vec![Source {
+                                title: path.to_string(),
+                                content: content.to_string(),
+                            }]
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    },
+                    timestamp: chrono::Utc::now().timestamp(),
+                    thinking_steps: None,
+                };
+
+                if let Err(e) = database.save_message(&sess.id, &user_msg) {
+                    debug!("Failed to save user message to session: {}", e);
+                } else {
+                    debug!("User message saved successfully to session {}", sess.id);
+                }
+
+                // Save assistant message (no thinking steps for non-streaming)
+                let assistant_msg = crate::session::ChatMessage {
+                    role: "assistant".to_string(),
+                    content: answer_str.clone(),
+                    sources: vec![],
+                    timestamp: chrono::Utc::now().timestamp(),
+                    thinking_steps: None,
+                };
+
+                if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+                    debug!("Failed to save assistant message to session: {}", e);
+                } else {
+                    debug!("Assistant message saved successfully to session {}", sess.id);
+                }
+
+                // Update session token usage
+                sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
+                if let Err(e) = database.save_session(sess) {
+                    debug!("Failed to update session: {}", e);
+                }
+            }
+        }
+
+        return Ok(answer_str);
     }
 
     let answer = response_message.content.ok_or("No response from LLM")?;
+    let answer_str = answer.to_string();
 
-    Ok(answer)
+    // Save to session if provided (for simple responses without tool calls)
+    if let Some(sess) = session {
+        if let Some(database) = db {
+            // Save session metadata FIRST (before messages, due to foreign key constraint)
+            if sess.title.is_none() {
+                let title = if question.len() > 100 {
+                    format!("{}...", &question[..97])
+                } else {
+                    question.to_string()
+                };
+                sess.title = Some(title);
+            }
+
+            if let Err(e) = database.save_session(sess) {
+                debug!("Failed to save session: {}", e);
+            } else {
+                debug!("Session saved successfully: {}", sess.id);
+            }
+
+            // Save user message
+            let user_msg = crate::session::ChatMessage {
+                role: "user".to_string(),
+                content: question.to_string(),
+                sources: if let Some(path) = file_path {
+                    if let Some(content) = file_content {
+                        vec![Source {
+                            title: path.to_string(),
+                            content: content.to_string(),
+                        }]
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                },
+                timestamp: chrono::Utc::now().timestamp(),
+                thinking_steps: None,
+            };
+
+            if let Err(e) = database.save_message(&sess.id, &user_msg) {
+                debug!("Failed to save user message to session: {}", e);
+            } else {
+                debug!("User message saved successfully to session {}", sess.id);
+            }
+
+            // Save assistant message
+            let assistant_msg = crate::session::ChatMessage {
+                role: "assistant".to_string(),
+                content: answer_str.clone(),
+                sources: vec![],
+                timestamp: chrono::Utc::now().timestamp(),
+                thinking_steps: None,
+            };
+
+            if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+                debug!("Failed to save assistant message to session: {}", e);
+            } else {
+                debug!("Assistant message saved successfully to session {}", sess.id);
+            }
+
+            // Update session token usage
+            sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
+            if let Err(e) = database.save_session(sess) {
+                debug!("Failed to update session: {}", e);
+            }
+        }
+    }
+
+    Ok(answer_str)
 }
 
 /// Initialize RAG system if needed based on config and CLI flags
@@ -743,6 +1029,17 @@ pub async fn run_ask_command(
         }
     };
 
+    // Create session and open database for saving conversation
+    let mut session = ChatSession::new();
+    session.set_model(model.clone());
+    let db = match db::Database::new(&app_config.database_path) {
+        Ok(db) => Some(db),
+        Err(e) => {
+            warn!("Failed to open database for session saving: {}", e);
+            None
+        }
+    };
+
     if no_stream {
         match ask_llm(
             &full_question,
@@ -751,6 +1048,8 @@ pub async fn run_ask_command(
             custom_prompt.as_deref(),
             &model,
             app_config,
+            Some(&mut session),
+            db.as_ref(),
         )
         .await
         {
@@ -764,11 +1063,15 @@ pub async fn run_ask_command(
         custom_prompt.as_deref(),
         &model,
         app_config,
+        Some(&mut session),
+        db.as_ref(),
     )
     .await
     {
         error!("Failed to get response: {}", e);
     }
+    
+    println!("💾 Session saved: {}", &session.id[..8]);
 }
 
 /// Handles the `review` command: validates and reads the file, initialises RAG,
@@ -897,6 +1200,17 @@ pub async fn run_review_command(
         }
     };
 
+    // Create session and open database for saving conversation
+    let mut session = ChatSession::new();
+    session.set_model(model.clone());
+    let db = match db::Database::new(&app_config.database_path) {
+        Ok(db) => Some(db),
+        Err(e) => {
+            warn!("Failed to open database for session saving: {}", e);
+            None
+        }
+    };
+
     if no_stream {
         match ask_llm(
             &question,
@@ -905,6 +1219,8 @@ pub async fn run_review_command(
             Some(&combined_review_prompt),
             &model,
             app_config,
+            Some(&mut session),
+            db.as_ref(),
         )
         .await
         {
@@ -918,11 +1234,15 @@ pub async fn run_review_command(
         Some(&combined_review_prompt),
         &model,
         app_config,
+        Some(&mut session),
+        db.as_ref(),
     )
     .await
     {
         error!("Failed to get review: {}", e);
     }
+    
+    println!("💾 Session saved: {}", &session.id[..8]);
 }
 
 #[cfg(test)]
