@@ -741,7 +741,9 @@ const Chatbot = () => {
                                 !message.thinkingSteps ? (
                                   <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                                 ) : (
-                                  <MessageResponse>{version.content}</MessageResponse>
+                                  <MessageResponse preserveWhitespace={message.from === 'user'}>
+                                    {version.content}
+                                  </MessageResponse>
                                 )}
                               </MessageContent>
                               {/* Tool approvals for reasoning mode (after content) */}
