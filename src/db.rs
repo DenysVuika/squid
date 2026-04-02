@@ -240,6 +240,7 @@ impl Database {
         };
 
         // Load messages
+        debug!("Loading messages for session: {}", session_id);
         let mut msg_stmt = conn.prepare(
             "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
@@ -253,6 +254,8 @@ impl Database {
             ))
         })?
         .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
+
+        debug!("Found {} messages for session {}", messages.len(), session_id);
 
         // Convert to ChatMessages and load sources for each
         let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
