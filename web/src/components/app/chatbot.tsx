@@ -2,7 +2,6 @@ import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import type { FileUIPart } from 'ai';
 import React from 'react';
 
-import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import {
   Context,
@@ -74,6 +73,7 @@ import { SourceContentSidebar } from './source-content-sidebar';
 import { AgentItem } from './agent-item';
 import { SuggestionItem } from './suggestion-item';
 import { ToolApprovalComponent } from './tool-approval';
+import { ThinkingShimmer } from './thinking-shimmer';
 
 // Zustand stores
 import { useSessionStore } from '@/stores/session-store';
@@ -565,6 +565,25 @@ const Chatbot = () => {
                                       );
                                     }
                                   })}
+                                  {/* Show thinking after tools when streaming */}
+                                  {(() => {
+                                    if (!isCurrentlyStreaming || message.thinkingSteps!.length === 0) {
+                                      return null;
+                                    }
+                                    const lastStep = message.thinkingSteps![message.thinkingSteps!.length - 1];
+                                    if (
+                                      lastStep.type === 'tool' &&
+                                      (lastStep.result || lastStep.error) &&
+                                      !version.content
+                                    ) {
+                                      return (
+                                        <div className="mt-4">
+                                          <ThinkingShimmer className="text-muted-foreground" />
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                 </ChainOfThoughtContent>
                               </ChainOfThought>
                             );
@@ -644,8 +663,25 @@ const Chatbot = () => {
                                   }
                                 });
 
-                                // Show remaining content after all tools
-                                if (contentPosition < version.content.length) {
+                                // Check if we're streaming and the last step is a completed tool
+                                const isCurrentlyStreaming = status === 'streaming' && streamingMessageId === version.id;
+                                const lastStep = message.thinkingSteps![message.thinkingSteps!.length - 1];
+                                const shouldShowThinking =
+                                  isCurrentlyStreaming &&
+                                  lastStep?.type === 'tool' &&
+                                  (lastStep.result || lastStep.error) &&
+                                  contentPosition >= version.content.length;
+
+                                if (shouldShowThinking) {
+                                  elements.push(
+                                    <MessageContent key="thinking-after-tool">
+                                      <ThinkingShimmer className="text-muted-foreground" />
+                                    </MessageContent>
+                                  );
+                                }
+
+                                // Show remaining content after all tools (only if not already shown by thinking)
+                                if (!shouldShowThinking && contentPosition < version.content.length) {
                                   const remainingContent = version.content.substring(contentPosition);
                                   if (remainingContent.trim()) {
                                     elements.push(
@@ -743,7 +779,7 @@ const Chatbot = () => {
                                 !version.content &&
                                 status === 'streaming' &&
                                 !message.thinkingSteps ? (
-                                  <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                                  <ThinkingShimmer className="text-muted-foreground" />
                                 ) : (
                                   <MessageResponse preserveWhitespace={message.from === 'user'}>
                                     {version.content}
