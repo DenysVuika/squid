@@ -180,12 +180,10 @@ mod tests {
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: "You are a helpful assistant.".to_string().into(),
                 name: None,
-                ..Default::default()
             }),
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Hello!".to_string()),
                 name: None,
-                ..Default::default()
             }),
         ];
 
@@ -208,7 +206,6 @@ mod tests {
                     "Write a function to calculate fibonacci numbers.".to_string(),
                 ),
                 name: None,
-                ..Default::default()
             },
         )];
 
@@ -243,17 +240,14 @@ mod tests {
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Question 1".to_string()),
                 name: None,
-                ..Default::default()
             }),
             ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
                 content: Some("Answer 1".to_string().into()),
                 name: None,
-                ..Default::default()
             }),
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Question 2".to_string()),
                 name: None,
-                ..Default::default()
             }),
         ];
 
@@ -270,7 +264,6 @@ mod tests {
             ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Hello!".to_string()),
                 name: None,
-                ..Default::default()
             },
         )];
 
@@ -287,7 +280,6 @@ mod tests {
             ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Test".to_string()),
                 name: None,
-                ..Default::default()
             },
         )];
 
