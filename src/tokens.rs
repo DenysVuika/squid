@@ -23,15 +23,19 @@ fn message_to_text(msg: &ChatCompletionRequestMessage) -> String {
             ChatCompletionRequestMessage::User(m) => {
                 format!("{:?}", m.content)
             }
-            ChatCompletionRequestMessage::Assistant(m) => {
-                m.content.as_ref().map(|c| format!("{:?}", c)).unwrap_or_default()
-            }
+            ChatCompletionRequestMessage::Assistant(m) => m
+                .content
+                .as_ref()
+                .map(|c| format!("{:?}", c))
+                .unwrap_or_default(),
             ChatCompletionRequestMessage::Tool(m) => {
                 format!("{:?}", m.content)
             }
-            ChatCompletionRequestMessage::Function(m) => {
-                m.content.as_ref().map(|c| format!("{:?}", c)).unwrap_or_default()
-            }
+            ChatCompletionRequestMessage::Function(m) => m
+                .content
+                .as_ref()
+                .map(|c| format!("{:?}", c))
+                .unwrap_or_default(),
             ChatCompletionRequestMessage::Developer(m) => {
                 format!("{:?}", m.content)
             }
@@ -56,10 +60,7 @@ fn message_to_text(msg: &ChatCompletionRequestMessage) -> String {
 ///
 /// A tuple of (input_tokens, output_tokens). Output tokens is always 0 for this function
 /// since it only counts the input context.
-pub fn estimate_tokens(
-    model: &str,
-    messages: &[ChatCompletionRequestMessage],
-) -> (i64, i64) {
+pub fn estimate_tokens(model: &str, messages: &[ChatCompletionRequestMessage]) -> (i64, i64) {
     match tiktoken_rs::get_bpe_from_model(model) {
         Ok(bpe) => {
             let mut total_tokens = 0;
@@ -180,12 +181,10 @@ mod tests {
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: "You are a helpful assistant.".to_string().into(),
                 name: None,
-                ..Default::default()
             }),
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Hello!".to_string()),
                 name: None,
-                ..Default::default()
             }),
         ];
 
@@ -208,7 +207,6 @@ mod tests {
                     "Write a function to calculate fibonacci numbers.".to_string(),
                 ),
                 name: None,
-                ..Default::default()
             },
         )];
 
@@ -243,7 +241,6 @@ mod tests {
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Question 1".to_string()),
                 name: None,
-                ..Default::default()
             }),
             ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
                 content: Some("Answer 1".to_string().into()),
@@ -253,7 +250,6 @@ mod tests {
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Question 2".to_string()),
                 name: None,
-                ..Default::default()
             }),
         ];
 
@@ -270,7 +266,6 @@ mod tests {
             ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Hello!".to_string()),
                 name: None,
-                ..Default::default()
             },
         )];
 
@@ -287,7 +282,6 @@ mod tests {
             ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Test".to_string()),
                 name: None,
-                ..Default::default()
             },
         )];
 

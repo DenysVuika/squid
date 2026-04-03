@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, Error};
+use actix_web::{Error, HttpResponse, web};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,10 @@ pub async fn get_workspace_files() -> Result<HttpResponse, Error> {
 
     // Get current working directory
     let cwd = std::env::current_dir().map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("Failed to get current directory: {}", e))
+        actix_web::error::ErrorInternalServerError(format!(
+            "Failed to get current directory: {}",
+            e
+        ))
     })?;
 
     // Build file tree
@@ -37,14 +40,12 @@ pub async fn get_workspace_files() -> Result<HttpResponse, Error> {
 fn is_supported_file(path: &std::path::Path) -> bool {
     // Extensions to include (code and documentation files)
     let code_extensions = [
-        "rs", "toml", "lock", "json", "js", "jsx", "ts", "tsx", "css", "scss", "html",
-        "md", "txt", "yaml", "yml", "sh", "py", "go", "java", "c", "cpp", "h", "hpp",
-        "vue", "svelte", "rb", "php", "swift", "kt", "sql", "graphql", "proto",
+        "rs", "toml", "lock", "json", "js", "jsx", "ts", "tsx", "css", "scss", "html", "md", "txt",
+        "yaml", "yml", "sh", "py", "go", "java", "c", "cpp", "h", "hpp", "vue", "svelte", "rb",
+        "php", "swift", "kt", "sql", "graphql", "proto",
     ];
 
-    let file_name = path.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // Check extension
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -52,7 +53,9 @@ fn is_supported_file(path: &std::path::Path) -> bool {
     } else {
         // Files without extension - only include certain names
         let allowed_no_ext = ["Dockerfile", "Makefile", "README", "LICENSE"];
-        allowed_no_ext.iter().any(|&name| file_name.starts_with(name))
+        allowed_no_ext
+            .iter()
+            .any(|&name| file_name.starts_with(name))
     }
 }
 
@@ -63,19 +66,24 @@ pub async fn get_workspace_file(path: web::Path<String>) -> Result<HttpResponse,
 
     // Get current working directory
     let cwd = std::env::current_dir().map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("Failed to get current directory: {}", e))
+        actix_web::error::ErrorInternalServerError(format!(
+            "Failed to get current directory: {}",
+            e
+        ))
     })?;
 
     // Construct full path
     let full_path = cwd.join(&file_path);
 
     // Security check: ensure the resolved path is within the workspace
-    let canonical_path = full_path.canonicalize().map_err(|e| {
-        actix_web::error::ErrorNotFound(format!("File not found: {}", e))
-    })?;
+    let canonical_path = full_path
+        .canonicalize()
+        .map_err(|e| actix_web::error::ErrorNotFound(format!("File not found: {}", e)))?;
 
     if !canonical_path.starts_with(&cwd) {
-        return Err(actix_web::error::ErrorForbidden("Access denied: Path is outside workspace"));
+        return Err(actix_web::error::ErrorForbidden(
+            "Access denied: Path is outside workspace",
+        ));
     }
 
     // Check if path is a file
@@ -85,7 +93,9 @@ pub async fn get_workspace_file(path: web::Path<String>) -> Result<HttpResponse,
 
     // Check if file type is supported
     if !is_supported_file(&canonical_path) {
-        return Err(actix_web::error::ErrorBadRequest("File type not supported for viewing"));
+        return Err(actix_web::error::ErrorBadRequest(
+            "File type not supported for viewing",
+        ));
     }
 
     // Read file content
@@ -99,21 +109,45 @@ pub async fn get_workspace_file(path: web::Path<String>) -> Result<HttpResponse,
 }
 
 /// Build a hierarchical file tree for a directory
-fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn std::error::Error>> {
-    use walkdir::WalkDir;
+fn build_file_tree(
+    root_path: &std::path::Path,
+) -> Result<Vec<FileNode>, Box<dyn std::error::Error>> {
     use std::collections::HashMap;
+    use walkdir::WalkDir;
 
     // Directories to exclude
     let excluded_dirs = [
-        "node_modules", "target", "dist", "build", ".git", ".next", ".nuxt",
-        "vendor", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache",
-        "coverage", ".nyc_output", "tmp", "temp", ".cache",
+        "node_modules",
+        "target",
+        "dist",
+        "build",
+        ".git",
+        ".next",
+        ".nuxt",
+        "vendor",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "__pycache__",
+        ".pytest_cache",
+        "coverage",
+        ".nyc_output",
+        "tmp",
+        "temp",
+        ".cache",
     ];
 
     // Files to exclude
     let excluded_files = [
-        ".DS_Store", "Thumbs.db", ".gitignore", ".gitattributes", "package-lock.json",
-        "yarn.lock", "pnpm-lock.yaml", "Cargo.lock",
+        ".DS_Store",
+        "Thumbs.db",
+        ".gitignore",
+        ".gitattributes",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "Cargo.lock",
     ];
 
     // Store all entries with their metadata
@@ -151,9 +185,7 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
 
         // For files, check if they should be included
         if !is_dir {
-            let file_name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Skip excluded files
             if excluded_files.contains(&file_name) {
@@ -178,12 +210,14 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
 
     // First pass: create all nodes and identify root nodes
     for (path, is_dir) in &entries {
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
 
-        let relative_path = path.strip_prefix(root_path)
+        let relative_path = path
+            .strip_prefix(root_path)
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();
@@ -224,23 +258,19 @@ fn build_file_tree(root_path: &std::path::Path) -> Result<Vec<FileNode>, Box<dyn
     }
 
     // Sort nodes: directories first, then alphabetically
-    root_nodes.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    root_nodes.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     // Sort children recursively
     fn sort_children(node: &mut FileNode) {
         if let Some(ref mut children) = node.children {
-            children.sort_by(|a, b| {
-                match (a.is_dir, b.is_dir) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                }
+            children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
             });
             for child in children.iter_mut() {
                 sort_children(child);

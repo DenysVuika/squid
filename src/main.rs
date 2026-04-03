@@ -212,7 +212,10 @@ async fn main() {
             "debug" => log::LevelFilter::Debug,
             "trace" => log::LevelFilter::Trace,
             _ => {
-                eprintln!("Invalid db_log_level '{}', defaulting to 'debug'", app_config.db_log_level);
+                eprintln!(
+                    "Invalid db_log_level '{}', defaulting to 'debug'",
+                    app_config.db_log_level
+                );
                 log::LevelFilter::Debug
             }
         };
@@ -250,13 +253,15 @@ async fn main() {
             }
             llm::run_ask_command(
                 question,
-                message.as_deref(),
-                *no_stream,
-                file.as_deref(),
-                prompt.as_deref(),
-                agent.as_deref(),
-                *rag,
-                *no_rag,
+                llm::AskCommandOptions {
+                    message: message.as_deref(),
+                    no_stream: *no_stream,
+                    file: file.as_deref(),
+                    prompt: prompt.as_deref(),
+                    agent: agent.as_deref(),
+                    rag_flag: *rag,
+                    no_rag_flag: *no_rag,
+                },
                 &app_config,
             )
             .await;
@@ -313,9 +318,10 @@ async fn main() {
                             } else {
                                 println!("\n{} log entries:\n", logs.len());
                                 for log in logs {
-                                    let timestamp = chrono::DateTime::from_timestamp(log.timestamp, 0)
-                                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                        .unwrap_or_else(|| "unknown".to_string());
+                                    let timestamp =
+                                        chrono::DateTime::from_timestamp(log.timestamp, 0)
+                                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                            .unwrap_or_else(|| "unknown".to_string());
 
                                     let session_info = log
                                         .session_id
@@ -324,7 +330,11 @@ async fn main() {
 
                                     println!(
                                         "[{}] {} {}{}: {}",
-                                        timestamp, log.level.to_uppercase(), log.target, session_info, log.message
+                                        timestamp,
+                                        log.level.to_uppercase(),
+                                        log.target,
+                                        session_info,
+                                        log.message
                                     );
                                 }
                             }
@@ -386,7 +396,9 @@ async fn main() {
 
             if !rag_config.enabled {
                 println!("🦑: RAG is disabled in configuration");
-                println!("    Set 'rag.enabled = true' in squid.config.json to enable RAG features");
+                println!(
+                    "    Set 'rag.enabled = true' in squid.config.json to enable RAG features"
+                );
                 return;
             }
 
@@ -406,7 +418,10 @@ async fn main() {
                         .unwrap_or_else(|| PathBuf::from(&rag_config.documents_path));
 
                     if !documents_path.exists() {
-                        println!("🦑: Documents directory not found: {}", documents_path.display());
+                        println!(
+                            "🦑: Documents directory not found: {}",
+                            documents_path.display()
+                        );
                         println!("    Create the directory and add documents to index");
                         return;
                     }
@@ -421,8 +436,14 @@ async fn main() {
                             println!("✗ Embedding service connection failed:");
                             println!("    {}", e);
                             println!("\nTroubleshooting:");
-                            println!("  1. Check if embedding service is running at: {}", rag_config.embedding_url);
-                            println!("  2. Verify the embedding model '{}' is loaded", rag_config.embedding_model);
+                            println!(
+                                "  1. Check if embedding service is running at: {}",
+                                rag_config.embedding_url
+                            );
+                            println!(
+                                "  2. Verify the embedding model '{}' is loaded",
+                                rag_config.embedding_model
+                            );
                             println!("  3. For Ollama: run 'ollama pull nomic-embed-text'");
                             println!("  4. For LM Studio: ensure an embedding model is loaded");
                             println!("\nUpdate config with: squid init");
@@ -430,7 +451,10 @@ async fn main() {
                         }
                     }
 
-                    println!("🦑: Scanning documents directory: {}", documents_path.display());
+                    println!(
+                        "🦑: Scanning documents directory: {}",
+                        documents_path.display()
+                    );
 
                     let pb = indicatif::ProgressBar::new_spinner();
                     pb.set_message("Indexing documents...");
@@ -455,39 +479,40 @@ async fn main() {
                         }
                     }
                 }
-                RagCommands::List => {
-                    match rag_system.indexer.list_documents() {
-                        Ok(docs) => {
-                            if docs.is_empty() {
-                                println!("🦑: No documents indexed");
-                                println!("    Run 'squid rag init' to index documents");
-                            } else {
-                                println!("🦑: Indexed documents:\n");
-                                for doc in &docs {
-                                    let updated = chrono::DateTime::from_timestamp(doc.updated_at, 0)
-                                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                        .unwrap_or_else(|| "unknown".to_string());
-                                    println!(
-                                        "  {} ({} bytes, updated: {})",
-                                        doc.filename, doc.file_size, updated
-                                    );
-                                }
-                                println!("\nTotal: {} documents", docs.len());
+                RagCommands::List => match rag_system.indexer.list_documents() {
+                    Ok(docs) => {
+                        if docs.is_empty() {
+                            println!("🦑: No documents indexed");
+                            println!("    Run 'squid rag init' to index documents");
+                        } else {
+                            println!("🦑: Indexed documents:\n");
+                            for doc in &docs {
+                                let updated = chrono::DateTime::from_timestamp(doc.updated_at, 0)
+                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                    .unwrap_or_else(|| "unknown".to_string());
+                                println!(
+                                    "  {} ({} bytes, updated: {})",
+                                    doc.filename, doc.file_size, updated
+                                );
                             }
-                        }
-                        Err(e) => {
-                            error!("Failed to list documents: {}", e);
-                            println!("🦑: Failed to list documents - {}", e);
+                            println!("\nTotal: {} documents", docs.len());
                         }
                     }
-                }
+                    Err(e) => {
+                        error!("Failed to list documents: {}", e);
+                        println!("🦑: Failed to list documents - {}", e);
+                    }
+                },
                 RagCommands::Rebuild { dir } => {
                     let documents_path = dir
                         .clone()
                         .unwrap_or_else(|| PathBuf::from(&rag_config.documents_path));
 
                     if !documents_path.exists() {
-                        println!("🦑: Documents directory not found: {}", documents_path.display());
+                        println!(
+                            "🦑: Documents directory not found: {}",
+                            documents_path.display()
+                        );
                         return;
                     }
 
@@ -516,24 +541,22 @@ async fn main() {
                         }
                     }
                 }
-                RagCommands::Stats => {
-                    match rag_system.indexer.get_stats() {
-                        Ok((doc_count, chunk_count, embedding_count)) => {
-                            println!("🦑: RAG Statistics:\n");
-                            println!("  Documents: {}", doc_count);
-                            println!("  Chunks: {}", chunk_count);
-                            println!("  Embeddings: {}", embedding_count);
-                            if doc_count > 0 {
-                                let avg_chunks = chunk_count as f64 / doc_count as f64;
-                                println!("  Average chunks per document: {:.1}", avg_chunks);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to get stats: {}", e);
-                            println!("🦑: Failed to get statistics - {}", e);
+                RagCommands::Stats => match rag_system.indexer.get_stats() {
+                    Ok((doc_count, chunk_count, embedding_count)) => {
+                        println!("🦑: RAG Statistics:\n");
+                        println!("  Documents: {}", doc_count);
+                        println!("  Chunks: {}", chunk_count);
+                        println!("  Embeddings: {}", embedding_count);
+                        if doc_count > 0 {
+                            let avg_chunks = chunk_count as f64 / doc_count as f64;
+                            println!("  Average chunks per document: {:.1}", avg_chunks);
                         }
                     }
-                }
+                    Err(e) => {
+                        error!("Failed to get stats: {}", e);
+                        println!("🦑: Failed to get statistics - {}", e);
+                    }
+                },
             }
         }
     }

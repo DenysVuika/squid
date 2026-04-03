@@ -5,19 +5,19 @@ use rig::client::EmbeddingsClient;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 use tiktoken_rs::cl100k_base;
+use tokio::sync::Mutex;
 
 use crate::config::RagConfig;
 use crate::db::Database;
 
 /// Supported document file extensions for RAG indexing
 const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "md", "txt", "rs", "py", "js", "ts", "jsx", "tsx", "java", "c", "cpp", "h", "hpp", "go",
-    "rb", "php", "sh", "bash", "yml", "yaml", "json", "toml", "xml", "html", "css", "scss",
+    "md", "txt", "rs", "py", "js", "ts", "jsx", "tsx", "java", "c", "cpp", "h", "hpp", "go", "rb",
+    "php", "sh", "bash", "yml", "yaml", "json", "toml", "xml", "html", "css", "scss",
 ];
 
 /// RAG embedder using Rig with OpenAI-compatible API
@@ -68,7 +68,9 @@ impl RagEmbedder {
         debug!("Generating embedding using model: {}", self.model);
         debug!("Text length: {} characters", text.len());
 
-        let embeddings = match self.client.embeddings(&self.model)
+        let embeddings = match self
+            .client
+            .embeddings(&self.model)
             .document(text)
             .context("Failed to create embedding document")?
             .build()
@@ -91,7 +93,9 @@ impl RagEmbedder {
 
         if let Some((_, embedding)) = embeddings.first() {
             // Get the first embedding from OneOrMany
-            let emb = embedding.iter().next()
+            let emb = embedding
+                .iter()
+                .next()
                 .context("No embeddings in response")?;
             Ok(emb.vec.iter().map(|&x| x as f32).collect())
         } else {
@@ -166,8 +170,7 @@ impl DocumentManager {
     /// to avoid UTF-8 decoding issues when token boundaries don't align with
     /// character boundaries.
     pub fn chunk_text(&self, text: &str) -> Result<Vec<DocumentChunk>> {
-        let bpe = cl100k_base()
-            .context("Failed to load tokenizer")?;
+        let bpe = cl100k_base().context("Failed to load tokenizer")?;
 
         // Get total token count for the entire text
         let total_tokens = bpe.encode_ordinary(text).len();
@@ -337,7 +340,9 @@ impl RagQuery {
     pub async fn execute(&self, query: &str) -> Result<String> {
         let query_embedding = self.embedder.embed_text(query).await?;
 
-        let results = self.vector_store.query_similar(&query_embedding, self.top_k)?;
+        let results = self
+            .vector_store
+            .query_similar(&query_embedding, self.top_k)?;
 
         if results.is_empty() {
             return Ok(String::new());
@@ -361,7 +366,8 @@ impl RagQuery {
     /// Execute query and return structured results
     pub async fn execute_structured(&self, query: &str) -> Result<Vec<SearchResult>> {
         let query_embedding = self.embedder.embed_text(query).await?;
-        self.vector_store.query_similar(&query_embedding, self.top_k)
+        self.vector_store
+            .query_similar(&query_embedding, self.top_k)
     }
 }
 
@@ -595,7 +601,11 @@ impl RagIndexer {
                 chunk.tokens as i32,
             )?;
 
-            debug!("Generating embedding for chunk {} (length: {} chars)", chunk.index, chunk.text.len());
+            debug!(
+                "Generating embedding for chunk {} (length: {} chars)",
+                chunk.index,
+                chunk.text.len()
+            );
             let embedding = self
                 .embedder
                 .embed_text(&chunk.text)
@@ -603,7 +613,10 @@ impl RagIndexer {
                 .with_context(|| {
                     error!("Embedding generation failed for chunk {}", chunk.index);
                     error!("  Embedding URL: {}", self.embedding_url);
-                    error!("  Chunk text preview: {}...", &chunk.text.chars().take(100).collect::<String>());
+                    error!(
+                        "  Chunk text preview: {}...",
+                        &chunk.text.chars().take(100).collect::<String>()
+                    );
                     format!(
                         "Failed to generate embedding for chunk {} (embedding service: {})",
                         chunk.index, self.embedding_url
@@ -631,9 +644,7 @@ impl RagIndexer {
 
     /// Get RAG statistics
     pub fn get_stats(&self) -> Result<(i64, i64, i64)> {
-        self.db
-            .get_rag_stats()
-            .context("Failed to get RAG stats")
+        self.db.get_rag_stats().context("Failed to get RAG stats")
     }
 
     /// List all indexed documents
@@ -645,13 +656,15 @@ impl RagIndexer {
 
         Ok(docs
             .into_iter()
-            .map(|(id, filename, file_size, created_at, updated_at)| DocumentInfo {
-                id,
-                filename,
-                file_size,
-                created_at,
-                updated_at,
-            })
+            .map(
+                |(id, filename, file_size, created_at, updated_at)| DocumentInfo {
+                    id,
+                    filename,
+                    file_size,
+                    created_at,
+                    updated_at,
+                },
+            )
             .collect())
     }
 
@@ -781,8 +794,15 @@ mod tests {
     fn test_document_manager_empty_text() {
         let manager = DocumentManager::new(512, 50);
         let result = manager.chunk_text("");
-        assert!(result.is_ok(), "Empty text should return Ok with empty vector");
-        assert_eq!(result.unwrap().len(), 0, "Empty text should produce no chunks");
+        assert!(
+            result.is_ok(),
+            "Empty text should return Ok with empty vector"
+        );
+        assert_eq!(
+            result.unwrap().len(),
+            0,
+            "Empty text should produce no chunks"
+        );
     }
 
     #[test]
@@ -828,7 +848,10 @@ mod tests {
         let hash3 = manager.calculate_content_hash("different content");
 
         assert_eq!(hash1, hash2, "Same content should produce same hash");
-        assert_ne!(hash1, hash3, "Different content should produce different hash");
+        assert_ne!(
+            hash1, hash3,
+            "Different content should produce different hash"
+        );
 
         // Test empty content
         let hash_empty = manager.calculate_content_hash("");
@@ -905,7 +928,10 @@ mod tests {
 
         let embedding = result.unwrap();
         assert!(!embedding.is_empty(), "Embedding should not be empty");
-        assert!(embedding.len() > 100, "Embedding should have reasonable size");
+        assert!(
+            embedding.len() > 100,
+            "Embedding should have reasonable size"
+        );
 
         // Verify all values are finite
         for &value in &embedding {
@@ -927,12 +953,21 @@ mod tests {
 
         // Embeddings should be very similar (cosine similarity should be high)
         let similarity = cosine_similarity(&embedding1, &embedding2);
-        assert!(similarity > 0.99, "Same text should produce nearly identical embeddings");
+        assert!(
+            similarity > 0.99,
+            "Same text should produce nearly identical embeddings"
+        );
 
         // Different text should produce different embeddings
-        let embedding3 = embedder.embed_text("Completely different content").await.unwrap();
+        let embedding3 = embedder
+            .embed_text("Completely different content")
+            .await
+            .unwrap();
         let similarity2 = cosine_similarity(&embedding1, &embedding3);
-        assert!(similarity2 < 0.95, "Different text should produce different embeddings");
+        assert!(
+            similarity2 < 0.95,
+            "Different text should produce different embeddings"
+        );
     }
 
     #[tokio::test]
@@ -1037,7 +1072,10 @@ mod tests {
         let chunks = manager.chunk_text(&text).unwrap();
 
         for chunk in chunks {
-            assert!(chunk.tokens > 0, "All chunks should have positive token count");
+            assert!(
+                chunk.tokens > 0,
+                "All chunks should have positive token count"
+            );
         }
     }
 

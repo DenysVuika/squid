@@ -1,5 +1,5 @@
 //! Plugin system for extending squid with JavaScript-based tools
-//! 
+//!
 //! This module provides a QuickJS-based plugin system that allows users to create
 //! custom tools that can be invoked by the LLM alongside built-in tools.
 
@@ -32,14 +32,14 @@ pub fn initialize(config: Arc<Config>) -> Result<(), Box<dyn std::error::Error>>
         debug!("Plugin system is disabled in config");
         return Ok(());
     }
-    
+
     let manager = PluginManager::new(config);
     manager.initialize()?;
-    
-    PLUGIN_MANAGER.set(Arc::new(manager)).map_err(|_| {
-        "Plugin manager already initialized"
-    })?;
-    
+
+    PLUGIN_MANAGER
+        .set(Arc::new(manager))
+        .map_err(|_| "Plugin manager already initialized")?;
+
     Ok(())
 }
 

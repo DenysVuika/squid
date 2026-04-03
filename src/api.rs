@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, Error};
+use actix_web::{Error, HttpResponse, web};
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -11,13 +11,13 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, info, trace, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
 use std::time::Instant;
+use tokio::sync::{Mutex, oneshot};
 
 use crate::{config, llm, logger, session, template, tokens, tools};
 
@@ -41,7 +41,9 @@ fn get_tool_description(tool_name: &str) -> String {
         "write_file" => "Write content to a file on the filesystem".to_string(),
         "grep" => "Search for a pattern in files using regex".to_string(),
         "bash" => "Execute a bash command (safe, read-only commands only)".to_string(),
-        "demo_tool" => "A demo tool for testing the approval workflow (safe, read-only)".to_string(),
+        "demo_tool" => {
+            "A demo tool for testing the approval workflow (safe, read-only)".to_string()
+        }
         _ => format!("Execute tool: {}", tool_name),
     }
 }
@@ -104,10 +106,7 @@ pub enum StreamEvent {
         tool_description: String,
     },
     #[serde(rename = "tool_approval_response")]
-    ToolApprovalResponse {
-        approval_id: String,
-        approved: bool,
-    },
+    ToolApprovalResponse { approval_id: String, approved: bool },
     #[serde(rename = "tool_invocation_completed")]
     ToolInvocationCompleted {
         name: String,
@@ -220,25 +219,28 @@ pub async fn get_session(
     session_id: web::Path<String>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    trace!("Getting session: {}", session_id);
-
     match session_manager.get_session(&session_id) {
         Some(session) => {
             let response = SessionResponse {
                 session_id: session.id,
-                messages: session.messages.iter().map(|msg| {
-                    trace!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
-                    SessionMessage {
+                messages: session
+                    .messages
+                    .iter()
+                    .map(|msg| SessionMessage {
                         role: msg.role.clone(),
                         content: msg.content.clone(),
-                        sources: msg.sources.iter().map(|s| Source {
-                            title: s.title.clone(),
-                            content: s.content.clone(),
-                        }).collect(),
+                        sources: msg
+                            .sources
+                            .iter()
+                            .map(|s| Source {
+                                title: s.title.clone(),
+                                content: s.content.clone(),
+                            })
+                            .collect(),
                         timestamp: msg.timestamp,
                         thinking_steps: msg.thinking_steps.clone(),
-                    }
-                }).collect(),
+                    })
+                    .collect(),
                 created_at: session.created_at,
                 updated_at: session.updated_at,
                 title: session.title.clone(),
@@ -266,15 +268,14 @@ pub async fn get_session(
 pub async fn list_sessions(
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    trace!("Listing all sessions");
-
     let session_ids = session_manager.list_sessions();
     let mut sessions = Vec::new();
 
     for session_id in session_ids {
         if let Some(session) = session_manager.get_session(&session_id) {
             // Get preview from first user message
-            let preview = session.messages
+            let preview = session
+                .messages
                 .iter()
                 .find(|msg| msg.role == "user")
                 .map(|msg| {
@@ -320,8 +321,6 @@ pub async fn delete_session(
     session_id: web::Path<String>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Deleting session: {}", session_id);
-
     let deleted = session_manager.delete_session(&session_id);
 
     if deleted {
@@ -342,8 +341,6 @@ pub async fn update_session(
     update_request: web::Json<UpdateSessionRequest>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Updating session: {} with title: {}", session_id, update_request.title);
-
     // Validate title is not empty
     let title = update_request.title.trim();
     if title.is_empty() {
@@ -371,8 +368,6 @@ pub async fn chat_stream(
     approval_map: web::Data<ApprovalStateMap>,
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Received chat request: {:?}", body);
-
     let question = body.message.clone();
     let use_rag = body.use_rag.unwrap_or(false);
     let mut use_tools = body.use_tools.unwrap_or(false);
@@ -388,10 +383,14 @@ pub async fn chat_stream(
         }
     }
 
-    let files: Vec<session::FileAttachment> = body.files.iter().map(|f| session::FileAttachment {
-        filename: f.filename.clone(),
-        content: f.content.clone(),
-    }).collect();
+    let files: Vec<session::FileAttachment> = body
+        .files
+        .iter()
+        .map(|f| session::FileAttachment {
+            filename: f.filename.clone(),
+            content: f.content.clone(),
+        })
+        .collect();
     let system_prompt = body.system_prompt.clone();
     let system_prompt_for_stream = system_prompt.clone(); // Clone for use inside stream
     let app_config_clone = app_config.get_ref().clone();
@@ -402,7 +401,9 @@ pub async fn chat_stream(
     // Get agent to extract model_id and context_window for token estimation and session storage
     let (model_id, context_window) = match app_config_clone.get_agent(&agent_id) {
         Some(agent) => {
-            let ctx_window = agent.context_window.unwrap_or(app_config_clone.context_window);
+            let ctx_window = agent
+                .context_window
+                .unwrap_or(app_config_clone.context_window);
             // Enforce agent-level use_tools setting: if the agent disables tools, override the client request
             if !agent.use_tools {
                 use_tools = false;
@@ -417,9 +418,10 @@ pub async fn chat_stream(
     };
 
     // Get or create session
-    let session_id = body.session_id.clone().unwrap_or_else(|| {
-        session_manager_clone.create_session()
-    });
+    let session_id = body
+        .session_id
+        .clone()
+        .unwrap_or_else(|| session_manager_clone.create_session());
 
     // Create SSE stream
     let stream = async_stream::stream! {
@@ -436,12 +438,9 @@ pub async fn chat_stream(
         let mut rag_sources = Vec::new();
         if use_rag {
             if let Some(rag_sys) = rag_system.as_ref() {
-                debug!("🔍 RAG enabled - querying for context: {}", question);
                 match rag_sys.query.execute_structured(&question).await {
                     Ok(results) => {
-                        debug!("✅ RAG returned {} results", results.len());
                         for result in results.iter() {
-                            debug!("  📄 {} (relevance: {:.3})", result.filename, 1.0 - result.distance.min(1.0));
                             rag_sources.push(Source {
                                 title: result.filename.clone(),
                                 content: result.chunk_text.clone(),
@@ -691,22 +690,17 @@ pub async fn chat_stream(
                 }));
 
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
-                    trace!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
-                        session_id, final_content_trimmed.len(),
-                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
-                        sources.len(), rag_sources.len(), all_sources.len());
-
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
                         all_sources,
                         thinking_steps_opt,
                     ) {
-                        Ok(_) => trace!("Assistant message saved successfully"),
+                        Ok(_) => {},
                         Err(e) => debug!("Failed to save assistant message: {}", e),
                     }
                 } else {
-                    trace!("Skipping empty assistant message for session {}", session_id);
+                    // Skip empty messages
                 }
 
                 // If provider didn't send usage stats, estimate them client-side
@@ -759,11 +753,6 @@ pub async fn chat_stream(
                             total_output_tokens = tokens::estimate_message_tokens(&model_id, accumulated_content.as_str());
                         }
 
-                        debug!(
-                            "Estimated tokens for session {}: input={}, output={}",
-                            session_id, total_input_tokens, total_output_tokens
-                        );
-
                         // Send estimated usage to UI
                         let usage_event = StreamEvent::Usage {
                             input_tokens: total_input_tokens,
@@ -779,20 +768,20 @@ pub async fn chat_stream(
                 }
 
                 // Update session with token usage and model info
-                if total_input_tokens > 0 || total_output_tokens > 0 {
-                    trace!("Updating session {} with token usage: input={}, output={}",
-                           session_id, total_input_tokens, total_output_tokens);
-                    if let Err(e) = session_manager_clone.update_token_usage(
+                if (total_input_tokens > 0 || total_output_tokens > 0)
+                    && let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
                         &agent_id_for_stream,
-                        total_input_tokens,
-                        total_output_tokens,
-                        total_reasoning_tokens,
-                        total_cache_tokens,
-                        context_window,
-                    ) {
-                        debug!("Failed to update token usage: {}", e);
-                    }
+                        crate::session::TokenUsageUpdate {
+                            input_tokens: total_input_tokens,
+                            output_tokens: total_output_tokens,
+                            reasoning_tokens: total_reasoning_tokens,
+                            cache_tokens: total_cache_tokens,
+                            context_window,
+                        },
+                    )
+                {
+                    debug!("Failed to update token usage: {}", e);
                 }
 
                 // Send done event
@@ -889,20 +878,20 @@ async fn create_chat_stream(
 
     let default_prompt = llm::combine_prompts(llm::get_ask_prompt());
     // Use agent's prompt if available, then system_prompt parameter, then default
-    let final_system_prompt = agent.prompt.as_deref()
+    let final_system_prompt = agent
+        .prompt
+        .as_deref()
         .or(system_prompt)
         .unwrap_or(&default_prompt);
 
     // Render template variables in system message
     let renderer = template::TemplateRenderer::new();
-    let system_message = renderer.render_string(final_system_prompt)
+    let system_message = renderer
+        .render_string(final_system_prompt)
         .unwrap_or_else(|e| {
             warn!("Failed to render system prompt template: {}", e);
             final_system_prompt.to_string()
         });
-
-    trace!("System message:\n{}", system_message);
-    trace!("User message:\n{}", user_message);
 
     // Get conversation history from session
     let session = session_manager
@@ -937,13 +926,15 @@ async fn create_chat_stream(
         } else if msg.role == "assistant" {
             // Check if this message has tool invocations in thinking steps
             if let Some(thinking_steps) = &msg.thinking_steps {
-                let tool_steps: Vec<_> = thinking_steps.iter()
+                let tool_steps: Vec<_> = thinking_steps
+                    .iter()
                     .filter(|s| s.step_type == "tool")
                     .collect();
 
                 if !tool_steps.is_empty() {
                     // Reconstruct tool calls from thinking steps
-                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps.iter()
+                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps
+                        .iter()
                         .enumerate()
                         .map(|(idx, step)| {
                             let mut tool_call = ChatCompletionMessageToolCall {
@@ -951,7 +942,8 @@ async fn create_chat_stream(
                                 function: Default::default(),
                             };
                             tool_call.function.name = step.tool_name.clone().unwrap_or_default();
-                            tool_call.function.arguments = serde_json::to_string(&step.tool_arguments).unwrap_or_default();
+                            tool_call.function.arguments =
+                                serde_json::to_string(&step.tool_arguments).unwrap_or_default();
                             ChatCompletionMessageToolCalls::Function(tool_call)
                         })
                         .collect();
@@ -959,10 +951,6 @@ async fn create_chat_stream(
                     // Add assistant message with tool calls
                     // Strip reasoning blocks when sending back to model
                     let filtered_content = llm::strip_reasoning_blocks(&msg.content);
-                    if filtered_content.len() != msg.content.len() {
-                        trace!("Filtered reasoning from assistant message: {} chars -> {} chars",
-                               msg.content.len(), filtered_content.len());
-                    }
                     messages.push(
                         ChatCompletionRequestAssistantMessage {
                             content: if filtered_content.is_empty() {
@@ -1222,8 +1210,6 @@ async fn create_chat_stream(
                                         // Generate unique approval ID
                                         let approval_id = Uuid::new_v4().to_string();
 
-                                        info!("Tool '{}' needs approval, generated approval_id: {}", name, approval_id);
-
                                         // Create oneshot channel for approval response
                                         let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
 
@@ -1248,23 +1234,20 @@ async fn create_chat_stream(
                                             tool_description: get_tool_description(name),
                                         });
 
-                                        info!("Emitted ToolApprovalRequest event for approval_id: {}", approval_id);
-
                                         // Wait for approval with 5 minute timeout
                                         let approved = match tokio::time::timeout(
                                             Duration::from_secs(300),
                                             receiver
                                         ).await {
                                             Ok(Ok(decision)) => {
-                                                info!("Tool '{}' approval received: {}", name, decision);
                                                 decision
                                             }
                                             Ok(Err(_)) => {
-                                                warn!("Tool '{}' approval channel closed without response", name);
+                                                warn!("Tool approval channel closed without response");
                                                 false
                                             }
                                             Err(_) => {
-                                                warn!("Tool '{}' approval timed out after 5 minutes", name);
+                                                warn!("Tool approval timed out after 5 minutes");
                                                 false
                                             }
                                         };
@@ -1399,8 +1382,6 @@ pub async fn get_logs(
     }))
 }
 
-
-
 #[derive(Debug, Serialize)]
 pub struct ConfigResponse {
     pub api_url: String,
@@ -1409,9 +1390,7 @@ pub struct ConfigResponse {
 }
 
 /// Get API configuration (default model, etc.)
-pub async fn get_config(
-    app_config: web::Data<Arc<config::Config>>,
-) -> Result<HttpResponse, Error> {
+pub async fn get_config(app_config: web::Data<Arc<config::Config>>) -> Result<HttpResponse, Error> {
     debug!("Fetching API configuration");
 
     let response = ConfigResponse {
@@ -1446,9 +1425,7 @@ pub struct AgentsResponse {
     pub default_agent: String,
 }
 
-pub async fn get_agents(
-    app_config: web::Data<Arc<config::Config>>,
-) -> Result<HttpResponse, Error> {
+pub async fn get_agents(app_config: web::Data<Arc<config::Config>>) -> Result<HttpResponse, Error> {
     debug!("Fetching agents configuration");
 
     let agents: Vec<AgentInfo> = app_config
@@ -1497,18 +1474,18 @@ pub async fn handle_tool_approval(
     body: web::Json<ToolApprovalRequest>,
     approval_map: web::Data<ApprovalStateMap>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Received tool approval: {:?}", body);
-
     // Find the pending approval
     let mut approvals = approval_map.lock().await;
 
     if let Some(approval_state) = approvals.remove(&body.approval_id) {
         // Send the approval decision through the channel
         if approval_state.sender.send(body.approved).is_err() {
-            return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
-                success: false,
-                message: "Failed to send approval response".to_string(),
-            }));
+            return Ok(
+                HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                    success: false,
+                    message: "Failed to send approval response".to_string(),
+                }),
+            );
         }
 
         // If save_decision is true, update the config file
@@ -1529,10 +1506,12 @@ pub async fn handle_tool_approval(
             };
 
             if let Err(e) = result {
-                return Ok(HttpResponse::InternalServerError().json(ToolApprovalResponse {
-                    success: false,
-                    message: format!("Approval processed but failed to save to config: {}", e),
-                }));
+                return Ok(
+                    HttpResponse::InternalServerError().json(ToolApprovalResponse {
+                        success: false,
+                        message: format!("Approval processed but failed to save to config: {}", e),
+                    }),
+                );
             }
         }
 
@@ -1606,8 +1585,6 @@ pub async fn rag_query(
     body: web::Json<RagQueryRequest>,
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("RAG query request: {}", body.query);
-
     let Some(rag_system) = rag_system.as_ref() else {
         return Ok(HttpResponse::ServiceUnavailable().json(json!({
             "error": "RAG system is not enabled"
@@ -1687,7 +1664,6 @@ pub async fn rag_delete_document(
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
     let filename = path.into_inner();
-    debug!("Deleting RAG document: {}", filename);
 
     let Some(rag_system) = rag_system.as_ref() else {
         return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
@@ -1697,12 +1673,10 @@ pub async fn rag_delete_document(
     };
 
     match rag_system.indexer.remove_document(&filename) {
-        Ok(_) => {
-            Ok(HttpResponse::Ok().json(RagResponse {
-                success: true,
-                message: format!("Document {} deleted successfully", filename),
-            }))
-        }
+        Ok(_) => Ok(HttpResponse::Ok().json(RagResponse {
+            success: true,
+            message: format!("Document {} deleted successfully", filename),
+        })),
         Err(e) => {
             warn!("Failed to delete document: {}", e);
             Ok(HttpResponse::InternalServerError().json(RagResponse {
@@ -1761,8 +1735,6 @@ pub async fn rag_upload_document(
     rag_system: web::Data<Option<Arc<RagSystem>>>,
     app_config: web::Data<Arc<config::Config>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Uploading document: {}", body.filename);
-
     if rag_system.as_ref().is_none() {
         return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
             success: false,
@@ -1796,6 +1768,9 @@ pub async fn rag_upload_document(
     // File will be automatically indexed by the document watcher
     Ok(HttpResponse::Ok().json(RagResponse {
         success: true,
-        message: format!("Document {} uploaded successfully. Indexing in progress...", body.filename),
+        message: format!(
+            "Document {} uploaded successfully. Indexing in progress...",
+            body.filename
+        ),
     }))
 }

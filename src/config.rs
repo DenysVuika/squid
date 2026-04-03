@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -146,7 +146,6 @@ impl Default for ServerConfig {
     }
 }
 
-
 /// Configuration for squid CLI
 ///
 /// This configuration is typically stored in `squid.config.json` in the project directory.
@@ -244,7 +243,8 @@ impl Config {
     /// Load configuration from squid.config.json if it exists, otherwise from environment variables
     pub fn load() -> Self {
         // Search for config file in current directory and parent directories
-        let config_path = Self::find_config_file().unwrap_or_else(|| PathBuf::from("squid.config.json"));
+        let config_path =
+            Self::find_config_file().unwrap_or_else(|| PathBuf::from("squid.config.json"));
 
         let mut config = if config_path.exists() {
             debug!("Loading configuration from squid.config.json");
@@ -498,10 +498,17 @@ impl Config {
     }
 
     /// Add a tool to an agent's allow list and save config
-    pub fn allow_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn allow_tool_for_agent(
+        &mut self,
+        agent_id: &str,
+        tool_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
 
-        let agent = self.agents.agents.get_mut(agent_id)
+        let agent = self
+            .agents
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
         // Remove from deny list if present
@@ -517,10 +524,17 @@ impl Config {
     }
 
     /// Add a tool to an agent's deny list and save config
-    pub fn deny_tool_for_agent(&mut self, agent_id: &str, tool_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn deny_tool_for_agent(
+        &mut self,
+        agent_id: &str,
+        tool_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let tool_str = tool_name.to_string();
 
-        let agent = self.agents.agents.get_mut(agent_id)
+        let agent = self
+            .agents
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
         // Remove from allow list if present
@@ -551,7 +565,10 @@ mod tests {
         assert_eq!(config.database_path, "squid.db");
         assert_eq!(config.working_dir, "./workspace");
         assert_eq!(config.rag.enabled, true);
-        assert_eq!(config.rag.embedding_model, "text-embedding-nomic-embed-text-v1.5");
+        assert_eq!(
+            config.rag.embedding_model,
+            "text-embedding-nomic-embed-text-v1.5"
+        );
         assert_eq!(config.rag.chunk_size, 512);
     }
 

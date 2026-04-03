@@ -73,6 +73,16 @@ pub struct TokenUsage {
     pub context_utilization: f64,
 }
 
+/// Parameters for updating token usage
+#[derive(Debug, Clone)]
+pub struct TokenUsageUpdate {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+    pub context_window: u32,
+}
+
 impl TokenUsage {
     /// Calculate context utilization percentage (0.0 to 1.0)
     pub fn update_utilization(&mut self) {
@@ -129,11 +139,10 @@ impl ChatSession {
         self.token_usage.output_tokens += output;
         self.token_usage.reasoning_tokens += reasoning;
         self.token_usage.cache_tokens += cache;
-        self.token_usage.total_tokens =
-            self.token_usage.input_tokens +
-            self.token_usage.output_tokens +
-            self.token_usage.reasoning_tokens +
-            self.token_usage.cache_tokens;
+        self.token_usage.total_tokens = self.token_usage.input_tokens
+            + self.token_usage.output_tokens
+            + self.token_usage.reasoning_tokens
+            + self.token_usage.cache_tokens;
 
         // Update context utilization
         self.token_usage.update_utilization();
@@ -293,7 +302,8 @@ impl SessionManager {
         files: Vec<FileAttachment>,
     ) -> Result<Vec<Source>, String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Convert file attachments to sources
@@ -312,7 +322,9 @@ impl SessionManager {
         session.update_title_if_needed();
 
         // Get the last message
-        let message = session.messages.last()
+        let message = session
+            .messages
+            .last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 
         // Save message to database
@@ -359,7 +371,8 @@ impl SessionManager {
         thinking_steps: Option<Vec<ThinkingStep>>,
     ) -> Result<(), String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
@@ -370,7 +383,9 @@ impl SessionManager {
             message.thinking_steps = thinking_steps;
         }
 
-        let message = session.messages.last()
+        let message = session
+            .messages
+            .last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 
         // Save message to database
@@ -427,24 +442,26 @@ impl SessionManager {
         &self,
         session_id: &str,
         agent_id: &str,
-        input_tokens: i64,
-        output_tokens: i64,
-        reasoning_tokens: i64,
-        cache_tokens: i64,
-        context_window: u32,
+        usage: TokenUsageUpdate,
     ) -> Result<(), String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Set agent if not already set
         session.set_model(agent_id.to_string());
 
         // Set context window
-        session.set_context_window(context_window);
+        session.set_context_window(usage.context_window);
 
         // Add token usage
-        session.add_tokens(input_tokens, output_tokens, reasoning_tokens, cache_tokens);
+        session.add_tokens(
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.reasoning_tokens,
+            usage.cache_tokens,
+        );
 
         // Update session in database
         if let Err(e) = self.db.save_session(&session) {
@@ -627,15 +644,19 @@ mod tests {
 
         // Update token usage multiple times (simulates streaming updates)
         for i in 1..=5 {
-            manager.update_token_usage(
-                &session_id,
-                "test-model",
-                i * 5,
-                i * 5,
-                0,
-                0,
-                8192,
-            ).unwrap();
+            manager
+                .update_token_usage(
+                    &session_id,
+                    "test-model",
+                    TokenUsageUpdate {
+                        input_tokens: i * 5,
+                        output_tokens: i * 5,
+                        reasoning_tokens: 0,
+                        cache_tokens: 0,
+                        context_window: 8192,
+                    },
+                )
+                .unwrap();
         }
 
         // Clear cache and reload from database

@@ -1,4 +1,5 @@
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
+use chrono::Utc;
 use console::style;
 use inquire::Select;
 use log::{debug, error, info, warn};
@@ -8,7 +9,6 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::time::timeout;
 use walkdir::WalkDir;
-use chrono::Utc;
 
 use crate::config::Config;
 use crate::validate::PathValidator;
@@ -131,12 +131,12 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
                 .expect("Failed to build demo_tool function"),
         }),
     ];
-    
+
     // Add dynamically loaded plugin tools
     if let Ok(plugin_tools) = crate::plugins::get_plugin_tools() {
         tools.extend(plugin_tools);
     }
-    
+
     tools
 }
 
@@ -382,7 +382,7 @@ pub fn check_tool_permission(
             };
         }
     };
-    
+
     // Check plugin permissions
     if name.starts_with("plugin:") {
         // Check if plugin exists
@@ -398,20 +398,21 @@ pub fn check_tool_permission(
                     };
                 }
             }
-            
+
             // Check if plugin itself is explicitly denied
             if permissions.deny.contains(&name.to_string()) {
                 return ToolPermissionStatus::Denied {
                     reason: format!("Plugin '{}' is denied by agent configuration", name),
                 };
             }
-            
+
             // Check if plugin is explicitly allowed or wildcard allowed
-            if permissions.allow.contains(&name.to_string()) 
-                || permissions.allow.contains(&"plugin:*".to_string()) {
+            if permissions.allow.contains(&name.to_string())
+                || permissions.allow.contains(&"plugin:*".to_string())
+            {
                 return ToolPermissionStatus::Allowed;
             }
-            
+
             // Otherwise needs approval
             return ToolPermissionStatus::NeedsApproval;
         } else {
@@ -442,7 +443,8 @@ pub fn check_tool_permission(
         let command_trimmed = command.trim();
         permissions.allow.iter().any(|perm| {
             if let Some(bash_cmd) = perm.strip_prefix("bash:") {
-                command_trimmed == bash_cmd || command_trimmed.starts_with(&format!("{} ", bash_cmd))
+                command_trimmed == bash_cmd
+                    || command_trimmed.starts_with(&format!("{} ", bash_cmd))
             } else {
                 false
             }
@@ -452,7 +454,10 @@ pub fn check_tool_permission(
     };
 
     if auto_allowed {
-        info!("Tool '{}' is allowed for agent '{}', auto-approving", name, agent_id);
+        info!(
+            "Tool '{}' is allowed for agent '{}', auto-approving",
+            name, agent_id
+        );
         ToolPermissionStatus::Allowed
     } else {
         ToolPermissionStatus::NeedsApproval
@@ -476,7 +481,7 @@ pub async fn execute_tool_direct(
             }
         }
     }
-    
+
     // Validate paths for file operations
     let ignore_patterns = PathValidator::load_ignore_patterns();
     let validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
@@ -532,7 +537,11 @@ pub async fn execute_tool_direct(
             let validated_path = validated_path.unwrap();
             match std::fs::read_to_string(&validated_path) {
                 Ok(content) => {
-                    info!("Successfully read file: {} ({} bytes)", validated_path.display(), content.len());
+                    info!(
+                        "Successfully read file: {} ({} bytes)",
+                        validated_path.display(),
+                        content.len()
+                    );
                     json!({"content": content})
                 }
                 Err(e) => {
@@ -546,7 +555,11 @@ pub async fn execute_tool_direct(
             let content = args["content"].as_str().unwrap_or("");
             match std::fs::write(&validated_path, content) {
                 Ok(_) => {
-                    info!("Successfully wrote file: {} ({} bytes)", validated_path.display(), content.len());
+                    info!(
+                        "Successfully wrote file: {} ({} bytes)",
+                        validated_path.display(),
+                        content.len()
+                    );
                     json!({"success": true, "message": format!("File written successfully: {}", validated_path.display())})
                 }
                 Err(e) => {
@@ -561,9 +574,19 @@ pub async fn execute_tool_direct(
             let case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
             let max_results = args["max_results"].as_i64().unwrap_or(50) as usize;
 
-            match execute_grep(pattern, validated_path.to_str().unwrap_or(""), case_sensitive, max_results) {
+            match execute_grep(
+                pattern,
+                validated_path.to_str().unwrap_or(""),
+                case_sensitive,
+                max_results,
+            ) {
                 Ok(results) => {
-                    info!("Grep found {} results for pattern '{}' in {}", results.len(), pattern, validated_path.display());
+                    info!(
+                        "Grep found {} results for pattern '{}' in {}",
+                        results.len(),
+                        pattern,
+                        validated_path.display()
+                    );
                     if results.is_empty() {
                         json!({"message": format!("No matches found for pattern '{}' in {}", pattern, validated_path.display())})
                     } else {
@@ -578,13 +601,23 @@ pub async fn execute_tool_direct(
                             let file = result["file"].as_str().unwrap_or("?");
                             let line = result["line"].as_i64().unwrap_or(0);
                             let content = result["content"].as_str().unwrap_or("");
-                            formatted_results.push_str(&format!("  - {}:{} — {}\n", file, line, content.trim()));
+                            formatted_results.push_str(&format!(
+                                "  - {}:{} — {}\n",
+                                file,
+                                line,
+                                content.trim()
+                            ));
                         }
                         json!({"content": formatted_results})
                     }
                 }
                 Err(e) => {
-                    warn!("Grep failed for pattern '{}' in {}: {}", pattern, validated_path.display(), e);
+                    warn!(
+                        "Grep failed for pattern '{}' in {}: {}",
+                        pattern,
+                        validated_path.display(),
+                        e
+                    );
                     json!({"error": format!("Grep failed: {}", e)})
                 }
             }
@@ -606,7 +639,10 @@ pub async fn execute_tool_direct(
         "demo_tool" => {
             let message = args["message"].as_str().unwrap_or("No message provided");
             let delay = args["delay_seconds"].as_u64().unwrap_or(0);
-            info!("Demo tool called with message: '{}', delay: {}s", message, delay);
+            info!(
+                "Demo tool called with message: '{}', delay: {}s",
+                message, delay
+            );
             if delay > 0 {
                 tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
             }
@@ -625,7 +661,12 @@ pub async fn execute_tool_direct(
     }
 }
 
-pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &Config) -> serde_json::Value {
+pub async fn call_tool(
+    name: &str,
+    args: &str,
+    agent_id: Option<&str>,
+    config: &Config,
+) -> serde_json::Value {
     info!("Tool call: {} with args: {}", name, args);
 
     // Parse arguments first to get command for bash tool
@@ -636,7 +677,7 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
             return json!({"error": format!("Invalid arguments: {}", e)});
         }
     };
-    
+
     // Check if this is a plugin tool
     if crate::plugins::is_plugin_tool(name) {
         // Plugin tools are executed directly without CLI approval prompts
@@ -812,10 +853,15 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to allow list for agent '{}'", tool_to_save, agent_id_str);
+                        info!(
+                            "Adding '{}' to allow list for agent '{}'",
+                            tool_to_save, agent_id_str
+                        );
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.allow_tool_for_agent(agent_id_str, &tool_to_save) {
+                        if let Err(e) =
+                            updated_config.allow_tool_for_agent(agent_id_str, &tool_to_save)
+                        {
                             error!("Failed to update config with allow list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
@@ -850,10 +896,15 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
                             name.to_string()
                         };
 
-                        info!("Adding '{}' to deny list for agent '{}'", tool_to_save, agent_id_str);
+                        info!(
+                            "Adding '{}' to deny list for agent '{}'",
+                            tool_to_save, agent_id_str
+                        );
                         // Load current config, modify it, and save
                         let mut updated_config = Config::load();
-                        if let Err(e) = updated_config.deny_tool_for_agent(agent_id_str, &tool_to_save) {
+                        if let Err(e) =
+                            updated_config.deny_tool_for_agent(agent_id_str, &tool_to_save)
+                        {
                             error!("Failed to update config with deny list: {}", e);
                             eprintln!("{} Failed to save permission: {}", style("✗").red(), e);
                         } else {
@@ -1005,7 +1056,10 @@ pub async fn call_tool(name: &str, args: &str, agent_id: Option<&str>, config: &
                     let message = args["message"].as_str().unwrap_or("No message provided");
                     let delay = args["delay_seconds"].as_u64().unwrap_or(0);
 
-                    info!("Demo tool called with message: '{}', delay: {}s", message, delay);
+                    info!(
+                        "Demo tool called with message: '{}', delay: {}s",
+                        message, delay
+                    );
 
                     // Optional delay to simulate work
                     if delay > 0 {

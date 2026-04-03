@@ -41,6 +41,29 @@ const CODE_REVIEW_MAKEFILE_PROMPT: &str = include_str!("./assets/review-makefile
 const CODE_REVIEW_MARKDOWN_PROMPT: &str = include_str!("./assets/review-md.md");
 const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 
+/// Options for the ask command
+pub struct AskCommandOptions<'a> {
+    pub message: Option<&'a str>,
+    pub no_stream: bool,
+    pub file: Option<&'a Path>,
+    pub prompt: Option<&'a Path>,
+    pub agent: Option<&'a str>,
+    pub rag_flag: bool,
+    pub no_rag_flag: bool,
+}
+
+/// Parameters for LLM query functions
+pub struct LlmQueryParams<'a> {
+    pub question: &'a str,
+    pub file_content: Option<&'a str>,
+    pub file_path: Option<&'a str>,
+    pub system_prompt: Option<&'a str>,
+    pub model: &'a str,
+    pub app_config: &'a config::Config,
+    pub session: Option<&'a mut ChatSession>,
+    pub db: Option<&'a db::Database>,
+}
+
 /// Combines persona and task-specific prompt into a complete system prompt
 /// Renders templates with secure context variables
 pub fn combine_prompts(task_prompt: &str) -> String {
@@ -70,11 +93,7 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
         if let Some(end) = result[start..].find("</think>") {
             let absolute_end = start + end;
             // Remove the <think>...</think> section
-            result = format!(
-                "{}{}",
-                &result[..start],
-                &result[absolute_end + 8..]
-            );
+            result = format!("{}{}", &result[..start], &result[absolute_end + 8..]);
         } else {
             // Malformed tag - no closing tag found, leave as-is
             break;
@@ -157,32 +176,26 @@ pub fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
 /// Sends a streaming request to the LLM and handles tool calls
 /// Optionally saves the conversation to a session if session_id and db are provided
 pub async fn ask_llm_streaming(
-    question: &str,
-    file_content: Option<&str>,
-    file_path: Option<&str>,
-    system_prompt: Option<&str>,
-    model: &str,
-    app_config: &config::Config,
-    session: Option<&mut ChatSession>,
-    db: Option<&db::Database>,
+    params: LlmQueryParams<'_>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using Model: {}", model);
+    debug!("Using API URL: {}", params.app_config.api_url);
+    debug!("Using Model: {}", params.model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(&app_config.api_url)
-        .with_api_key(app_config.get_api_key());
+        .with_api_base(&params.app_config.api_url)
+        .with_api_key(params.app_config.get_api_key());
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path);
+    let user_message = compose_user_message(params.question, params.file_content, params.file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = params.system_prompt.unwrap_or(&default_prompt);
 
     // Render template variables in system message
     let renderer = template::TemplateRenderer::new();
-    let system_message = renderer.render_string(system_prompt_str)
+    let system_message = renderer
+        .render_string(system_prompt_str)
         .unwrap_or_else(|e| {
             log::warn!("Failed to render system prompt template: {}", e);
             system_prompt_str.to_string()
@@ -205,7 +218,7 @@ pub async fn ask_llm_streaming(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(model)
+        .model(params.model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .stream_options(ChatCompletionStreamOptions {
@@ -232,15 +245,15 @@ pub async fn ask_llm_streaming(
     let mut lock = io::stdout().lock();
     let mut first_content = true;
     let mut spinner_active = true;
-    
+
     // Accumulate response content and thinking steps for session saving
     let mut accumulated_content = String::new();
     let mut thinking_steps: Vec<ThinkingStep> = Vec::new();
     let mut step_order = 0i32;
     let mut total_input_tokens = 0i64;
     let mut total_output_tokens = 0i64;
-    let mut total_reasoning_tokens = 0i64;
-    let mut total_cache_tokens = 0i64;
+    let total_reasoning_tokens = 0i64;
+    let total_cache_tokens = 0i64;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -283,35 +296,32 @@ pub async fn ask_llm_streaming(
                 };
                 write!(lock, "{}", content_to_write)?;
                 accumulated_content.push_str(content);
-                
+
                 // Check for <think>...</think> blocks in the content
-                loop {
-                    if let Some(think_start) = accumulated_content.find("<think>") {
-                        if let Some(think_end) = accumulated_content.find("</think>") {
-                            if think_end > think_start {
-                                let reasoning_text = accumulated_content[think_start + 7..think_end].to_string();
-                                if !reasoning_text.trim().is_empty() {
-                                    thinking_steps.push(ThinkingStep {
-                                        step_type: "reasoning".to_string(),
-                                        step_order,
-                                        content: Some(reasoning_text),
-                                        tool_name: None,
-                                        tool_arguments: None,
-                                        tool_result: None,
-                                        tool_error: None,
-                                        content_before_tool: None,
-                                    });
-                                    step_order += 1;
-                                }
-                                // Remove the <think> block from accumulated content for final display
-                                accumulated_content = format!(
-                                    "{}{}",
-                                    &accumulated_content[..think_start],
-                                    &accumulated_content[think_end + 8..]
-                                );
-                            } else {
-                                break;
+                while let Some(think_start) = accumulated_content.find("<think>") {
+                    if let Some(think_end) = accumulated_content.find("</think>") {
+                        if think_end > think_start {
+                            let reasoning_text =
+                                accumulated_content[think_start + 7..think_end].to_string();
+                            if !reasoning_text.trim().is_empty() {
+                                thinking_steps.push(ThinkingStep {
+                                    step_type: "reasoning".to_string(),
+                                    step_order,
+                                    content: Some(reasoning_text),
+                                    tool_name: None,
+                                    tool_arguments: None,
+                                    tool_result: None,
+                                    tool_error: None,
+                                    content_before_tool: None,
+                                });
+                                step_order += 1;
                             }
+                            // Remove the <think> block from accumulated content for final display
+                            accumulated_content = format!(
+                                "{}{}",
+                                &accumulated_content[..think_start],
+                                &accumulated_content[think_end + 8..]
+                            );
                         } else {
                             break;
                         }
@@ -341,7 +351,10 @@ pub async fn ask_llm_streaming(
                             tool_call.function.name = name;
                         }
                         if let Some(arguments) = function_chunk.arguments {
-                            tool_call.function.arguments.push_str(&arguments.to_string());
+                            tool_call
+                                .function
+                                .arguments
+                                .push_str(&arguments.to_string());
                         }
                     }
                 }
@@ -361,7 +374,7 @@ pub async fn ask_llm_streaming(
                     let args = tool_call.function.arguments.clone();
                     let tool_call_id = tool_call.id.clone();
 
-                    let config_clone = app_config.clone();
+                    let config_clone = params.app_config.clone();
                     let handle = tokio::spawn(async move {
                         let result: serde_json::Value =
                             tools::call_tool(&name, &args, None, &config_clone).await;
@@ -406,7 +419,7 @@ pub async fn ask_llm_streaming(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(model)
+            .model(params.model)
             .messages(messages)
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
@@ -456,109 +469,113 @@ pub async fn ask_llm_streaming(
     }
 
     writeln!(lock)?;
-    
+
     // Save to session if provided
-    if let Some(sess) = session {
-        if let Some(database) = db {
-            // Save session metadata FIRST (before messages, due to foreign key constraint)
-            if sess.title.is_none() {
-                // Generate title from first user message
-                let title = if question.len() > 100 {
-                    format!("{}...", &question[..97])
-                } else {
-                    question.to_string()
-                };
-                sess.title = Some(title);
-            }
-            
-            if let Err(e) = database.save_session(sess) {
-                debug!("Failed to save session: {}", e);
+    if let Some(sess) = params.session
+        && let Some(database) = params.db
+    {
+        // Save session metadata FIRST (before messages, due to foreign key constraint)
+        if sess.title.is_none() {
+            // Generate title from first user message
+            let title = if params.question.len() > 100 {
+                format!("{}...", &params.question[..97])
             } else {
-                debug!("Session saved successfully: {}", sess.id);
-            }
-            
-            // Save user message
-            let user_msg = crate::session::ChatMessage {
-                role: "user".to_string(),
-                content: question.to_string(),
-                sources: if let Some(path) = file_path {
-                    if let Some(content) = file_content {
-                        vec![Source {
-                            title: path.to_string(),
-                            content: content.to_string(),
-                        }]
-                    } else {
-                        vec![]
-                    }
+                params.question.to_string()
+            };
+            sess.title = Some(title);
+        }
+
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to save session: {}", e);
+        } else {
+            debug!("Session saved successfully: {}", sess.id);
+        }
+
+        // Save user message
+        let user_msg = crate::session::ChatMessage {
+            role: "user".to_string(),
+            content: params.question.to_string(),
+            sources: if let Some(path) = params.file_path {
+                if let Some(content) = params.file_content {
+                    vec![Source {
+                        title: path.to_string(),
+                        content: content.to_string(),
+                    }]
                 } else {
                     vec![]
-                },
-                timestamp: chrono::Utc::now().timestamp(),
-                thinking_steps: None,
-            };
-
-            if let Err(e) = database.save_message(&sess.id, &user_msg) {
-                debug!("Failed to save user message to session: {}", e);
+                }
             } else {
-                debug!("User message saved successfully to session {}", sess.id);
-            }
+                vec![]
+            },
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: None,
+        };
 
-            // Save assistant message
-            let thinking_steps_opt = if thinking_steps.is_empty() { None } else { Some(thinking_steps) };
-            let assistant_msg = crate::session::ChatMessage {
-                role: "assistant".to_string(),
-                content: accumulated_content.trim().to_string(),
-                sources: vec![],
-                timestamp: chrono::Utc::now().timestamp(),
-                thinking_steps: thinking_steps_opt,
-            };
+        if let Err(e) = database.save_message(&sess.id, &user_msg) {
+            debug!("Failed to save user message to session: {}", e);
+        } else {
+            debug!("User message saved successfully to session {}", sess.id);
+        }
 
-            if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-                debug!("Failed to save assistant message to session: {}", e);
-            } else {
-                debug!("Assistant message saved successfully to session {}", sess.id);
-            }
+        // Save assistant message
+        let thinking_steps_opt = if thinking_steps.is_empty() {
+            None
+        } else {
+            Some(thinking_steps)
+        };
+        let assistant_msg = crate::session::ChatMessage {
+            role: "assistant".to_string(),
+            content: accumulated_content.trim().to_string(),
+            sources: vec![],
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: thinking_steps_opt,
+        };
 
-            // Update session token usage
-            sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
-            if let Err(e) = database.save_session(sess) {
-                debug!("Failed to update session: {}", e);
-            }
+        if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+            debug!("Failed to save assistant message to session: {}", e);
+        } else {
+            debug!(
+                "Assistant message saved successfully to session {}",
+                sess.id
+            );
+        }
+
+        // Update session token usage
+        sess.add_tokens(
+            total_input_tokens,
+            total_output_tokens,
+            total_reasoning_tokens,
+            total_cache_tokens,
+        );
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to update session: {}", e);
         }
     }
-    
+
     Ok(accumulated_content.trim().to_string())
 }
 
 /// Sends a non-streaming request to the LLM and handles tool calls
 /// Optionally saves the conversation to a session if session_id and db are provided
-pub async fn ask_llm(
-    question: &str,
-    file_content: Option<&str>,
-    file_path: Option<&str>,
-    system_prompt: Option<&str>,
-    model: &str,
-    app_config: &config::Config,
-    session: Option<&mut ChatSession>,
-    db: Option<&db::Database>,
-) -> Result<String, Box<dyn std::error::Error>> {
-    debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using Model: {}", model);
+pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::error::Error>> {
+    debug!("Using API URL: {}", params.app_config.api_url);
+    debug!("Using Model: {}", params.model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(&app_config.api_url)
-        .with_api_key(app_config.get_api_key());
+        .with_api_base(&params.app_config.api_url)
+        .with_api_key(params.app_config.get_api_key());
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path);
+    let user_message = compose_user_message(params.question, params.file_content, params.file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = params.system_prompt.unwrap_or(&default_prompt);
 
     // Render template variables in system message
     let renderer = template::TemplateRenderer::new();
-    let system_message = renderer.render_string(system_prompt_str)
+    let system_message = renderer
+        .render_string(system_prompt_str)
         .unwrap_or_else(|e| {
             log::warn!("Failed to render system prompt template: {}", e);
             system_prompt_str.to_string()
@@ -581,7 +598,7 @@ pub async fn ask_llm(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(model)
+        .model(params.model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .build()?;
@@ -593,9 +610,9 @@ pub async fn ask_llm(
     // Log token usage statistics
     let mut total_input_tokens = 0i64;
     let mut total_output_tokens = 0i64;
-    let mut total_reasoning_tokens = 0i64;
-    let mut total_cache_tokens = 0i64;
-    
+    let total_reasoning_tokens = 0i64;
+    let total_cache_tokens = 0i64;
+
     if let Some(usage) = &response.usage {
         debug!(
             "Token usage - Prompt: {}, Completion: {}, Total: {}",
@@ -627,7 +644,7 @@ pub async fn ask_llm(
                 let args = tc.function.arguments.clone();
                 let tool_call_clone = tool_call.clone();
 
-                let config_clone = app_config.clone();
+                let config_clone = params.app_config.clone();
                 let handle = tokio::spawn(async move {
                     let result: serde_json::Value =
                         tools::call_tool(&name, &args, None, &config_clone).await;
@@ -673,7 +690,7 @@ pub async fn ask_llm(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(model)
+            .model(params.model)
             .messages(messages)
             .build()?;
 
@@ -706,88 +723,15 @@ pub async fn ask_llm(
         let answer_str = answer.to_string();
 
         // Save to session if provided
-        if let Some(sess) = session {
-            if let Some(database) = db {
-                // Save session metadata FIRST (before messages, due to foreign key constraint)
-                if sess.title.is_none() {
-                    let title = if question.len() > 100 {
-                        format!("{}...", &question[..97])
-                    } else {
-                        question.to_string()
-                    };
-                    sess.title = Some(title);
-                }
-
-                if let Err(e) = database.save_session(sess) {
-                    debug!("Failed to save session: {}", e);
-                } else {
-                    debug!("Session saved successfully: {}", sess.id);
-                }
-
-                // Save user message
-                let user_msg = crate::session::ChatMessage {
-                    role: "user".to_string(),
-                    content: question.to_string(),
-                    sources: if let Some(path) = file_path {
-                        if let Some(content) = file_content {
-                            vec![Source {
-                                title: path.to_string(),
-                                content: content.to_string(),
-                            }]
-                        } else {
-                            vec![]
-                        }
-                    } else {
-                        vec![]
-                    },
-                    timestamp: chrono::Utc::now().timestamp(),
-                    thinking_steps: None,
-                };
-
-                if let Err(e) = database.save_message(&sess.id, &user_msg) {
-                    debug!("Failed to save user message to session: {}", e);
-                } else {
-                    debug!("User message saved successfully to session {}", sess.id);
-                }
-
-                // Save assistant message (no thinking steps for non-streaming)
-                let assistant_msg = crate::session::ChatMessage {
-                    role: "assistant".to_string(),
-                    content: answer_str.clone(),
-                    sources: vec![],
-                    timestamp: chrono::Utc::now().timestamp(),
-                    thinking_steps: None,
-                };
-
-                if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-                    debug!("Failed to save assistant message to session: {}", e);
-                } else {
-                    debug!("Assistant message saved successfully to session {}", sess.id);
-                }
-
-                // Update session token usage
-                sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
-                if let Err(e) = database.save_session(sess) {
-                    debug!("Failed to update session: {}", e);
-                }
-            }
-        }
-
-        return Ok(answer_str);
-    }
-
-    let answer = response_message.content.ok_or("No response from LLM")?;
-    let answer_str = answer.to_string();
-
-    // Save to session if provided (for simple responses without tool calls)
-    if let Some(sess) = session {
-        if let Some(database) = db {
+        if let Some(sess) = params.session
+            && let Some(database) = params.db
+        {
             // Save session metadata FIRST (before messages, due to foreign key constraint)
             if sess.title.is_none() {
-                let title = if question.len() > 100 {
-                    format!("{}...", &question[..97])
+                let title = if params.question.len() > 100 {
+                    format!("{}...", &params.question[..97])
                 } else {
-                    question.to_string()
+                    params.question.to_string()
                 };
                 sess.title = Some(title);
             }
@@ -801,9 +745,9 @@ pub async fn ask_llm(
             // Save user message
             let user_msg = crate::session::ChatMessage {
                 role: "user".to_string(),
-                content: question.to_string(),
-                sources: if let Some(path) = file_path {
-                    if let Some(content) = file_content {
+                content: params.question.to_string(),
+                sources: if let Some(path) = params.file_path {
+                    if let Some(content) = params.file_content {
                         vec![Source {
                             title: path.to_string(),
                             content: content.to_string(),
@@ -824,7 +768,7 @@ pub async fn ask_llm(
                 debug!("User message saved successfully to session {}", sess.id);
             }
 
-            // Save assistant message
+            // Save assistant message (no thinking steps for non-streaming)
             let assistant_msg = crate::session::ChatMessage {
                 role: "assistant".to_string(),
                 content: answer_str.clone(),
@@ -836,14 +780,103 @@ pub async fn ask_llm(
             if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
                 debug!("Failed to save assistant message to session: {}", e);
             } else {
-                debug!("Assistant message saved successfully to session {}", sess.id);
+                debug!(
+                    "Assistant message saved successfully to session {}",
+                    sess.id
+                );
             }
 
             // Update session token usage
-            sess.add_tokens(total_input_tokens, total_output_tokens, total_reasoning_tokens, total_cache_tokens);
+            sess.add_tokens(
+                total_input_tokens,
+                total_output_tokens,
+                total_reasoning_tokens,
+                total_cache_tokens,
+            );
             if let Err(e) = database.save_session(sess) {
                 debug!("Failed to update session: {}", e);
             }
+        }
+
+        return Ok(answer_str);
+    }
+
+    let answer = response_message.content.ok_or("No response from LLM")?;
+    let answer_str = answer.to_string();
+
+    // Save to session if provided (for simple responses without tool calls)
+    if let Some(sess) = params.session
+        && let Some(database) = params.db
+    {
+        // Save session metadata FIRST (before messages, due to foreign key constraint)
+        if sess.title.is_none() {
+            let title = if params.question.len() > 100 {
+                format!("{}...", &params.question[..97])
+            } else {
+                params.question.to_string()
+            };
+            sess.title = Some(title);
+        }
+
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to save session: {}", e);
+        } else {
+            debug!("Session saved successfully: {}", sess.id);
+        }
+
+        // Save user message
+        let user_msg = crate::session::ChatMessage {
+            role: "user".to_string(),
+            content: params.question.to_string(),
+            sources: if let Some(path) = params.file_path {
+                if let Some(content) = params.file_content {
+                    vec![Source {
+                        title: path.to_string(),
+                        content: content.to_string(),
+                    }]
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            },
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: None,
+        };
+
+        if let Err(e) = database.save_message(&sess.id, &user_msg) {
+            debug!("Failed to save user message to session: {}", e);
+        } else {
+            debug!("User message saved successfully to session {}", sess.id);
+        }
+
+        // Save assistant message
+        let assistant_msg = crate::session::ChatMessage {
+            role: "assistant".to_string(),
+            content: answer_str.clone(),
+            sources: vec![],
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: None,
+        };
+
+        if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+            debug!("Failed to save assistant message to session: {}", e);
+        } else {
+            debug!(
+                "Assistant message saved successfully to session {}",
+                sess.id
+            );
+        }
+
+        // Update session token usage
+        sess.add_tokens(
+            total_input_tokens,
+            total_output_tokens,
+            total_reasoning_tokens,
+            total_cache_tokens,
+        );
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to update session: {}", e);
         }
     }
 
@@ -888,16 +921,10 @@ async fn initialize_rag_if_needed(
 /// and agent model, then dispatches to the LLM (streaming or non-streaming).
 pub async fn run_ask_command(
     question: &str,
-    message: Option<&str>,
-    no_stream: bool,
-    file: Option<&Path>,
-    prompt: Option<&Path>,
-    agent: Option<&str>,
-    rag_flag: bool,
-    no_rag_flag: bool,
+    options: AskCommandOptions<'_>,
     app_config: &config::Config,
 ) {
-    let full_question = if let Some(m) = message {
+    let full_question = if let Some(m) = options.message {
         format!("{} {}", question, m)
     } else {
         question.to_string()
@@ -905,7 +932,7 @@ pub async fn run_ask_command(
 
     info!("Q: {}", full_question);
 
-    let file_content = if let Some(file_path) = file {
+    let file_content = if let Some(file_path) = options.file {
         let ignore_patterns = validate::PathValidator::load_ignore_patterns();
         let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
 
@@ -917,7 +944,9 @@ pub async fn run_ask_command(
                 }
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::NotFound {
-                        println!("🦑: I can't find that file. Please check the path and try again.");
+                        println!(
+                            "🦑: I can't find that file. Please check the path and try again."
+                        );
                     } else if e.kind() == std::io::ErrorKind::PermissionDenied {
                         println!("🦑: I don't have permission to read that file.");
                     } else {
@@ -947,7 +976,7 @@ pub async fn run_ask_command(
         None
     };
 
-    let custom_prompt = if let Some(prompt_path) = prompt {
+    let custom_prompt = if let Some(prompt_path) = options.prompt {
         match std::fs::read_to_string(prompt_path) {
             Ok(content) => {
                 info!("Using custom system prompt ({} bytes)", content.len());
@@ -963,7 +992,11 @@ pub async fn run_ask_command(
                 } else {
                     println!("🦑: I couldn't read that prompt file - {}", e);
                 }
-                debug!("Failed to read custom prompt file {}: {}", prompt_path.display(), e);
+                debug!(
+                    "Failed to read custom prompt file {}: {}",
+                    prompt_path.display(),
+                    e
+                );
                 return;
             }
         }
@@ -973,8 +1006,8 @@ pub async fn run_ask_command(
 
     let rag_system = initialize_rag_if_needed(
         app_config.rag.enabled,
-        rag_flag,
-        no_rag_flag,
+        options.rag_flag,
+        options.no_rag_flag,
         app_config,
     )
     .await;
@@ -1006,10 +1039,15 @@ pub async fn run_ask_command(
         (None, file_opt) => file_opt,
     };
 
-    let agent_id = agent.unwrap_or(app_config.agents.default_agent.as_str());
+    let agent_id = options
+        .agent
+        .unwrap_or(app_config.agents.default_agent.as_str());
     let model = match app_config.get_agent(agent_id) {
         Some(agent_config) => {
-            info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+            info!(
+                "Using agent '{}' with model '{}'",
+                agent_id, agent_config.model
+            );
             agent_config.model.clone()
         }
         None => {
@@ -1040,37 +1078,37 @@ pub async fn run_ask_command(
         }
     };
 
-    if no_stream {
-        match ask_llm(
-            &full_question,
-            enhanced_file_content.as_deref(),
-            file.and_then(|p| p.to_str()),
-            custom_prompt.as_deref(),
-            &model,
+    if options.no_stream {
+        match ask_llm(LlmQueryParams {
+            question: &full_question,
+            file_content: enhanced_file_content.as_deref(),
+            file_path: options.file.and_then(|p| p.to_str()),
+            system_prompt: custom_prompt.as_deref(),
+            model: &model,
             app_config,
-            Some(&mut session),
-            db.as_ref(),
-        )
+            session: Some(&mut session),
+            db: db.as_ref(),
+        })
         .await
         {
             Ok(response) => println!("\n🦑: {}", response),
             Err(e) => error!("Failed to get response: {}", e),
         }
-    } else if let Err(e) = ask_llm_streaming(
-        &full_question,
-        enhanced_file_content.as_deref(),
-        file.and_then(|p| p.to_str()),
-        custom_prompt.as_deref(),
-        &model,
+    } else if let Err(e) = ask_llm_streaming(LlmQueryParams {
+        question: &full_question,
+        file_content: enhanced_file_content.as_deref(),
+        file_path: options.file.and_then(|p| p.to_str()),
+        system_prompt: custom_prompt.as_deref(),
+        model: &model,
         app_config,
-        Some(&mut session),
-        db.as_ref(),
-    )
+        session: Some(&mut session),
+        db: db.as_ref(),
+    })
     .await
     {
         error!("Failed to get response: {}", e);
     }
-    
+
     println!("💾 Session saved: {}", &session.id[..8]);
 }
 
@@ -1135,17 +1173,15 @@ pub async fn run_review_command(
         "Please review this code.".to_string()
     };
 
-    let rag_system = initialize_rag_if_needed(
-        app_config.rag.enabled,
-        rag_flag,
-        no_rag_flag,
-        app_config,
-    )
-    .await;
+    let rag_system =
+        initialize_rag_if_needed(app_config.rag.enabled, rag_flag, no_rag_flag, app_config).await;
 
     let rag_context = if let Some(ref system) = rag_system {
         println!("🦑: Using RAG for enhanced context...");
-        let file_extension = file.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+        let file_extension = file
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown");
         let review_query = format!(
             "code review best practices and common issues for {} files{}",
             file_extension,
@@ -1154,7 +1190,10 @@ pub async fn run_review_command(
 
         match system.query.execute(&review_query).await {
             Ok(context) if !context.is_empty() => {
-                debug!("RAG retrieved {} bytes of context for review", context.len());
+                debug!(
+                    "RAG retrieved {} bytes of context for review",
+                    context.len()
+                );
                 Some(context)
             }
             Ok(_) => {
@@ -1180,7 +1219,10 @@ pub async fn run_review_command(
     let agent_id = agent.unwrap_or(app_config.agents.default_agent.as_str());
     let model = match app_config.get_agent(agent_id) {
         Some(agent_config) => {
-            info!("Using agent '{}' with model '{}'", agent_id, agent_config.model);
+            info!(
+                "Using agent '{}' with model '{}'",
+                agent_id, agent_config.model
+            );
             agent_config.model.clone()
         }
         None => {
@@ -1212,36 +1254,36 @@ pub async fn run_review_command(
     };
 
     if no_stream {
-        match ask_llm(
-            &question,
-            Some(&enhanced_content),
-            file.to_str(),
-            Some(&combined_review_prompt),
-            &model,
+        match ask_llm(LlmQueryParams {
+            question: &question,
+            file_content: Some(&enhanced_content),
+            file_path: file.to_str(),
+            system_prompt: Some(&combined_review_prompt),
+            model: &model,
             app_config,
-            Some(&mut session),
-            db.as_ref(),
-        )
+            session: Some(&mut session),
+            db: db.as_ref(),
+        })
         .await
         {
             Ok(response) => println!("\n🦑: {}", response),
             Err(e) => error!("Failed to get review: {}", e),
         }
-    } else if let Err(e) = ask_llm_streaming(
-        &question,
-        Some(&enhanced_content),
-        file.to_str(),
-        Some(&combined_review_prompt),
-        &model,
+    } else if let Err(e) = ask_llm_streaming(LlmQueryParams {
+        question: &question,
+        file_content: Some(&enhanced_content),
+        file_path: file.to_str(),
+        system_prompt: Some(&combined_review_prompt),
+        model: &model,
         app_config,
-        Some(&mut session),
-        db.as_ref(),
-    )
+        session: Some(&mut session),
+        db: db.as_ref(),
+    })
     .await
     {
         error!("Failed to get review: {}", e);
     }
-    
+
     println!("💾 Session saved: {}", &session.id[..8]);
 }
 

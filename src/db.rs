@@ -1,12 +1,12 @@
-use log::{debug, info, trace};
-use rusqlite::{params, Connection, Result as SqliteResult};
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::io::{Read, Write};
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use sha2::{Sha256, Digest};
+use log::{debug, info};
+use rusqlite::{Connection, Result as SqliteResult, params};
+use sha2::{Digest, Sha256};
+use std::io::{Read, Write};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use crate::session::{ChatMessage, ChatSession, Source};
 
@@ -47,9 +47,7 @@ impl Database {
         use sqlite_vec::sqlite3_vec_init;
 
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_vec_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
         }
         info!("Registered sqlite-vec extension");
     }
@@ -99,7 +97,10 @@ impl Database {
                         // If error is about duplicate column, mark as applied (already exists)
                         let err_msg = e.to_string();
                         if err_msg.contains("duplicate column name") {
-                            debug!("Migration {} already partially applied (duplicate column), marking as complete", version);
+                            debug!(
+                                "Migration {} already partially applied (duplicate column), marking as complete",
+                                version
+                            );
                             mark_migration_applied(version)?;
                             Ok(())
                         } else {
@@ -114,40 +115,88 @@ impl Database {
         };
 
         // Migration 001: Initial schema
-        run_migration(1, "Initial schema", include_str!("../migrations/001_initial_schema.sql"))?;
+        run_migration(
+            1,
+            "Initial schema",
+            include_str!("../migrations/001_initial_schema.sql"),
+        )?;
 
         // Migration 002: Logs table
-        run_migration(2, "Logs table", include_str!("../migrations/002_logs_table.sql"))?;
+        run_migration(
+            2,
+            "Logs table",
+            include_str!("../migrations/002_logs_table.sql"),
+        )?;
 
         // Migration 003: Session titles
-        run_migration(3, "Session titles", include_str!("../migrations/003_session_titles.sql"))?;
+        run_migration(
+            3,
+            "Session titles",
+            include_str!("../migrations/003_session_titles.sql"),
+        )?;
 
         // Migration 004: Token tracking
-        run_migration(4, "Token tracking", include_str!("../migrations/004_token_tracking.sql"))?;
+        run_migration(
+            4,
+            "Token tracking",
+            include_str!("../migrations/004_token_tracking.sql"),
+        )?;
 
         // Migration 005: Context window
-        run_migration(5, "Context window", include_str!("../migrations/005_context_window.sql"))?;
+        run_migration(
+            5,
+            "Context window",
+            include_str!("../migrations/005_context_window.sql"),
+        )?;
 
         // Migration 006: Deduplicate sources
-        run_migration(6, "Deduplicate sources", include_str!("../migrations/006_deduplicate_sources.sql"))?;
+        run_migration(
+            6,
+            "Deduplicate sources",
+            include_str!("../migrations/006_deduplicate_sources.sql"),
+        )?;
 
         // Migration 007: Reasoning column
-        run_migration(7, "Reasoning column", include_str!("../migrations/007_reasoning_column.sql"))?;
+        run_migration(
+            7,
+            "Reasoning column",
+            include_str!("../migrations/007_reasoning_column.sql"),
+        )?;
 
         // Migration 008: Tool invocations
-        run_migration(8, "Tool invocations", include_str!("../migrations/008_tool_invocations.sql"))?;
+        run_migration(
+            8,
+            "Tool invocations",
+            include_str!("../migrations/008_tool_invocations.sql"),
+        )?;
 
         // Migration 009: Thinking steps
-        run_migration(9, "Thinking steps", include_str!("../migrations/009_thinking_steps.sql"))?;
+        run_migration(
+            9,
+            "Thinking steps",
+            include_str!("../migrations/009_thinking_steps.sql"),
+        )?;
 
         // Migration 010: Content split markers
-        run_migration(10, "Content split markers", include_str!("../migrations/010_content_split_markers.sql"))?;
+        run_migration(
+            10,
+            "Content split markers",
+            include_str!("../migrations/010_content_split_markers.sql"),
+        )?;
 
         // Migration 011: RAG vectors
-        run_migration(11, "RAG vectors", include_str!("../migrations/011_rag_vectors.sql"))?;
+        run_migration(
+            11,
+            "RAG vectors",
+            include_str!("../migrations/011_rag_vectors.sql"),
+        )?;
 
         // Migration 012: Rename model_id to agent_id
-        run_migration(12, "Rename model_id to agent_id", include_str!("../migrations/012_rename_model_to_agent.sql"))?;
+        run_migration(
+            12,
+            "Rename model_id to agent_id",
+            include_str!("../migrations/012_rename_model_to_agent.sql"),
+        )?;
 
         info!("Database migrations completed successfully");
         Ok(())
@@ -156,8 +205,6 @@ impl Database {
     /// Save a session to the database
     pub fn save_session(&self, session: &ChatSession) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
-
-        trace!("Saving session: {}", session.id);
 
         // Try to update existing session first
         let updated = conn.execute(
@@ -208,8 +255,6 @@ impl Database {
     pub fn load_session(&self, session_id: &str) -> SqliteResult<Option<ChatSession>> {
         let conn = self.conn.lock().unwrap();
 
-        trace!("Loading session: {}", session_id);
-
         // Load session metadata
         let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
@@ -240,27 +285,23 @@ impl Database {
         };
 
         // Load messages
-        debug!("Loading messages for session: {}", session_id);
         let mut msg_stmt = conn.prepare(
             "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
-        let messages = msg_stmt.query_map(params![session_id], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-            ))
-        })?
-        .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
-
-        debug!("Found {} messages for session {}", messages.len(), session_id);
+        let messages = msg_stmt
+            .query_map(params![session_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
 
         // Convert to ChatMessages and load sources for each
         let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
-            trace!("Processing message_id {} for session {}", message_id, session_id);
-
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -307,8 +348,6 @@ impl Database {
                  ORDER BY step_order ASC"
             )?;
 
-            trace!("Loading thinking steps for message_id: {}", message_id);
-
             let thinking_steps = steps_stmt.query_map(params![message_id], |row| {
                 let tool_args_json: Option<String> = row.get(4)?;
                 let tool_arguments = tool_args_json.and_then(|json| serde_json::from_str(&json).ok());
@@ -325,12 +364,9 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
 
-            trace!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
-
             let thinking_steps = if thinking_steps.is_empty() {
                 None
             } else {
-                trace!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
                 Some(thinking_steps)
             };
 
@@ -352,8 +388,6 @@ impl Database {
     pub fn save_message(&self, session_id: &str, message: &ChatMessage) -> SqliteResult<i64> {
         let conn = self.conn.lock().unwrap();
 
-        trace!("Saving message for session: {} (role: {})", session_id, message.role);
-
         // Insert message
         conn.execute(
             "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
@@ -367,8 +401,6 @@ impl Database {
             // Check file size limit (10MB)
             const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
             if source.content.len() > MAX_FILE_SIZE {
-                debug!("Source '{}' exceeds size limit ({} bytes > {} bytes), skipping",
-                    source.title, source.content.len(), MAX_FILE_SIZE);
                 continue;
             }
 
@@ -380,32 +412,29 @@ impl Database {
             let hash: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
 
             // Check if content already exists
-            let content_id: Option<i64> = conn.query_row(
-                "SELECT id FROM file_contents WHERE content_hash = ?1",
-                params![hash],
-                |row| row.get(0),
-            ).ok();
+            let content_id: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM file_contents WHERE content_hash = ?1",
+                    params![hash],
+                    |row| row.get(0),
+                )
+                .ok();
 
             let content_id = if let Some(id) = content_id {
                 // Content already exists, reuse it
-                trace!("Reusing existing content (hash: {})", hash);
                 id
             } else {
                 // Compress content
                 let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-                encoder.write_all(source.content.as_bytes()).map_err(|e| {
-                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-                })?;
-                let compressed = encoder.finish().map_err(|e| {
-                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-                })?;
+                encoder
+                    .write_all(source.content.as_bytes())
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let compressed = encoder
+                    .finish()
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
                 let original_size = source.content.len() as i64;
                 let compressed_size = compressed.len() as i64;
-
-                trace!("Compressed content from {} to {} bytes ({:.1}% reduction)",
-                    original_size, compressed_size,
-                    100.0 * (1.0 - compressed_size as f64 / original_size as f64));
 
                 // Insert new content
                 conn.execute(
@@ -433,7 +462,9 @@ impl Database {
         // Save thinking steps if present
         if let Some(thinking_steps) = &message.thinking_steps {
             for step in thinking_steps {
-                let tool_args_json = step.tool_arguments.as_ref()
+                let tool_args_json = step
+                    .tool_arguments
+                    .as_ref()
                     .map(|args| serde_json::to_string(args).unwrap_or_default());
 
                 conn.execute(
@@ -453,7 +484,6 @@ impl Database {
                     ],
                 )?;
             }
-            trace!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
         }
 
         Ok(message_id)
@@ -462,8 +492,6 @@ impl Database {
     /// Delete a session and all its messages
     pub fn delete_session(&self, session_id: &str) -> SqliteResult<bool> {
         let conn = self.conn.lock().unwrap();
-
-        debug!("Deleting session: {}", session_id);
 
         let deleted = conn.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
 
@@ -476,7 +504,8 @@ impl Database {
 
         let mut stmt = conn.prepare("SELECT id FROM sessions ORDER BY updated_at DESC")?;
 
-        let sessions = stmt.query_map([], |row| row.get(0))?
+        let sessions = stmt
+            .query_map([], |row| row.get(0))?
             .collect::<SqliteResult<Vec<String>>>()?;
 
         Ok(sessions)
@@ -485,8 +514,6 @@ impl Database {
     /// Update session title
     pub fn update_session_title(&self, session_id: &str, title: &str) -> SqliteResult<bool> {
         let conn = self.conn.lock().unwrap();
-
-        debug!("Updating session title: {} -> {}", session_id, title);
 
         let updated = conn.execute(
             "UPDATE sessions SET title = ?1 WHERE id = ?2",
@@ -501,8 +528,6 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let cutoff_time = chrono::Utc::now().timestamp() - max_age_seconds;
-
-        debug!("Cleaning up sessions older than timestamp: {}", cutoff_time);
 
         let deleted = conn.execute(
             "DELETE FROM sessions WHERE updated_at < ?1",
@@ -630,11 +655,17 @@ impl Database {
 
         // Delete embeddings for these chunks
         for chunk_id in chunk_ids {
-            conn.execute("DELETE FROM rag_embeddings WHERE chunk_id = ?1", params![chunk_id])?;
+            conn.execute(
+                "DELETE FROM rag_embeddings WHERE chunk_id = ?1",
+                params![chunk_id],
+            )?;
         }
 
         // Delete chunks
-        conn.execute("DELETE FROM rag_chunks WHERE document_id = ?1", params![document_id])?;
+        conn.execute(
+            "DELETE FROM rag_chunks WHERE document_id = ?1",
+            params![document_id],
+        )?;
 
         Ok(())
     }
@@ -653,17 +684,26 @@ impl Database {
 
         // Delete embeddings
         for chunk_id in chunk_ids {
-            conn.execute("DELETE FROM rag_embeddings WHERE chunk_id = ?1", params![chunk_id])?;
+            conn.execute(
+                "DELETE FROM rag_embeddings WHERE chunk_id = ?1",
+                params![chunk_id],
+            )?;
         }
 
         // Delete document (will CASCADE delete chunks)
-        let deleted = conn.execute("DELETE FROM rag_documents WHERE id = ?1", params![document_id])?;
+        let deleted = conn.execute(
+            "DELETE FROM rag_documents WHERE id = ?1",
+            params![document_id],
+        )?;
 
         Ok(deleted > 0)
     }
 
     /// Get RAG document by filename
-    pub fn get_rag_document_by_filename(&self, filename: &str) -> SqliteResult<Option<(i64, String, i64)>> {
+    pub fn get_rag_document_by_filename(
+        &self,
+        filename: &str,
+    ) -> SqliteResult<Option<(i64, String, i64)>> {
         let conn = self.conn.lock().unwrap();
 
         match conn.query_row(
@@ -685,16 +725,17 @@ impl Database {
             "SELECT id, filename, file_size, created_at, updated_at FROM rag_documents ORDER BY filename"
         )?;
 
-        let docs = stmt.query_map([], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-            ))
-        })?
-        .collect::<SqliteResult<Vec<_>>>()?;
+        let docs = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(docs)
     }
@@ -703,9 +744,12 @@ impl Database {
     pub fn get_rag_stats(&self) -> SqliteResult<(i64, i64, i64)> {
         let conn = self.conn.lock().unwrap();
 
-        let doc_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_documents", [], |row| row.get(0))?;
-        let chunk_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_chunks", [], |row| row.get(0))?;
-        let embedding_count: i64 = conn.query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))?;
+        let doc_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM rag_documents", [], |row| row.get(0))?;
+        let chunk_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM rag_chunks", [], |row| row.get(0))?;
+        let embedding_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))?;
 
         Ok((doc_count, chunk_count, embedding_count))
     }
@@ -730,18 +774,14 @@ impl Database {
              JOIN rag_chunks c ON e.chunk_id = c.id
              JOIN rag_documents d ON c.document_id = d.id
              ORDER BY distance
-             LIMIT ?2"
+             LIMIT ?2",
         )?;
 
-        let results = stmt.query_map(params![embedding_json, limit], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-            ))
-        })?
-        .collect::<SqliteResult<Vec<_>>>()?;
+        let results = stmt
+            .query_map(params![embedding_json, limit], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(results)
     }
@@ -920,11 +960,7 @@ mod tests {
         // Simulate 3 rounds of conversation
         for i in 1..=3 {
             // Add user message
-            session.add_message(
-                "user".to_string(),
-                format!("User message {}", i),
-                vec![],
-            );
+            session.add_message("user".to_string(), format!("User message {}", i), vec![]);
             let user_msg = session.messages.last().unwrap();
             db.save_message(&session_id, user_msg).unwrap();
 
@@ -984,11 +1020,7 @@ mod tests {
         db.save_session(&session).unwrap();
 
         // Add user message
-        session.add_message(
-            "user".to_string(),
-            "Execute demo tool".to_string(),
-            vec![],
-        );
+        session.add_message("user".to_string(), "Execute demo tool".to_string(), vec![]);
         let user_msg = session.messages.last().unwrap();
         db.save_message(&session_id, user_msg).unwrap();
 
@@ -1046,17 +1078,32 @@ mod tests {
         // Verify first tool step (successful execution)
         assert_eq!(loaded_steps[0].step_type, "tool");
         assert_eq!(loaded_steps[0].tool_name.as_ref().unwrap(), "demo_tool");
-        assert_eq!(loaded_steps[0].tool_arguments.as_ref().unwrap()["message"], "Hello World");
+        assert_eq!(
+            loaded_steps[0].tool_arguments.as_ref().unwrap()["message"],
+            "Hello World"
+        );
         assert!(loaded_steps[0].tool_result.is_some());
         assert!(loaded_steps[0].tool_error.is_none());
-        assert!(loaded_steps[0].tool_result.as_ref().unwrap().contains("Hello World"));
+        assert!(
+            loaded_steps[0]
+                .tool_result
+                .as_ref()
+                .unwrap()
+                .contains("Hello World")
+        );
 
         // Verify second tool step (error case)
         assert_eq!(loaded_steps[1].step_type, "tool");
         assert_eq!(loaded_steps[1].tool_name.as_ref().unwrap(), "read_file");
-        assert_eq!(loaded_steps[1].tool_arguments.as_ref().unwrap()["path"], "/tmp/test.txt");
+        assert_eq!(
+            loaded_steps[1].tool_arguments.as_ref().unwrap()["path"],
+            "/tmp/test.txt"
+        );
         assert!(loaded_steps[1].tool_result.is_none());
         assert!(loaded_steps[1].tool_error.is_some());
-        assert_eq!(loaded_steps[1].tool_error.as_ref().unwrap(), "File not found");
+        assert_eq!(
+            loaded_steps[1].tool_error.as_ref().unwrap(),
+            "File not found"
+        );
     }
 }

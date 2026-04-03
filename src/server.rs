@@ -1,8 +1,8 @@
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use actix_cors::Cors;
+use actix_web::{App, HttpResponse, HttpServer, middleware, web};
 use log::{error, info, warn};
 use rust_embed::RustEmbed;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{api, config, db, rag, session, workspace};
@@ -50,7 +50,10 @@ pub async fn start_server(
     // CLI --dir parameter overrides config working_dir
     if let Some(work_dir) = dir {
         let work_dir_str = work_dir.to_string_lossy().to_string();
-        info!("CLI --dir parameter overrides config working_dir: {}", work_dir_str);
+        info!(
+            "CLI --dir parameter overrides config working_dir: {}",
+            work_dir_str
+        );
         app_config.working_dir = work_dir_str;
     }
 
@@ -61,18 +64,30 @@ pub async fn start_server(
     if !working_dir_path.exists() {
         info!("Creating working directory: {:?}", working_dir_path);
         if let Err(e) = std::fs::create_dir_all(&working_dir_path) {
-            error!("Failed to create working directory {:?}: {}", working_dir_path, e);
-            println!("🦑: Failed to create working directory {:?} - {}", working_dir_path, e);
+            error!(
+                "Failed to create working directory {:?}: {}",
+                working_dir_path, e
+            );
+            println!(
+                "🦑: Failed to create working directory {:?} - {}",
+                working_dir_path, e
+            );
             return;
         }
         println!("🦑: Created working directory: {:?}", working_dir_path);
     }
 
     // Change to working directory
-    if working_dir_path != PathBuf::from(".") {
+    if working_dir_path != Path::new(".") {
         if let Err(e) = std::env::set_current_dir(&working_dir_path) {
-            error!("Failed to change to working directory {:?}: {}", working_dir_path, e);
-            println!("🦑: Failed to change to working directory {:?} - {}", working_dir_path, e);
+            error!(
+                "Failed to change to working directory {:?}: {}",
+                working_dir_path, e
+            );
+            println!(
+                "🦑: Failed to change to working directory {:?} - {}",
+                working_dir_path, e
+            );
             return;
         }
         info!("Changed working directory to: {:?}", working_dir_path);
@@ -106,13 +121,15 @@ pub async fn start_server(
             error!("Failed to initialize database: {}", e);
             println!("🦑: Failed to initialize database - {}", e);
             println!("    Database path: {}", db_path);
-            println!("    Make sure the directory is writable and the database file is not corrupted.");
+            println!(
+                "    Make sure the directory is writable and the database file is not corrupted."
+            );
             return;
         }
     };
 
     let session_manager = Arc::new(session::SessionManager::new(database));
-    
+
     // Initialize plugin system
     info!("Initializing plugin system...");
     match crate::plugins::initialize(Arc::clone(&app_config)) {
@@ -137,20 +154,18 @@ pub async fn start_server(
         info!("  Embedding Model: {}", app_config.rag.embedding_model);
         info!("  Documents Path: {}", app_config.rag.documents_path);
         match db::Database::new(db_path) {
-            Ok(db) => {
-                match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
-                    Ok(system) => {
-                        info!("RAG system initialized successfully");
-                        Some(Arc::new(system))
-                    }
-                    Err(e) => {
-                        warn!("Failed to initialize RAG system: {}", e);
-                        println!("🦑: RAG initialization failed - {}", e);
-                        println!("    RAG features will be disabled");
-                        None
-                    }
+            Ok(db) => match rag::RagSystem::new(Arc::new(db), &app_config.rag).await {
+                Ok(system) => {
+                    info!("RAG system initialized successfully");
+                    Some(Arc::new(system))
                 }
-            }
+                Err(e) => {
+                    warn!("Failed to initialize RAG system: {}", e);
+                    println!("🦑: RAG initialization failed - {}", e);
+                    println!("    RAG features will be disabled");
+                    None
+                }
+            },
             Err(e) => {
                 warn!("Failed to open database for RAG: {}", e);
                 println!("🦑: RAG initialization failed - {}", e);
@@ -170,11 +185,15 @@ pub async fn start_server(
                 match watcher.start() {
                     Ok(_) => {
                         info!("Document watcher started for: {}", documents_path.display());
-                        println!("🦑: Document watcher active - monitoring {} for changes", documents_path.display());
+                        println!(
+                            "🦑: Document watcher active - monitoring {} for changes",
+                            documents_path.display()
+                        );
 
                         // Spawn background task to process file system events
                         tokio::spawn(async move {
-                            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+                            let mut interval =
+                                tokio::time::interval(tokio::time::Duration::from_secs(1));
                             loop {
                                 interval.tick().await;
                                 if let Err(e) = watcher.process_events().await {
@@ -196,7 +215,8 @@ pub async fn start_server(
     }
 
     // Create approval state map for tool approval workflow
-    let approval_map: api::ApprovalStateMap = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+    let approval_map: api::ApprovalStateMap =
+        Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 
     // Spawn approval cleanup task to remove expired approvals
     let approval_map_cleanup = approval_map.clone();
@@ -207,21 +227,29 @@ pub async fn start_server(
             let mut approvals = approval_map_cleanup.lock().await;
             let now = std::time::Instant::now();
             let initial_count = approvals.len();
-            approvals.retain(|_, state| {
-                now.duration_since(state.created_at).as_secs() < 300
-            });
+            approvals.retain(|_, state| now.duration_since(state.created_at).as_secs() < 300);
             let removed = initial_count - approvals.len();
             if removed > 0 {
-                log::debug!("Cleaned up {} expired approval(s), {} remaining", removed, approvals.len());
+                log::debug!(
+                    "Cleaned up {} expired approval(s), {} remaining",
+                    removed,
+                    approvals.len()
+                );
             }
         }
     });
 
     println!("🦑: Starting Squid Web UI...");
     if app_config.server.allow_network {
-        println!("🌐 Server running at: http://{} (accessible from local network)", bind_address);
+        println!(
+            "🌐 Server running at: http://{} (accessible from local network)",
+            bind_address
+        );
     } else {
-        println!("🌐 Server running at: http://{} (localhost only)", bind_address);
+        println!(
+            "🌐 Server running at: http://{} (localhost only)",
+            bind_address
+        );
     }
     println!("📡 API endpoint: http://{}/api/chat", bind_address);
     println!("Press Ctrl+C to stop the server\n");
@@ -246,19 +274,34 @@ pub async fn start_server(
                     .route("/chat", web::post().to(api::chat_stream))
                     .route("/sessions", web::get().to(api::list_sessions))
                     .route("/sessions/{session_id}", web::get().to(api::get_session))
-                    .route("/sessions/{session_id}", web::patch().to(api::update_session))
-                    .route("/sessions/{session_id}", web::delete().to(api::delete_session))
+                    .route(
+                        "/sessions/{session_id}",
+                        web::patch().to(api::update_session),
+                    )
+                    .route(
+                        "/sessions/{session_id}",
+                        web::delete().to(api::delete_session),
+                    )
                     .route("/logs", web::get().to(api::get_logs))
                     .route("/agents", web::get().to(api::get_agents))
                     .route("/config", web::get().to(api::get_config))
                     .route("/tool-approval", web::post().to(api::handle_tool_approval))
-                    .route("/workspace/files", web::get().to(workspace::get_workspace_files))
-                    .route("/workspace/files/{path:.*}", web::get().to(workspace::get_workspace_file))
+                    .route(
+                        "/workspace/files",
+                        web::get().to(workspace::get_workspace_files),
+                    )
+                    .route(
+                        "/workspace/files/{path:.*}",
+                        web::get().to(workspace::get_workspace_file),
+                    )
                     .route("/rag/query", web::post().to(api::rag_query))
                     .route("/rag/documents", web::get().to(api::rag_list_documents))
-                    .route("/rag/documents/{filename:.*}", web::delete().to(api::rag_delete_document))
+                    .route(
+                        "/rag/documents/{filename:.*}",
+                        web::delete().to(api::rag_delete_document),
+                    )
                     .route("/rag/stats", web::get().to(api::rag_stats))
-                    .route("/rag/upload", web::post().to(api::rag_upload_document))
+                    .route("/rag/upload", web::post().to(api::rag_upload_document)),
             )
             .route("/", web::get().to(serve_index))
             .route("/{filename:.*}", web::get().to(serve_static))
@@ -275,9 +318,7 @@ pub async fn start_server(
         Err(e) => {
             error!("Failed to bind to {}: {}", bind_address, e);
             println!("🦑: Failed to start server on {} - {}", bind_address, e);
-            println!(
-                "The port might already be in use. Try a different port with --port <PORT>"
-            );
+            println!("The port might already be in use. Try a different port with --port <PORT>");
         }
     }
 }
