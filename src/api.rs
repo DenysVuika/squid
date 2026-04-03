@@ -768,8 +768,8 @@ pub async fn chat_stream(
                 }
 
                 // Update session with token usage and model info
-                if total_input_tokens > 0 || total_output_tokens > 0 {
-                    if let Err(e) = session_manager_clone.update_token_usage(
+                if (total_input_tokens > 0 || total_output_tokens > 0)
+                    && let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
                         &agent_id_for_stream,
                         total_input_tokens,
@@ -777,9 +777,9 @@ pub async fn chat_stream(
                         total_reasoning_tokens,
                         total_cache_tokens,
                         context_window,
-                    ) {
-                        debug!("Failed to update token usage: {}", e);
-                    }
+                    )
+                {
+                    debug!("Failed to update token usage: {}", e);
                 }
 
                 // Send done event
