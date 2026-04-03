@@ -43,19 +43,40 @@ pub async fn start_server(
     port: u16,
     db: Option<PathBuf>,
     dir: Option<PathBuf>,
-    app_config: config::Config,
+    mut app_config: config::Config,
 ) {
     info!("Starting Squid Web UI on port {}", port);
 
-    // Change working directory if specified
+    // CLI --dir parameter overrides config working_dir
     if let Some(work_dir) = dir {
-        if let Err(e) = std::env::set_current_dir(&work_dir) {
-            error!("Failed to change to directory {:?}: {}", work_dir, e);
-            println!("🦑: Failed to change to directory {:?} - {}", work_dir, e);
+        let work_dir_str = work_dir.to_string_lossy().to_string();
+        info!("CLI --dir parameter overrides config working_dir: {}", work_dir_str);
+        app_config.working_dir = work_dir_str;
+    }
+
+    // Ensure working directory exists and change to it
+    let working_dir_path = PathBuf::from(&app_config.working_dir);
+
+    // Create working directory if it doesn't exist
+    if !working_dir_path.exists() {
+        info!("Creating working directory: {:?}", working_dir_path);
+        if let Err(e) = std::fs::create_dir_all(&working_dir_path) {
+            error!("Failed to create working directory {:?}: {}", working_dir_path, e);
+            println!("🦑: Failed to create working directory {:?} - {}", working_dir_path, e);
             return;
         }
-        info!("Changed working directory to: {:?}", work_dir);
-        println!("🦑: Working directory set to: {:?}", work_dir);
+        println!("🦑: Created working directory: {:?}", working_dir_path);
+    }
+
+    // Change to working directory
+    if working_dir_path != PathBuf::from(".") {
+        if let Err(e) = std::env::set_current_dir(&working_dir_path) {
+            error!("Failed to change to working directory {:?}: {}", working_dir_path, e);
+            println!("🦑: Failed to change to working directory {:?} - {}", working_dir_path, e);
+            return;
+        }
+        info!("Changed working directory to: {:?}", working_dir_path);
+        println!("🦑: Working directory set to: {:?}", working_dir_path);
     }
 
     let bind_address = if app_config.server.allow_network {
@@ -63,7 +84,6 @@ pub async fn start_server(
     } else {
         format!("127.0.0.1:{}", port)
     };
-    let mut app_config = app_config;
 
     // Override database path if specified via CLI
     if let Some(db_path) = db {

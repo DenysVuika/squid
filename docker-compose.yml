@@ -31,8 +31,6 @@ services:
         "3000",
         "--db",
         "/data/squid.db",
-        "--dir",
-        "/workspace",
       ]
     ports:
       - "3000:3000"
@@ -48,6 +46,7 @@ services:
       - SQUID_CONTEXT_WINDOW=32768
       - SQUID_LOG_LEVEL=info
       - SQUID_DATABASE_PATH=/data/squid.db
+      - SQUID_WORKING_DIR=/workspace
       - SQUID_RAG_ENABLED=true
       - SQUID_RAG_DOCUMENTS_PATH=documents
       - SQUID_RAG_CHUNK_SIZE=512

@@ -337,6 +337,7 @@ pub async fn run(
         db_log_level: crate::config::Config::default().db_log_level,
         version: None, // Will be set automatically by save_to_dir()
         database_path: crate::config::Config::default().database_path,
+        working_dir: crate::config::Config::default().working_dir,
         rag: final_rag_config,
         plugins: crate::config::PluginsConfig::default(),
         server: crate::config::Config::default().server,
