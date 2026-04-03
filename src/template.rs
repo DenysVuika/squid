@@ -192,7 +192,9 @@ mod tests {
         custom.insert("os", "CustomOS");
 
         let template = "OS: {{ os }}";
-        let result = renderer.render_string_with_context(template, &custom).unwrap();
+        let result = renderer
+            .render_string_with_context(template, &custom)
+            .unwrap();
         assert_eq!(result, "OS: CustomOS");
     }
 
@@ -203,7 +205,9 @@ mod tests {
         custom.insert("custom_var", "custom_value");
 
         let template = "Custom: {{ custom_var }}";
-        let result = renderer.render_string_with_context(template, &custom).unwrap();
+        let result = renderer
+            .render_string_with_context(template, &custom)
+            .unwrap();
         assert_eq!(result, "Custom: custom_value");
     }
 

@@ -104,18 +104,17 @@ pub async fn run(
     };
 
     // Ask about RAG setup
-    let enable_rag =
-        match inquire::Confirm::new("Enable RAG (Retrieval-Augmented Generation)?")
-            .with_default(default_config.rag.enabled)
-            .with_help_message("RAG allows the AI to use external documents for context")
-            .prompt()
-        {
-            Ok(enabled) => enabled,
-            Err(_) => {
-                error!("Configuration initialization cancelled or failed");
-                return;
-            }
-        };
+    let enable_rag = match inquire::Confirm::new("Enable RAG (Retrieval-Augmented Generation)?")
+        .with_default(default_config.rag.enabled)
+        .with_help_message("RAG allows the AI to use external documents for context")
+        .prompt()
+    {
+        Ok(enabled) => enabled,
+        Err(_) => {
+            error!("Configuration initialization cancelled or failed");
+            return;
+        }
+    };
 
     let final_rag_config = if enable_rag {
         // Prompt for RAG-specific settings
@@ -160,9 +159,7 @@ pub async fn run(
 
         let documents_path = match inquire::Text::new("Documents Directory:")
             .with_default(&default_config.rag.documents_path)
-            .with_help_message(
-                "Path where RAG documents will be stored (relative to project root)",
-            )
+            .with_help_message("Path where RAG documents will be stored (relative to project root)")
             .prompt()
         {
             Ok(path) => path,
@@ -429,9 +426,7 @@ pub async fn run(
                     Ok(_) => {
                         info!("✓ Created .squidignore file at {:?}", squidignore_path);
                         println!("\n✓ Created .squidignore with default patterns");
-                        println!(
-                            "  Edit this file to customize which files squid should ignore"
-                        );
+                        println!("  Edit this file to customize which files squid should ignore");
                     }
                     Err(e) => {
                         warn!("Failed to create .squidignore: {}", e);
@@ -467,8 +462,7 @@ pub async fn run(
                             continue;
                         }
 
-                        if let Some(content) =
-                            crate::server::DemoDocuments::get(filename.as_ref())
+                        if let Some(content) = crate::server::DemoDocuments::get(filename.as_ref())
                         {
                             match std::fs::write(&file_path, content.data.as_ref()) {
                                 Ok(_) => {

@@ -28,9 +28,13 @@ fn main() {
 
     if needs_build && web_dir.join("package.json").exists() {
         if let Ok(npm) = which_npm() {
-            eprintln!("cargo:warning=================================================================");
+            eprintln!(
+                "cargo:warning================================================================="
+            );
             eprintln!("cargo:warning=Building web frontend (static/ is missing or stale)...");
-            eprintln!("cargo:warning=================================================================");
+            eprintln!(
+                "cargo:warning================================================================="
+            );
 
             // npm ci / npm install
             let install_status = Command::new(&npm)
@@ -48,19 +52,27 @@ fn main() {
                         .current_dir(web_dir)
                         .status();
                     if !matches!(fallback, Ok(s) if s.success()) {
-                        eprintln!("cargo:warning=================================================================");
+                        eprintln!(
+                            "cargo:warning================================================================="
+                        );
                         eprintln!("cargo:warning=ERROR: npm install failed — skipping web build");
                         eprintln!("cargo:warning=Web UI will NOT be available!");
-                        eprintln!("cargo:warning=================================================================");
+                        eprintln!(
+                            "cargo:warning================================================================="
+                        );
                         ensure_static_dir(static_dir);
                         return;
                     }
                 }
                 Err(e) => {
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                     eprintln!("cargo:warning=ERROR: Could not run npm: {e}");
                     eprintln!("cargo:warning=Web UI will NOT be available!");
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                     ensure_static_dir(static_dir);
                     return;
                 }
@@ -74,25 +86,39 @@ fn main() {
 
             match build_status {
                 Ok(s) if s.success() => {
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                     eprintln!("cargo:warning=Web frontend built successfully.");
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                 }
                 Ok(s) => {
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                     eprintln!("cargo:warning=WARNING: npm run build exited with {s}");
                     eprintln!("cargo:warning=Web UI may be unavailable!");
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                 }
                 Err(e) => {
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                     eprintln!("cargo:warning=ERROR: Could not run npm build: {e}");
                     eprintln!("cargo:warning=Web UI may be unavailable!");
-                    eprintln!("cargo:warning=================================================================");
+                    eprintln!(
+                        "cargo:warning================================================================="
+                    );
                 }
             }
         } else {
-            eprintln!("cargo:warning=================================================================");
+            eprintln!(
+                "cargo:warning================================================================="
+            );
             eprintln!("cargo:warning=ERROR: npm not found on system PATH!");
             eprintln!("cargo:warning=");
             eprintln!("cargo:warning=The web UI will NOT be available.");
@@ -102,7 +128,9 @@ fn main() {
             eprintln!("cargo:warning=  - Or use your package manager (brew, apt, etc.)");
             eprintln!("cargo:warning=");
             eprintln!("cargo:warning=Then rebuild with: cargo build --release");
-            eprintln!("cargo:warning=================================================================");
+            eprintln!(
+                "cargo:warning================================================================="
+            );
         }
     }
 

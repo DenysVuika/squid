@@ -22,13 +22,11 @@ impl PluginContext {
         allow_file_write: bool,
     ) -> Self {
         let ignore_patterns = PathValidator::load_ignore_patterns();
-        let path_validator = PathValidator::with_ignore_file(
-            if ignore_patterns.is_empty() {
-                None
-            } else {
-                Some(ignore_patterns)
-            }
-        );
+        let path_validator = PathValidator::with_ignore_file(if ignore_patterns.is_empty() {
+            None
+        } else {
+            Some(ignore_patterns)
+        });
 
         // Resolve working directory (absolute or relative to cwd)
         let working_dir = PathBuf::from(&config.working_dir);
@@ -42,9 +40,13 @@ impl PluginContext {
 
         // Ensure working directory exists
         if !working_dir.exists()
-            && let Err(e) = std::fs::create_dir_all(&working_dir) {
-                debug!("Warning: Failed to create working directory {:?}: {}", working_dir, e);
-            }
+            && let Err(e) = std::fs::create_dir_all(&working_dir)
+        {
+            debug!(
+                "Warning: Failed to create working directory {:?}: {}",
+                working_dir, e
+            );
+        }
 
         Self {
             path_validator,
@@ -64,7 +66,7 @@ impl PluginContext {
             self.working_dir.join(path)
         }
     }
-    
+
     /// Read a file from the filesystem (respects .squidignore)
     pub fn read_file(&self, path: &str) -> Result<String, String> {
         debug!("Plugin '{}' reading file: {}", self.plugin_id, path);
@@ -78,10 +80,9 @@ impl PluginContext {
             .map_err(|e| format!("Access denied: {}", e))?;
 
         // Read the file
-        std::fs::read_to_string(&path_obj)
-            .map_err(|e| format!("Failed to read file: {}", e))
+        std::fs::read_to_string(&path_obj).map_err(|e| format!("Failed to read file: {}", e))
     }
-    
+
     /// Write content to a file (requires file_write permission)
     pub fn write_file(&self, path: &str, content: &str) -> Result<(), String> {
         if !self.allow_file_write {
@@ -99,46 +100,51 @@ impl PluginContext {
             .map_err(|e| format!("Access denied: {}", e))?;
 
         // Write the file
-        std::fs::write(&path_obj, content)
-            .map_err(|e| format!("Failed to write file: {}", e))
+        std::fs::write(&path_obj, content).map_err(|e| format!("Failed to write file: {}", e))
     }
-    
+
     /// Make an HTTP GET request (requires network permission)
     pub async fn http_get(&self, url: &str, timeout_ms: Option<u64>) -> Result<String, String> {
         if !self.allow_network {
             return Err("Plugin does not have network permission".to_string());
         }
-        
-        info!("Plugin '{}' making HTTP GET request to: {}", self.plugin_id, url);
-        
+
+        info!(
+            "Plugin '{}' making HTTP GET request to: {}",
+            self.plugin_id, url
+        );
+
         let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(5000));
-        
+
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-        
+
         let response = client
             .get(url)
             .send()
             .await
             .map_err(|e| format!("HTTP request failed: {}", e))?;
-        
+
         if !response.status().is_success() {
-            return Err(format!("HTTP request failed with status: {}", response.status()));
+            return Err(format!(
+                "HTTP request failed with status: {}",
+                response.status()
+            ));
         }
-        
+
         response
             .text()
             .await
             .map_err(|e| format!("Failed to read response body: {}", e))
     }
-    
+
     /// Log a message from the plugin
     pub fn log(&self, message: &str) {
         info!("[Plugin:{}] {}", self.plugin_id, message);
     }
-    
+
     /// Get the current project directory
     /// Returns "." to indicate plugins should use relative paths
     /// The actual working directory is managed internally by the context
@@ -150,7 +156,7 @@ impl PluginContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_read_file_permission() {
         // Use a config with working_dir set to current directory for tests
@@ -158,12 +164,7 @@ mod tests {
         config.working_dir = ".".to_string();
         let config = Arc::new(config);
 
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         // Try to read Cargo.toml (should work as it's a valid project file)
         let result = context.read_file("Cargo.toml");
@@ -191,12 +192,7 @@ mod tests {
     #[test]
     fn test_project_dir() {
         let config = Arc::new(Config::load());
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         let dir = context.project_dir();
         assert!(!dir.is_empty());
@@ -229,12 +225,7 @@ mod tests {
         config.working_dir = ".".to_string();
         let config = Arc::new(config);
 
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         // Relative path should be joined with working_dir
         let resolved = context.resolve_path("src/main.rs");
@@ -248,12 +239,7 @@ mod tests {
         config.working_dir = "./workspace".to_string();
         let config = Arc::new(config);
 
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         // Absolute path should be used as-is (will be validated by PathValidator)
         let absolute_path = if cfg!(windows) {
@@ -272,12 +258,7 @@ mod tests {
         config.working_dir = ".".to_string();
         let config = Arc::new(config);
 
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         // These system paths should be blocked by PathValidator
         let system_paths = if cfg!(windows) {
@@ -286,11 +267,7 @@ mod tests {
                 "C:\\Program Files\\sensitive.dat",
             ]
         } else {
-            vec![
-                "/etc/passwd",
-                "/etc/shadow",
-                "/root/.ssh/id_rsa",
-            ]
+            vec!["/etc/passwd", "/etc/shadow", "/root/.ssh/id_rsa"]
         };
 
         for path in system_paths {
@@ -300,7 +277,9 @@ mod tests {
             let err = result.unwrap_err();
             // Should mention either access denied or permission
             assert!(
-                err.contains("Access denied") || err.contains("Permission denied") || err.contains("Failed to read"),
+                err.contains("Access denied")
+                    || err.contains("Permission denied")
+                    || err.contains("Failed to read"),
                 "Expected security error for {}, got: {}",
                 path,
                 err
@@ -316,16 +295,14 @@ mod tests {
         config.working_dir = ".".to_string();
         let config = Arc::new(config);
 
-        let context = PluginContext::new(
-            config,
-            "test-plugin".to_string(),
-            false,
-            false,
-        );
+        let context = PluginContext::new(config, "test-plugin".to_string(), false, false);
 
         // Reading a file in the current directory should work
         let result = context.read_file("Cargo.toml");
-        assert!(result.is_ok(), "Should be able to read files in working_dir");
+        assert!(
+            result.is_ok(),
+            "Should be able to read files in working_dir"
+        );
 
         // Trying to read from system directories should fail
         // (either path validation fails or file doesn't exist)
@@ -363,15 +340,23 @@ mod tests {
         );
 
         // Should fail without permission
-        let result = context_no_network.http_get("https://example.com", None).await;
+        let result = context_no_network
+            .http_get("https://example.com", None)
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("network permission"));
 
         // Should attempt with permission (may fail due to no network, but shouldn't fail on permission)
-        let result = context_with_network.http_get("https://example.com", None).await;
+        let result = context_with_network
+            .http_get("https://example.com", None)
+            .await;
         // We don't check if it succeeds (no network in tests), just that permission error doesn't occur
         if let Err(e) = result {
-            assert!(!e.contains("network permission"), "Should not fail on permission check, got: {}", e);
+            assert!(
+                !e.contains("network permission"),
+                "Should not fail on permission check, got: {}",
+                e
+            );
         }
     }
 }

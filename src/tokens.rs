@@ -23,15 +23,19 @@ fn message_to_text(msg: &ChatCompletionRequestMessage) -> String {
             ChatCompletionRequestMessage::User(m) => {
                 format!("{:?}", m.content)
             }
-            ChatCompletionRequestMessage::Assistant(m) => {
-                m.content.as_ref().map(|c| format!("{:?}", c)).unwrap_or_default()
-            }
+            ChatCompletionRequestMessage::Assistant(m) => m
+                .content
+                .as_ref()
+                .map(|c| format!("{:?}", c))
+                .unwrap_or_default(),
             ChatCompletionRequestMessage::Tool(m) => {
                 format!("{:?}", m.content)
             }
-            ChatCompletionRequestMessage::Function(m) => {
-                m.content.as_ref().map(|c| format!("{:?}", c)).unwrap_or_default()
-            }
+            ChatCompletionRequestMessage::Function(m) => m
+                .content
+                .as_ref()
+                .map(|c| format!("{:?}", c))
+                .unwrap_or_default(),
             ChatCompletionRequestMessage::Developer(m) => {
                 format!("{:?}", m.content)
             }
@@ -56,10 +60,7 @@ fn message_to_text(msg: &ChatCompletionRequestMessage) -> String {
 ///
 /// A tuple of (input_tokens, output_tokens). Output tokens is always 0 for this function
 /// since it only counts the input context.
-pub fn estimate_tokens(
-    model: &str,
-    messages: &[ChatCompletionRequestMessage],
-) -> (i64, i64) {
+pub fn estimate_tokens(model: &str, messages: &[ChatCompletionRequestMessage]) -> (i64, i64) {
     match tiktoken_rs::get_bpe_from_model(model) {
         Ok(bpe) => {
             let mut total_tokens = 0;

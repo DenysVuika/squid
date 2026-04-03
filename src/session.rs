@@ -129,11 +129,10 @@ impl ChatSession {
         self.token_usage.output_tokens += output;
         self.token_usage.reasoning_tokens += reasoning;
         self.token_usage.cache_tokens += cache;
-        self.token_usage.total_tokens =
-            self.token_usage.input_tokens +
-            self.token_usage.output_tokens +
-            self.token_usage.reasoning_tokens +
-            self.token_usage.cache_tokens;
+        self.token_usage.total_tokens = self.token_usage.input_tokens
+            + self.token_usage.output_tokens
+            + self.token_usage.reasoning_tokens
+            + self.token_usage.cache_tokens;
 
         // Update context utilization
         self.token_usage.update_utilization();
@@ -293,7 +292,8 @@ impl SessionManager {
         files: Vec<FileAttachment>,
     ) -> Result<Vec<Source>, String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Convert file attachments to sources
@@ -312,7 +312,9 @@ impl SessionManager {
         session.update_title_if_needed();
 
         // Get the last message
-        let message = session.messages.last()
+        let message = session
+            .messages
+            .last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 
         // Save message to database
@@ -359,7 +361,8 @@ impl SessionManager {
         thinking_steps: Option<Vec<ThinkingStep>>,
     ) -> Result<(), String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Add message to session
@@ -370,7 +373,9 @@ impl SessionManager {
             message.thinking_steps = thinking_steps;
         }
 
-        let message = session.messages.last()
+        let message = session
+            .messages
+            .last()
             .ok_or_else(|| "Failed to add message".to_string())?;
 
         // Save message to database
@@ -434,7 +439,8 @@ impl SessionManager {
         context_window: u32,
     ) -> Result<(), String> {
         // Get or load session
-        let mut session = self.get_session(session_id)
+        let mut session = self
+            .get_session(session_id)
             .ok_or_else(|| "Session not found".to_string())?;
 
         // Set agent if not already set
@@ -627,15 +633,9 @@ mod tests {
 
         // Update token usage multiple times (simulates streaming updates)
         for i in 1..=5 {
-            manager.update_token_usage(
-                &session_id,
-                "test-model",
-                i * 5,
-                i * 5,
-                0,
-                0,
-                8192,
-            ).unwrap();
+            manager
+                .update_token_usage(&session_id, "test-model", i * 5, i * 5, 0, 0, 8192)
+                .unwrap();
         }
 
         // Clear cache and reload from database

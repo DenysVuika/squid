@@ -1,9 +1,8 @@
 use env_logger::{Builder, Env};
 use log::{LevelFilter, Log, Metadata, Record};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::io::Write;
 use std::path::PathBuf;
-
 
 /// Custom logger that writes to both stdout and optionally to SQLite database
 pub struct DualLogger {
@@ -14,7 +13,11 @@ pub struct DualLogger {
 
 impl DualLogger {
     /// Create a new dual logger with optional database support
-    pub fn new(log_level: Option<&str>, db_path: Option<PathBuf>, db_level: Option<LevelFilter>) -> Self {
+    pub fn new(
+        log_level: Option<&str>,
+        db_path: Option<PathBuf>,
+        db_level: Option<LevelFilter>,
+    ) -> Self {
         let default_level = log_level.unwrap_or("error");
 
         let env = Env::default()
@@ -74,10 +77,10 @@ impl Log for DualLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
         // Enable if either console or database logging would use this level
         // For database, also check if target is from squid crate
-        self.env_logger.enabled(metadata) ||
-            (self.db_path.is_some() &&
-             metadata.level() <= self.db_level &&
-             Self::is_squid_target(metadata.target()))
+        self.env_logger.enabled(metadata)
+            || (self.db_path.is_some()
+                && metadata.level() <= self.db_level
+                && Self::is_squid_target(metadata.target()))
     }
 
     fn log(&self, record: &Record) {
@@ -109,7 +112,11 @@ pub fn init(log_level: Option<&str>) {
 ///
 /// Database logging only captures logs from the squid crate (targets starting with "squid" or "squid_rs").
 /// This filters out logs from dependencies like actix_web, tokio, etc.
-pub fn init_with_db(log_level: Option<&str>, db_path: Option<PathBuf>, db_level: Option<LevelFilter>) {
+pub fn init_with_db(
+    log_level: Option<&str>,
+    db_path: Option<PathBuf>,
+    db_level: Option<LevelFilter>,
+) {
     let logger = DualLogger::new(log_level, db_path, db_level);
     let console_level = logger.env_logger.filter();
 
@@ -136,7 +143,9 @@ pub fn query_logs(
 ) -> Result<Vec<LogEntry>, rusqlite::Error> {
     let conn = Connection::open(db_path)?;
 
-    let mut query = String::from("SELECT id, timestamp, level, target, message, session_id FROM logs WHERE 1=1");
+    let mut query = String::from(
+        "SELECT id, timestamp, level, target, message, session_id FROM logs WHERE 1=1",
+    );
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(level) = level_filter {
@@ -212,7 +221,6 @@ pub struct LogEntry {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_logger_initialization() {
         // Note: Logger can only be initialized once per process.
@@ -244,7 +252,11 @@ mod tests {
 
         // Create logger with console=error, db=info
         // This means console shows only errors, but database captures info+ logs
-        let logger = DualLogger::new(Some("error"), Some(db_path.clone()), Some(LevelFilter::Info));
+        let logger = DualLogger::new(
+            Some("error"),
+            Some(db_path.clone()),
+            Some(LevelFilter::Info),
+        );
 
         // Verify console level is Error
         assert_eq!(logger.env_logger.filter(), LevelFilter::Error);
@@ -257,14 +269,20 @@ mod tests {
             .level(log::Level::Info)
             .target("squid_rs::api")
             .build();
-        assert!(logger.enabled(&info_metadata_squid), "Logger should be enabled for Info level from squid crate due to database logging");
+        assert!(
+            logger.enabled(&info_metadata_squid),
+            "Logger should be enabled for Info level from squid crate due to database logging"
+        );
 
         // Verify that enabled() returns false for Info level from other crates (filtered out)
         let info_metadata_other = log::Metadata::builder()
             .level(log::Level::Info)
             .target("actix_web")
             .build();
-        assert!(!logger.enabled(&info_metadata_other), "Logger should NOT be enabled for Info level from non-squid crate");
+        assert!(
+            !logger.enabled(&info_metadata_other),
+            "Logger should NOT be enabled for Info level from non-squid crate"
+        );
 
         // Cleanup
         let _ = std::fs::remove_file(&db_path);
@@ -311,18 +329,22 @@ mod tests {
 
         // Check database - should only have squid log
         if let Ok(conn) = Connection::open(&db_path) {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM logs WHERE target = 'squid_rs::api'",
-                [],
-                |row| row.get(0)
-            ).unwrap_or(0);
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM logs WHERE target = 'squid_rs::api'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
             assert_eq!(count, 1, "Should have 1 log from squid crate");
 
-            let other_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM logs WHERE target = 'actix_web::middleware'",
-                [],
-                |row| row.get(0)
-            ).unwrap_or(0);
+            let other_count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM logs WHERE target = 'actix_web::middleware'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
             assert_eq!(other_count, 0, "Should have 0 logs from other crates");
         }
 
@@ -377,7 +399,8 @@ mod tests {
                 message TEXT NOT NULL,
                 session_id TEXT
             );",
-        ).unwrap();
+        )
+        .unwrap();
 
         let now = chrono::Utc::now().timestamp();
         conn.execute(
