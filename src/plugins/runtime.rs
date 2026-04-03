@@ -340,11 +340,14 @@ mod tests {
     fn test_plugin_context_readfile() {
         use crate::config::Config;
         use std::sync::Arc;
-        
+
         let mut runtime = PluginRuntime::new().unwrap();
-        
-        // Set up plugin context
-        let config = Arc::new(Config::load());
+
+        // Set up plugin context with working_dir = "." for tests
+        let mut config = Config::load();
+        config.working_dir = ".".to_string();
+        let config = Arc::new(config);
+
         let context = Arc::new(PluginContext::new(
             config,
             "test-readfile".to_string(),

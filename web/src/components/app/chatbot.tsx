@@ -592,12 +592,16 @@ const Chatbot = () => {
                                     // After loading, use step.contentBeforeTool
                                     const contentBefore = approval?.contentBeforeApproval ?? step.contentBeforeTool;
                                     if (contentBefore) {
-                                      elements.push(
-                                        <MessageContent key={`content-before-${idx}`}>
-                                          <MessageResponse>{contentBefore}</MessageResponse>
-                                        </MessageContent>
-                                      );
-                                      contentPosition += contentBefore.length;
+                                      // contentBefore is cumulative, so extract only the incremental part
+                                      const incrementalContent = contentBefore.substring(contentPosition);
+                                      if (incrementalContent.trim()) {
+                                        elements.push(
+                                          <MessageContent key={`content-before-${idx}`}>
+                                            <MessageResponse>{incrementalContent}</MessageResponse>
+                                          </MessageContent>
+                                        );
+                                      }
+                                      contentPosition = contentBefore.length;
                                     }
 
                                     // Show tool approval or result

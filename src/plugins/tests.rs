@@ -194,18 +194,22 @@ mod plugin_system_tests {
     fn test_context_read_file_permission() {
         use crate::config::Config;
         use std::sync::Arc;
-        
-        let config = Arc::new(Config::load());
+
+        // Use working_dir = "." for tests
+        let mut config = Config::load();
+        config.working_dir = ".".to_string();
+        let config = Arc::new(config);
+
         let context = context::PluginContext::new(
             config,
             "test-plugin".to_string(),
             false, // no network
             false, // no file write
         );
-        
+
         // Try to read Cargo.toml (a file in the project directory)
         let result = context.read_file("Cargo.toml");
-        
+
         // Should succeed
         if let Err(e) = &result {
             eprintln!("Read file error: {}", e);
@@ -218,8 +222,11 @@ mod plugin_system_tests {
     fn test_context_write_file_permission_denied() {
         use crate::config::Config;
         use std::sync::Arc;
-        
-        let config = Arc::new(Config::load());
+
+        let mut config = Config::load();
+        config.working_dir = ".".to_string();
+        let config = Arc::new(config);
+
         let context = context::PluginContext::new(
             config,
             "test-plugin".to_string(),

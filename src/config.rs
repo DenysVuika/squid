@@ -158,6 +158,7 @@ impl Default for ServerConfig {
 /// - `log_level`: Console logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 /// - `db_log_level`: Database logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
 /// - `version`: Config file version (matches app version when created)
+/// - `working_dir`: Working directory for file operations (default: `.`)
 ///
 /// **Best Practices:**
 /// - Commit `squid.config.json` to your repository to share project settings with your team
@@ -186,6 +187,8 @@ pub struct Config {
     pub version: Option<String>,
     #[serde(default = "default_database_path")]
     pub database_path: String,
+    #[serde(default = "default_working_dir")]
+    pub working_dir: String,
     #[serde(default)]
     pub rag: RagConfig,
     #[serde(default)]
@@ -214,7 +217,9 @@ fn default_database_path() -> String {
     "squid.db".to_string()
 }
 
-
+fn default_working_dir() -> String {
+    "./workspace".to_string()
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -226,6 +231,7 @@ impl Default for Config {
             db_log_level: default_db_log_level(),
             version: None,
             database_path: default_database_path(),
+            working_dir: default_working_dir(),
             rag: RagConfig::default(),
             plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
@@ -320,7 +326,11 @@ impl Config {
             config.database_path = db_path;
         }
 
-        // Version management
+        if let Ok(working_dir) = std::env::var("SQUID_WORKING_DIR") {
+            debug!("Overriding SQUID_WORKING_DIR from environment");
+            config.working_dir = working_dir;
+        }
+
         // RAG configuration overrides
         if let Ok(rag_enabled) = std::env::var("SQUID_RAG_ENABLED")
             && let Ok(enabled) = rag_enabled.parse()
@@ -539,6 +549,7 @@ mod tests {
         assert_eq!(config.log_level, "error");
         assert_eq!(config.version, None);
         assert_eq!(config.database_path, "squid.db");
+        assert_eq!(config.working_dir, "./workspace");
         assert_eq!(config.rag.enabled, true);
         assert_eq!(config.rag.embedding_model, "text-embedding-nomic-embed-text-v1.5");
         assert_eq!(config.rag.chunk_size, 512);

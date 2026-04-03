@@ -270,7 +270,12 @@ See `.env.docker.example` for all available options and examples, and `docker-co
 
 #### Workspace Directory
 
-By default, Docker mounts the current directory (`.`) as the workspace. You can bind a specific project directory by setting the `WORKSPACE_DIR` environment variable:
+Docker uses a two-layer approach for workspace management:
+
+1. **Host Mount**: The `WORKSPACE_DIR` environment variable controls what host directory is mounted into the container
+2. **Working Directory**: Inside the container, `SQUID_WORKING_DIR=/workspace` points to this mounted directory
+
+By default, Docker mounts the current directory (`.`) to `/workspace` in the container. You can bind a specific project directory by setting the `WORKSPACE_DIR` environment variable:
 
 ```bash
 # Option 1: Set in .env file
@@ -289,8 +294,9 @@ The workspace directory is where Squid will:
 - Execute tool operations (read_file, write_file, etc.)
 - Search for code patterns
 - Run bash commands (when approved)
+- Automatically created if it doesn't exist
 
-**Security Note:** All file operations are restricted to the workspace directory and respect `.squidignore` patterns.
+**Security Note:** All file operations are restricted to the workspace directory and respect `.squidignore` patterns. Plugins cannot see the actual filesystem path and work with relative paths only.
 
 **Example - Work with a specific project:**
 ```bash
@@ -391,6 +397,17 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - **Important**: The server automatically finds the correct database when running from subdirectories
   - Set via `.env` file to override automatic detection
   - Example: `SQUID_DATABASE_PATH=/Users/you/squid-data/squid.db`
+
+- `SQUID_WORKING_DIR`: Working directory for AI operations (optional, default: `./workspace`)
+  - Defines the root directory for all file operations, code search, and plugin access
+  - Can be relative (e.g., `./workspace`) or absolute (e.g., `/path/to/project`)
+  - Automatically created if it doesn't exist
+  - Can be set in config file (`"working_dir"`) or via environment variable
+  - **Docker**: Set via `SQUID_WORKING_DIR` env var (mounted workspace should match this path)
+  - **Security**: All file operations and plugin access are restricted to this directory
+  - **Plugin isolation**: Plugins cannot see the actual filesystem path and work with relative paths only
+  - Example: `SQUID_WORKING_DIR=/Users/you/projects/myapp`
+  - CLI override: `squid serve --dir /custom/path` (overrides config)
 
 - **Template Variables**: Agent prompts support variable substitution using the Tera template engine
   - Variables are automatically available in agent prompts (in `squid.config.json`)
