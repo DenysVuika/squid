@@ -1,4 +1,4 @@
-use log::{debug, info, trace};
+use log::{debug, info};
 use rusqlite::{params, Connection, Result as SqliteResult};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -157,8 +157,6 @@ impl Database {
     pub fn save_session(&self, session: &ChatSession) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
 
-        trace!("Saving session: {}", session.id);
-
         // Try to update existing session first
         let updated = conn.execute(
             "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, agent_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12, context_window = ?13 WHERE id = ?1",
@@ -208,8 +206,6 @@ impl Database {
     pub fn load_session(&self, session_id: &str) -> SqliteResult<Option<ChatSession>> {
         let conn = self.conn.lock().unwrap();
 
-        trace!("Loading session: {}", session_id);
-
         // Load session metadata
         let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
@@ -240,7 +236,6 @@ impl Database {
         };
 
         // Load messages
-        debug!("Loading messages for session: {}", session_id);
         let mut msg_stmt = conn.prepare(
             "SELECT id, role, content, timestamp FROM messages WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
@@ -255,12 +250,8 @@ impl Database {
         })?
         .collect::<SqliteResult<Vec<(i64, String, String, i64)>>>()?;
 
-        debug!("Found {} messages for session {}", messages.len(), session_id);
-
         // Convert to ChatMessages and load sources for each
         let messages: Vec<ChatMessage> = messages.into_iter().map(|(message_id, role, content, timestamp)| {
-            trace!("Processing message_id {} for session {}", message_id, session_id);
-
             // Load sources for this message (support both old and new schema)
             let mut source_stmt = conn.prepare(
                 "SELECT s.title, s.content, s.content_id, fc.content_compressed
@@ -307,8 +298,6 @@ impl Database {
                  ORDER BY step_order ASC"
             )?;
 
-            trace!("Loading thinking steps for message_id: {}", message_id);
-
             let thinking_steps = steps_stmt.query_map(params![message_id], |row| {
                 let tool_args_json: Option<String> = row.get(4)?;
                 let tool_arguments = tool_args_json.and_then(|json| serde_json::from_str(&json).ok());
@@ -325,12 +314,9 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
 
-            trace!("Found {} thinking steps for message_id: {}", thinking_steps.len(), message_id);
-
             let thinking_steps = if thinking_steps.is_empty() {
                 None
             } else {
-                trace!("Loaded {} thinking steps for message {}", thinking_steps.len(), message_id);
                 Some(thinking_steps)
             };
 
@@ -352,8 +338,6 @@ impl Database {
     pub fn save_message(&self, session_id: &str, message: &ChatMessage) -> SqliteResult<i64> {
         let conn = self.conn.lock().unwrap();
 
-        trace!("Saving message for session: {} (role: {})", session_id, message.role);
-
         // Insert message
         conn.execute(
             "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
@@ -367,8 +351,6 @@ impl Database {
             // Check file size limit (10MB)
             const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
             if source.content.len() > MAX_FILE_SIZE {
-                debug!("Source '{}' exceeds size limit ({} bytes > {} bytes), skipping",
-                    source.title, source.content.len(), MAX_FILE_SIZE);
                 continue;
             }
 
@@ -388,7 +370,6 @@ impl Database {
 
             let content_id = if let Some(id) = content_id {
                 // Content already exists, reuse it
-                trace!("Reusing existing content (hash: {})", hash);
                 id
             } else {
                 // Compress content
@@ -402,10 +383,6 @@ impl Database {
 
                 let original_size = source.content.len() as i64;
                 let compressed_size = compressed.len() as i64;
-
-                trace!("Compressed content from {} to {} bytes ({:.1}% reduction)",
-                    original_size, compressed_size,
-                    100.0 * (1.0 - compressed_size as f64 / original_size as f64));
 
                 // Insert new content
                 conn.execute(
@@ -453,7 +430,6 @@ impl Database {
                     ],
                 )?;
             }
-            trace!("Saved {} thinking steps for message {}", thinking_steps.len(), message_id);
         }
 
         Ok(message_id)
@@ -462,8 +438,6 @@ impl Database {
     /// Delete a session and all its messages
     pub fn delete_session(&self, session_id: &str) -> SqliteResult<bool> {
         let conn = self.conn.lock().unwrap();
-
-        debug!("Deleting session: {}", session_id);
 
         let deleted = conn.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
 
@@ -486,8 +460,6 @@ impl Database {
     pub fn update_session_title(&self, session_id: &str, title: &str) -> SqliteResult<bool> {
         let conn = self.conn.lock().unwrap();
 
-        debug!("Updating session title: {} -> {}", session_id, title);
-
         let updated = conn.execute(
             "UPDATE sessions SET title = ?1 WHERE id = ?2",
             params![title, session_id],
@@ -501,8 +473,6 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let cutoff_time = chrono::Utc::now().timestamp() - max_age_seconds;
-
-        debug!("Cleaning up sessions older than timestamp: {}", cutoff_time);
 
         let deleted = conn.execute(
             "DELETE FROM sessions WHERE updated_at < ?1",
