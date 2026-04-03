@@ -364,12 +364,12 @@ mod tests {
         );
 
         // Should fail without permission
-        let result = context_no_network.http_get("http://example.com", None).await;
+        let result = context_no_network.http_get("https://example.com", None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("network permission"));
 
         // Should attempt with permission (may fail due to no network, but shouldn't fail on permission)
-        let result = context_with_network.http_get("http://example.com", None).await;
+        let result = context_with_network.http_get("https://example.com", None).await;
         // We don't check if it succeeds (no network in tests), just that permission error doesn't occur
         if let Err(e) = result {
             assert!(!e.contains("network permission"), "Should not fail on permission check, got: {}", e);
