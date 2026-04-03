@@ -24,6 +24,23 @@ const EXPECTED_MESSAGES = [
   'Computing...',
 ];
 
+// ─── Helper to get message text from component ──────────────────────────────
+
+const getMessageText = (): string => {
+  // Try to find one of the expected messages
+  for (const msg of EXPECTED_MESSAGES) {
+    try {
+      const element = screen.getByText(msg, { exact: true });
+      if (element) {
+        return msg;
+      }
+    } catch {
+      // Message not found, try next
+    }
+  }
+  return '';
+};
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('ThinkingShimmer', () => {
@@ -31,29 +48,29 @@ describe('ThinkingShimmer', () => {
 
   it('renders without crashing', () => {
     render(<ThinkingShimmer />);
-    expect(screen.getByText(/./)).toBeInTheDocument();
+    const message = getMessageText();
+    expect(message).toBeTruthy();
   });
 
   it('renders one of the predefined thinking messages', () => {
     render(<ThinkingShimmer />);
-    const content = screen.getByText(/./);
-    expect(EXPECTED_MESSAGES).toContain(content.textContent);
+    const message = getMessageText();
+    expect(EXPECTED_MESSAGES).toContain(message);
   });
 
   // ── Message consistency ────────────────────────────────────────────────────
 
   it('displays the same message across re-renders', () => {
     const { rerender } = render(<ThinkingShimmer />);
-    const firstMessage = screen.getByText(/./);
-    const firstMessageText = firstMessage.textContent;
+    const firstMessage = getMessageText();
 
     rerender(<ThinkingShimmer />);
-    const secondMessage = screen.getByText(/./);
-    expect(secondMessage.textContent).toBe(firstMessageText);
+    const secondMessage = getMessageText();
+    expect(secondMessage).toBe(firstMessage);
 
     rerender(<ThinkingShimmer />);
-    const thirdMessage = screen.getByText(/./);
-    expect(thirdMessage.textContent).toBe(firstMessageText);
+    const thirdMessage = getMessageText();
+    expect(thirdMessage).toBe(firstMessage);
   });
 
   // ── Message randomization ──────────────────────────────────────────────────
@@ -65,8 +82,8 @@ describe('ThinkingShimmer', () => {
     // (probabilistic test - with 8 messages, rendering 30 instances should give us variety)
     for (let i = 0; i < 30; i++) {
       const { unmount } = render(<ThinkingShimmer />);
-      const message = screen.getByText(/./);
-      messages.add(message.textContent || '');
+      const message = getMessageText();
+      messages.add(message);
       unmount();
     }
 
@@ -78,15 +95,15 @@ describe('ThinkingShimmer', () => {
   // ── Custom className ───────────────────────────────────────────────────────
 
   it('applies custom className to the Shimmer component', () => {
-    render(<ThinkingShimmer className="custom-class" />);
-    const shimmer = screen.getByText(/./);
-    expect(shimmer.className).toContain('custom-class');
+    const { container } = render(<ThinkingShimmer className="custom-class" />);
+    const shimmer = container.querySelector('.custom-class');
+    expect(shimmer).toBeInTheDocument();
   });
 
   it('works without a className prop', () => {
     render(<ThinkingShimmer />);
-    const shimmer = screen.getByText(/./);
-    expect(shimmer).toBeInTheDocument();
+    const message = getMessageText();
+    expect(message).toBeTruthy();
   });
 
   // ── Message variety coverage ───────────────────────────────────────────────
@@ -97,8 +114,8 @@ describe('ThinkingShimmer', () => {
     // With 100 instances and 8 messages, we should hit all of them
     for (let i = 0; i < 100; i++) {
       const { unmount } = render(<ThinkingShimmer />);
-      const message = screen.getByText(/./);
-      messages.add(message.textContent || '');
+      const message = getMessageText();
+      messages.add(message);
       unmount();
     }
 
@@ -110,8 +127,16 @@ describe('ThinkingShimmer', () => {
 
   it('renders non-empty message text', () => {
     render(<ThinkingShimmer />);
-    const shimmer = screen.getByText(/./);
-    expect(shimmer.textContent).toBeTruthy();
-    expect(shimmer.textContent!.length).toBeGreaterThan(0);
+    const message = getMessageText();
+    expect(message).toBeTruthy();
+    expect(message.length).toBeGreaterThan(0);
+  });
+
+  // ── Brain icon rendering ───────────────────────────────────────────────────
+
+  it('renders the brain icon', () => {
+    const { container } = render(<ThinkingShimmer />);
+    const svg = container.querySelector('svg');
+    expect(svg).toBeInTheDocument();
   });
 });
