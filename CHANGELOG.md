@@ -9,22 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Unified Working Directory Configuration**: New `working_dir` config field (default: `./workspace`) with `SQUID_WORKING_DIR` environment variable support
-  - Centralizes workspace path management across CLI, server, and Docker
-  - Automatically creates working directory if it doesn't exist on startup
-  - Plugins now resolve file operations relative to this directory internally
-  - **Security Enhancement**: Plugins can no longer see the actual filesystem path - they work with relative paths only
-  - CLI `--dir` parameter still works and overrides config value
-  - Docker: `SQUID_WORKING_DIR` environment variable replaces hardcoded `--dir` flag
+- **Enhanced Thinking Indicators**: Randomized thinking messages and visual feedback after tool execution for better UX (inspired by Claude Code/Qwen Code)
+- **Unified Working Directory Configuration**: New `working_dir` config field (default: `./workspace`) with `SQUID_WORKING_DIR` environment variable support. Centralizes workspace path management across CLI, server, and Docker. Plugins now work with relative paths only for enhanced security
 
 ### Changed
 
-- **Plugin Security**: Plugins no longer have access to the actual workspace filesystem path - `project_dir()` now returns `"."` to enforce relative path usage
-- **Docker Compose**: Replaced hardcoded `--dir /workspace` with `SQUID_WORKING_DIR=/workspace` environment variable for consistency
+- **Plugin Security**: Plugins no longer have access to actual workspace filesystem path - `project_dir()` returns `"."` to enforce relative path usage
+- **Docker Compose**: Replaced hardcoded `--dir /workspace` with `SQUID_WORKING_DIR=/workspace` environment variable
 
 ### Removed
 
-- **`api_model` Configuration**: Removed the deprecated global `api_model` field from `Config` struct and `squid.config.json`. The `API_MODEL` environment variable is no longer recognized. Models are configured exclusively per-agent in the `agents` section of `squid.config.json`. The `/api/config` endpoint no longer returns `api_model`
+- **`api_model` Configuration**: Removed deprecated global `api_model` field and `API_MODEL` environment variable. Models are now configured per-agent in `squid.config.json`
 
 ## [0.12.0] - 2026-03-31
 
