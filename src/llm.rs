@@ -460,81 +460,81 @@ pub async fn ask_llm_streaming(
     {
         // Save session metadata FIRST (before messages, due to foreign key constraint)
         if sess.title.is_none() {
-                // Generate title from first user message
-                let title = if question.len() > 100 {
-                    format!("{}...", &question[..97])
-                } else {
-                    question.to_string()
-                };
-                sess.title = Some(title);
-            }
-
-            if let Err(e) = database.save_session(sess) {
-                debug!("Failed to save session: {}", e);
+            // Generate title from first user message
+            let title = if question.len() > 100 {
+                format!("{}...", &question[..97])
             } else {
-                debug!("Session saved successfully: {}", sess.id);
-            }
+                question.to_string()
+            };
+            sess.title = Some(title);
+        }
 
-            // Save user message
-            let user_msg = crate::session::ChatMessage {
-                role: "user".to_string(),
-                content: question.to_string(),
-                sources: if let Some(path) = file_path {
-                    if let Some(content) = file_content {
-                        vec![Source {
-                            title: path.to_string(),
-                            content: content.to_string(),
-                        }]
-                    } else {
-                        vec![]
-                    }
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to save session: {}", e);
+        } else {
+            debug!("Session saved successfully: {}", sess.id);
+        }
+
+        // Save user message
+        let user_msg = crate::session::ChatMessage {
+            role: "user".to_string(),
+            content: question.to_string(),
+            sources: if let Some(path) = file_path {
+                if let Some(content) = file_content {
+                    vec![Source {
+                        title: path.to_string(),
+                        content: content.to_string(),
+                    }]
                 } else {
                     vec![]
-                },
-                timestamp: chrono::Utc::now().timestamp(),
-                thinking_steps: None,
-            };
-
-            if let Err(e) = database.save_message(&sess.id, &user_msg) {
-                debug!("Failed to save user message to session: {}", e);
+                }
             } else {
-                debug!("User message saved successfully to session {}", sess.id);
-            }
+                vec![]
+            },
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: None,
+        };
 
-            // Save assistant message
-            let thinking_steps_opt = if thinking_steps.is_empty() {
-                None
-            } else {
-                Some(thinking_steps)
-            };
-            let assistant_msg = crate::session::ChatMessage {
-                role: "assistant".to_string(),
-                content: accumulated_content.trim().to_string(),
-                sources: vec![],
-                timestamp: chrono::Utc::now().timestamp(),
-                thinking_steps: thinking_steps_opt,
-            };
-
-            if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-                debug!("Failed to save assistant message to session: {}", e);
-            } else {
-                debug!(
-                    "Assistant message saved successfully to session {}",
-                    sess.id
-                );
-            }
-
-            // Update session token usage
-            sess.add_tokens(
-                total_input_tokens,
-                total_output_tokens,
-                total_reasoning_tokens,
-                total_cache_tokens,
-            );
-            if let Err(e) = database.save_session(sess) {
-                debug!("Failed to update session: {}", e);
-            }
+        if let Err(e) = database.save_message(&sess.id, &user_msg) {
+            debug!("Failed to save user message to session: {}", e);
+        } else {
+            debug!("User message saved successfully to session {}", sess.id);
         }
+
+        // Save assistant message
+        let thinking_steps_opt = if thinking_steps.is_empty() {
+            None
+        } else {
+            Some(thinking_steps)
+        };
+        let assistant_msg = crate::session::ChatMessage {
+            role: "assistant".to_string(),
+            content: accumulated_content.trim().to_string(),
+            sources: vec![],
+            timestamp: chrono::Utc::now().timestamp(),
+            thinking_steps: thinking_steps_opt,
+        };
+
+        if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
+            debug!("Failed to save assistant message to session: {}", e);
+        } else {
+            debug!(
+                "Assistant message saved successfully to session {}",
+                sess.id
+            );
+        }
+
+        // Update session token usage
+        sess.add_tokens(
+            total_input_tokens,
+            total_output_tokens,
+            total_reasoning_tokens,
+            total_cache_tokens,
+        );
+        if let Err(e) = database.save_session(sess) {
+            debug!("Failed to update session: {}", e);
+        }
+    }
 
     Ok(accumulated_content.trim().to_string())
 }
