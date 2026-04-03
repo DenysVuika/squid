@@ -153,7 +153,6 @@ impl Default for ServerConfig {
 ///
 /// **Fields:**
 /// - `api_url`: Base URL for the LLM API (e.g., `http://127.0.0.1:1234/v1`)
-/// - `api_model`: Model identifier (e.g., `local-model`, `qwen2.5-coder`, `gpt-4`)
 /// - `api_key`: Optional API key (use `None` for local models)
 /// - `context_window`: Maximum context window size in tokens (e.g., `32768` for Qwen2.5-Coder)
 /// - `log_level`: Console logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
@@ -175,9 +174,6 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.12.0", note = "Use agent-specific model configuration instead. CLI commands now use the default agent's model.")]
-    pub api_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
     #[serde(default = "default_context_window")]
@@ -224,7 +220,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
-            api_model: None, // Deprecated: use agent-specific models
             api_key: None,
             context_window: default_context_window(),
             log_level: default_log_level(),
@@ -296,12 +291,6 @@ impl Config {
         if let Ok(api_url) = std::env::var("API_URL") {
             debug!("Overriding API_URL from environment");
             config.api_url = api_url;
-        }
-
-        if let Ok(api_model) = std::env::var("API_MODEL") {
-            warn!("⚠️  API_MODEL is deprecated. Use agent-specific model configuration instead. CLI commands now use the default agent's model.");
-            debug!("Overriding API_MODEL from environment (deprecated)");
-            config.api_model = Some(api_model);
         }
 
         if let Ok(api_key) = std::env::var("API_KEY") {
@@ -545,7 +534,6 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.api_url, "http://127.0.0.1:1234/v1");
-        assert_eq!(config.api_model, None);
         assert_eq!(config.api_key, None);
         assert_eq!(config.context_window, 8192);
         assert_eq!(config.log_level, "error");

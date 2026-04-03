@@ -588,7 +588,6 @@ export async function fetchAgents(apiUrl: string): Promise<AgentsResponse> {
 
 export interface ConfigResponse {
   api_url: string;
-  api_model: string;
   context_window: number;
   rag_enabled: boolean;
 }
@@ -602,7 +601,7 @@ export interface ConfigResponse {
  * @example
  * ```typescript
  * const config = await fetchConfig('');
- * console.log(`Default model: ${config.api_model}`);
+ * console.log(`Context window: ${config.context_window}`);
  * ```
  */
 export async function fetchConfig(apiUrl: string): Promise<ConfigResponse> {

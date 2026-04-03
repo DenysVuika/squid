@@ -137,7 +137,6 @@ Create a `.env` file in the project root:
 
 ```bash
 API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
 API_KEY=not-needed
 SQUID_LOG_LEVEL=error
 ```
@@ -146,7 +145,6 @@ SQUID_LOG_LEVEL=error
 
 ```bash
 API_URL=http://localhost:11434/v1
-API_MODEL=qwen2.5-coder
 API_KEY=not-needed
 SQUID_LOG_LEVEL=error
 ```
@@ -155,7 +153,6 @@ SQUID_LOG_LEVEL=error
 
 ```env
 API_URL=https://api.openai.com/v1
-API_MODEL=gpt-4
 API_KEY=sk-your-actual-api-key-here
 SQUID_LOG_LEVEL=error
 ```
@@ -164,14 +161,13 @@ SQUID_LOG_LEVEL=error
 
 ```env
 API_URL=https://api.mistral.ai/v1
-API_MODEL=devstral-2512
 API_KEY=your-mistral-api-key-here
 SQUID_LOG_LEVEL=error
 ```
 
 ### For Other Providers
 
-Check your provider's documentation for the correct `API_URL`, `API_MODEL`, and `API_KEY` values.
+Check your provider's documentation for the correct `API_URL` and `API_KEY` values.
 
 **Important Notes:**
 - If both `squid.config.json` and `.env` exist, the config file takes precedence
@@ -390,7 +386,7 @@ squid ask "Create a hello.txt file with 'Hello, World!'"
 - **Mistral API**:
   - Check your API key is valid
   - Verify URL: `https://api.mistral.ai/v1`
-- **All providers**: Verify `API_URL`, `API_MODEL`, and `API_KEY` in your `.env` file
+- **All providers**: Verify `API_URL` and `API_KEY` in your `.env` file
 
 ### Response not relevant to file
 - Make sure your question specifically asks about the file content

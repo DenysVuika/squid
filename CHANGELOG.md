@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`api_model` Configuration**: Removed the deprecated global `api_model` field from `Config` struct and `squid.config.json`. The `API_MODEL` environment variable is no longer recognized. Models are configured exclusively per-agent in the `agents` section of `squid.config.json`. The `/api/config` endpoint no longer returns `api_model`
+
 ## [0.12.0] - 2026-03-31
 
 ### Added
@@ -356,7 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - See [Security Documentation](docs/SECURITY.md#-tool-permissions-allowdeny-lists) for details
 
 - **Mistral API Support**: Works with Mistral's OpenAI-compatible endpoint
-  - Example: `API_URL=https://api.mistral.ai/v1`, `API_MODEL=devstral-2512`
+  - Example: `API_URL=https://api.mistral.ai/v1`
   - Supports all Mistral models
 
 - **Datetime Tool**: New `now` tool for current date/time queries

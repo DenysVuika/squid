@@ -194,17 +194,14 @@ Make sure your `.env` file is configured:
 ```env
 # For LM Studio (local)
 API_URL=http://127.0.0.1:1234/v1
-API_MODEL=local-model
 API_KEY=not-needed
 
 # For OpenAI
 API_URL=https://api.openai.com/v1
-API_MODEL=gpt-4
 API_KEY=sk-your-key-here
 
 # For Mistral API
 API_URL=https://api.mistral.ai/v1
-API_MODEL=devstral-2512
 API_KEY=your-mistral-api-key-here
 ```
 

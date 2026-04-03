@@ -468,7 +468,6 @@ The `squid.config.json` file created by `squid init`:
 ```json
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder",
   "context_window": 32768,
   "log_level": "error",
   "database_path": "squid.db",
@@ -495,7 +494,6 @@ The `squid.config.json` file created by `squid init`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `api_url` | string | OpenAI-compatible API endpoint URL |
-| `api_model` | string | Model identifier to use |
 | `api_key` | string (optional) | API key for authentication |
 | `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
@@ -511,7 +509,6 @@ Instead of `squid.config.json`, you can create a `.env` file:
 ```bash
 # OpenAI API Configuration
 API_URL=http://127.0.0.1:1234/v1
-# API_MODEL=local-model  # DEPRECATED: Use agent-specific models in squid.config.json
 API_KEY=not-needed
 SQUID_CONTEXT_WINDOW=32768
 SQUID_DATABASE_PATH=squid.db
