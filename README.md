@@ -225,7 +225,7 @@ docker compose up -d
 
 The `.env` file configures:
 - **Model endpoints**: `API_URL`, `SQUID_EMBEDDING_URL` (connect to Docker AI models)
-- **Model identifiers**: `API_MODEL`, `SQUID_EMBEDDING_MODEL` (which models to use)
+- **Model identifiers**: `SQUID_EMBEDDING_MODEL` (which embedding model to use)
 
 **Default configuration**:
 - LLM: Qwen2.5-Coder 7B via Docker AI at `http://llm:8080/v1`
@@ -246,17 +246,14 @@ services:
     environment:
       # For LM Studio (running on host)
       - API_URL=http://host.docker.internal:1234/v1
-      - API_MODEL=qwen2.5-coder
       - SQUID_EMBEDDING_URL=http://host.docker.internal:1234/v1
       - SQUID_EMBEDDING_MODEL=nomic-embed-text
-      
+
       # For Ollama (running on host)
       # - API_URL=http://host.docker.internal:11434/v1
-      # - API_MODEL=qwen2.5-coder
-      
+
       # For OpenAI
       # - API_URL=https://api.openai.com/v1
-      # - API_MODEL=gpt-4
       # - API_KEY=your-api-key-here
 ```
 
@@ -357,13 +354,6 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - OpenAI: `https://api.openai.com/v1`
   - Mistral AI: `https://api.mistral.ai/v1`
   - Other OpenAI-compatible services: Check provider's documentation
-  
-- `API_MODEL`: The model identifier to use (can be overridden in Web UI)
-  - ~~`API_MODEL`~~ **DEPRECATED** (as of v0.12.0): Use agent-specific model configuration instead
-    - CLI commands (`ask`, `review`) now use the default agent's model from `squid.config.json`
-    - Web UI always used agent-specific models
-    - Configure models per-agent in the `agents` section (see [Agents](#agents) below)
-    - **Migration**: Remove `API_MODEL` from `.env` and configure models in `squid.config.json` agents
   
 - `API_KEY`: Your API key
   - Local services (LM Studio, Ollama, Docker): `not-needed`
@@ -1230,7 +1220,6 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 5. Set up your `.env`:
    ```bash
    API_URL=http://127.0.0.1:1234/v1
-   API_MODEL=local-model
    API_KEY=not-needed
    ```
 6. Run:
@@ -1259,7 +1248,6 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 4. Set up your `.env`:
    ```bash
    API_URL=http://localhost:11434/v1
-   API_MODEL=qwen2.5-coder
    API_KEY=not-needed
    ```
 5. Run:
@@ -1280,7 +1268,6 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 2. Set up your `.env`:
    ```bash
    API_URL=https://api.openai.com/v1
-   API_MODEL=gpt-4
    API_KEY=sk-your-api-key-here
    ```
 3. Run:
@@ -1301,7 +1288,6 @@ See **[tests/README.md](tests/README.md)** for complete testing documentation an
 2. Set up your `.env`:
    ```bash
    API_URL=https://api.mistral.ai/v1
-   API_MODEL=devstral-2512
    API_KEY=your-mistral-api-key-here
    ```
 3. Run:

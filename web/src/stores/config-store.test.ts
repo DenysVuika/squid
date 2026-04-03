@@ -11,7 +11,6 @@ vi.mock('@/lib/chat-api', () => ({
 const INITIAL_STATE = {
   ragEnabled: false,
   apiUrl: '',
-  apiModel: '',
   contextWindow: 0,
   isLoading: false,
   isLoaded: false,
@@ -19,7 +18,6 @@ const INITIAL_STATE = {
 
 const MOCK_CONFIG = {
   api_url: 'http://localhost:8080',
-  api_model: 'gpt-4o',
   context_window: 8192,
   rag_enabled: true,
 };
@@ -39,12 +37,11 @@ describe('useConfigStore', () => {
   // ── Initial state ──────────────────────────────────────────────────────────
 
   it('has the correct initial state', () => {
-    const { ragEnabled, apiUrl, apiModel, contextWindow, isLoading, isLoaded } =
+    const { ragEnabled, apiUrl, contextWindow, isLoading, isLoaded } =
       useConfigStore.getState();
 
     expect(ragEnabled).toBe(false);
     expect(apiUrl).toBe('');
-    expect(apiModel).toBe('');
     expect(contextWindow).toBe(0);
     expect(isLoading).toBe(false);
     expect(isLoaded).toBe(false);
@@ -76,10 +73,9 @@ describe('useConfigStore', () => {
 
     await useConfigStore.getState().loadConfig();
 
-    const { ragEnabled, apiUrl, apiModel, contextWindow } = useConfigStore.getState();
+    const { ragEnabled, apiUrl, contextWindow } = useConfigStore.getState();
     expect(ragEnabled).toBe(true);
     expect(apiUrl).toBe('http://localhost:8080');
-    expect(apiModel).toBe('gpt-4o');
     expect(contextWindow).toBe(8192);
   });
 
@@ -120,7 +116,6 @@ describe('useConfigStore', () => {
       '📋 Configuration loaded:',
       expect.objectContaining({
         ragEnabled: true,
-        apiModel: 'gpt-4o',
         contextWindow: 8192,
       }),
     );
@@ -148,7 +143,7 @@ describe('useConfigStore', () => {
     expect(useConfigStore.getState().ragEnabled).toBe(false);
   });
 
-  it('does not overwrite apiUrl, apiModel, or contextWindow on error', async () => {
+  it('does not overwrite apiUrl or contextWindow on error', async () => {
     // Load a successful config first
     vi.mocked(fetchConfig).mockResolvedValueOnce(MOCK_CONFIG);
     await useConfigStore.getState().loadConfig();
@@ -157,9 +152,8 @@ describe('useConfigStore', () => {
     vi.mocked(fetchConfig).mockRejectedValueOnce(new Error('Network error'));
     await useConfigStore.getState().loadConfig();
 
-    const { apiUrl, apiModel, contextWindow } = useConfigStore.getState();
+    const { apiUrl, contextWindow } = useConfigStore.getState();
     expect(apiUrl).toBe('http://localhost:8080');
-    expect(apiModel).toBe('gpt-4o');
     expect(contextWindow).toBe(8192);
   });
 
@@ -178,14 +172,12 @@ describe('useConfigStore', () => {
   it('reflects the latest config after being called multiple times', async () => {
     vi.mocked(fetchConfig)
       .mockResolvedValueOnce(MOCK_CONFIG)
-      .mockResolvedValueOnce({ ...MOCK_CONFIG, api_model: 'gpt-4o-mini', context_window: 4096 });
+      .mockResolvedValueOnce({ ...MOCK_CONFIG, context_window: 4096 });
 
     await useConfigStore.getState().loadConfig();
-    expect(useConfigStore.getState().apiModel).toBe('gpt-4o');
     expect(useConfigStore.getState().contextWindow).toBe(8192);
 
     await useConfigStore.getState().loadConfig();
-    expect(useConfigStore.getState().apiModel).toBe('gpt-4o-mini');
     expect(useConfigStore.getState().contextWindow).toBe(4096);
   });
 
@@ -200,6 +192,5 @@ describe('useConfigStore', () => {
 
     await useConfigStore.getState().loadConfig();
     expect(useConfigStore.getState().ragEnabled).toBe(true);
-    expect(useConfigStore.getState().apiModel).toBe('gpt-4o');
   });
 });

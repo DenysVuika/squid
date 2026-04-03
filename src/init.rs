@@ -331,7 +331,6 @@ pub async fn run(
 
     let config = crate::config::Config {
         api_url: final_url,
-        api_model: None, // Deprecated: use agent-specific models
         api_key: final_api_key,
         context_window: 32768, // Global default fallback
         log_level: final_log_level,

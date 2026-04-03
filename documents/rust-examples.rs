@@ -9,7 +9,6 @@ use anyhow::Result;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
-    pub api_model: String,
     pub api_key: Option<String>,
     pub context_window: u32,
 }
@@ -18,7 +17,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:1234/v1".to_string(),
-            api_model: "qwen2.5-coder-7b-instruct".to_string(),
             api_key: None,
             context_window: 8192,
         }

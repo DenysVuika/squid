@@ -86,7 +86,6 @@ Embedding documents... ████████████ 4/4
 ```json
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder-7b-instruct",
   "context_window": 32768,
   "rag": {
     "enabled": true,

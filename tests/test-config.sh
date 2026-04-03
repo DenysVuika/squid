@@ -51,7 +51,6 @@ echo "Test 1: Creating example config file"
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://test-url:1234/v1",
-  "api_model": "test-model",
   "api_key": "test-key",
   "log_level": "info"
 }
@@ -62,7 +61,6 @@ echo
 # Test 2: Config file parsing
 echo "Test 2: Verifying config file structure"
 run_test "Config has api_url" "grep -q '\"api_url\"' squid.config.json"
-run_test "Config has api_model" "grep -q '\"api_model\"' squid.config.json"
 run_test "Config has api_key" "grep -q '\"api_key\"' squid.config.json"
 run_test "Config has log_level" "grep -q '\"log_level\"' squid.config.json"
 echo
@@ -72,7 +70,6 @@ echo "Test 3: Testing config without optional fields (api_key)"
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model",
   "log_level": "info"
 }
 EOF

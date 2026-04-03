@@ -41,7 +41,6 @@ const INITIAL_STATE = {
 /** Minimal valid config response — loadAgents calls fetchConfig in parallel but does not use the result. */
 const STUB_CONFIG = {
   api_url: '',
-  api_model: '',
   context_window: 0,
   rag_enabled: false,
 };

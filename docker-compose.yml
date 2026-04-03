@@ -55,7 +55,6 @@ services:
     models:
       llm:
         endpoint_var: API_URL # OpenAI-compatible LLM endpoint
-        model_var: API_MODEL # Model identifier for LLM
       embedding:
         endpoint_var: SQUID_EMBEDDING_URL # OpenAI-compatible embedding endpoint
         model_var: SQUID_EMBEDDING_MODEL # Model identifier for embeddings

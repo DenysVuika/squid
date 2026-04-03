@@ -43,7 +43,6 @@ echo "Creating squid.config.json with default permissions..."
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model",
   "log_level": "info",
   "permissions": {
     "allow": ["now"],
@@ -91,7 +90,6 @@ echo "Let's add 'write_file' to the deny list..."
 cat > squid.config.json << 'EOF'
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "local-model",
   "log_level": "info",
   "permissions": {
     "allow": ["now"],

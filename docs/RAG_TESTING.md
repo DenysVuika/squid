@@ -42,7 +42,6 @@ Create `squid.config.json`:
 ```json
 {
   "api_url": "http://127.0.0.1:1234/v1",
-  "api_model": "qwen2.5-coder",
   "context_window": 32768,
   "log_level": "info",
   "database_path": "squid.db",

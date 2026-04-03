@@ -299,7 +299,7 @@ show_status() {
 
     # Show environment variables
     print_info "Model Configuration:"
-    docker compose exec -T squid env 2>/dev/null | grep -E "API_URL|API_MODEL|EMBEDDING_URL|EMBEDDING_MODEL|SQUID_CONTEXT_WINDOW" || true
+    docker compose exec -T squid env 2>/dev/null | grep -E "API_URL|EMBEDDING_URL|EMBEDDING_MODEL|SQUID_CONTEXT_WINDOW" || true
 }
 
 # Stop services
@@ -354,7 +354,7 @@ test_setup() {
     print_info "Checking environment variables..."
     if docker compose exec -T squid env | grep -q "API_URL"; then
         print_success "Environment variables configured"
-        docker compose exec -T squid env | grep -E "API_URL|API_MODEL|EMBEDDING_URL|EMBEDDING_MODEL|SQUID_CONTEXT_WINDOW"
+        docker compose exec -T squid env | grep -E "API_URL|EMBEDDING_URL|EMBEDDING_MODEL|SQUID_CONTEXT_WINDOW"
     else
         print_warning "Environment variables not found"
     fi
