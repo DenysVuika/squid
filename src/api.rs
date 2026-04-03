@@ -11,7 +11,7 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -220,14 +220,11 @@ pub async fn get_session(
     session_id: web::Path<String>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    trace!("Getting session: {}", session_id);
-
     match session_manager.get_session(&session_id) {
         Some(session) => {
             let response = SessionResponse {
                 session_id: session.id,
                 messages: session.messages.iter().map(|msg| {
-                    trace!("Serializing message with {} thinking steps", msg.thinking_steps.as_ref().map(|s| s.len()).unwrap_or(0));
                     SessionMessage {
                         role: msg.role.clone(),
                         content: msg.content.clone(),
@@ -266,8 +263,6 @@ pub async fn get_session(
 pub async fn list_sessions(
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    trace!("Listing all sessions");
-
     let session_ids = session_manager.list_sessions();
     let mut sessions = Vec::new();
 
@@ -320,8 +315,6 @@ pub async fn delete_session(
     session_id: web::Path<String>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Deleting session: {}", session_id);
-
     let deleted = session_manager.delete_session(&session_id);
 
     if deleted {
@@ -342,8 +335,6 @@ pub async fn update_session(
     update_request: web::Json<UpdateSessionRequest>,
     session_manager: web::Data<Arc<session::SessionManager>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Updating session: {} with title: {}", session_id, update_request.title);
-
     // Validate title is not empty
     let title = update_request.title.trim();
     if title.is_empty() {
@@ -371,8 +362,6 @@ pub async fn chat_stream(
     approval_map: web::Data<ApprovalStateMap>,
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Received chat request: {:?}", body);
-
     let question = body.message.clone();
     let use_rag = body.use_rag.unwrap_or(false);
     let mut use_tools = body.use_tools.unwrap_or(false);
@@ -436,12 +425,9 @@ pub async fn chat_stream(
         let mut rag_sources = Vec::new();
         if use_rag {
             if let Some(rag_sys) = rag_system.as_ref() {
-                debug!("🔍 RAG enabled - querying for context: {}", question);
                 match rag_sys.query.execute_structured(&question).await {
                     Ok(results) => {
-                        debug!("✅ RAG returned {} results", results.len());
                         for result in results.iter() {
-                            debug!("  📄 {} (relevance: {:.3})", result.filename, 1.0 - result.distance.min(1.0));
                             rag_sources.push(Source {
                                 title: result.filename.clone(),
                                 content: result.chunk_text.clone(),
@@ -691,22 +677,17 @@ pub async fn chat_stream(
                 }));
 
                 if !final_content_trimmed.is_empty() || thinking_steps_opt.is_some() {
-                    trace!("Saving assistant message to session {} (content length: {} chars, thinking_steps: {}, sources: {} file + {} RAG = {})",
-                        session_id, final_content_trimmed.len(),
-                        thinking_steps_opt.as_ref().map(|s| s.len()).unwrap_or(0),
-                        sources.len(), rag_sources.len(), all_sources.len());
-
                     match session_manager_clone.add_assistant_message(
                         &session_id,
                         final_content_trimmed.to_string(),
                         all_sources,
                         thinking_steps_opt,
                     ) {
-                        Ok(_) => trace!("Assistant message saved successfully"),
+                        Ok(_) => {},
                         Err(e) => debug!("Failed to save assistant message: {}", e),
                     }
                 } else {
-                    trace!("Skipping empty assistant message for session {}", session_id);
+                    // Skip empty messages
                 }
 
                 // If provider didn't send usage stats, estimate them client-side
@@ -759,11 +740,6 @@ pub async fn chat_stream(
                             total_output_tokens = tokens::estimate_message_tokens(&model_id, accumulated_content.as_str());
                         }
 
-                        debug!(
-                            "Estimated tokens for session {}: input={}, output={}",
-                            session_id, total_input_tokens, total_output_tokens
-                        );
-
                         // Send estimated usage to UI
                         let usage_event = StreamEvent::Usage {
                             input_tokens: total_input_tokens,
@@ -780,8 +756,6 @@ pub async fn chat_stream(
 
                 // Update session with token usage and model info
                 if total_input_tokens > 0 || total_output_tokens > 0 {
-                    trace!("Updating session {} with token usage: input={}, output={}",
-                           session_id, total_input_tokens, total_output_tokens);
                     if let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
                         &agent_id_for_stream,
@@ -901,9 +875,6 @@ async fn create_chat_stream(
             final_system_prompt.to_string()
         });
 
-    trace!("System message:\n{}", system_message);
-    trace!("User message:\n{}", user_message);
-
     // Get conversation history from session
     let session = session_manager
         .get_session(session_id)
@@ -959,10 +930,6 @@ async fn create_chat_stream(
                     // Add assistant message with tool calls
                     // Strip reasoning blocks when sending back to model
                     let filtered_content = llm::strip_reasoning_blocks(&msg.content);
-                    if filtered_content.len() != msg.content.len() {
-                        trace!("Filtered reasoning from assistant message: {} chars -> {} chars",
-                               msg.content.len(), filtered_content.len());
-                    }
                     messages.push(
                         ChatCompletionRequestAssistantMessage {
                             content: if filtered_content.is_empty() {
@@ -1222,8 +1189,6 @@ async fn create_chat_stream(
                                         // Generate unique approval ID
                                         let approval_id = Uuid::new_v4().to_string();
 
-                                        info!("Tool '{}' needs approval, generated approval_id: {}", name, approval_id);
-
                                         // Create oneshot channel for approval response
                                         let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
 
@@ -1248,23 +1213,20 @@ async fn create_chat_stream(
                                             tool_description: get_tool_description(name),
                                         });
 
-                                        info!("Emitted ToolApprovalRequest event for approval_id: {}", approval_id);
-
                                         // Wait for approval with 5 minute timeout
                                         let approved = match tokio::time::timeout(
                                             Duration::from_secs(300),
                                             receiver
                                         ).await {
                                             Ok(Ok(decision)) => {
-                                                info!("Tool '{}' approval received: {}", name, decision);
                                                 decision
                                             }
                                             Ok(Err(_)) => {
-                                                warn!("Tool '{}' approval channel closed without response", name);
+                                                warn!("Tool approval channel closed without response");
                                                 false
                                             }
                                             Err(_) => {
-                                                warn!("Tool '{}' approval timed out after 5 minutes", name);
+                                                warn!("Tool approval timed out after 5 minutes");
                                                 false
                                             }
                                         };
@@ -1497,8 +1459,6 @@ pub async fn handle_tool_approval(
     body: web::Json<ToolApprovalRequest>,
     approval_map: web::Data<ApprovalStateMap>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Received tool approval: {:?}", body);
-
     // Find the pending approval
     let mut approvals = approval_map.lock().await;
 
@@ -1606,8 +1566,6 @@ pub async fn rag_query(
     body: web::Json<RagQueryRequest>,
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("RAG query request: {}", body.query);
-
     let Some(rag_system) = rag_system.as_ref() else {
         return Ok(HttpResponse::ServiceUnavailable().json(json!({
             "error": "RAG system is not enabled"
@@ -1687,7 +1645,6 @@ pub async fn rag_delete_document(
     rag_system: web::Data<Option<Arc<RagSystem>>>,
 ) -> Result<HttpResponse, Error> {
     let filename = path.into_inner();
-    debug!("Deleting RAG document: {}", filename);
 
     let Some(rag_system) = rag_system.as_ref() else {
         return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
@@ -1761,8 +1718,6 @@ pub async fn rag_upload_document(
     rag_system: web::Data<Option<Arc<RagSystem>>>,
     app_config: web::Data<Arc<config::Config>>,
 ) -> Result<HttpResponse, Error> {
-    debug!("Uploading document: {}", body.filename);
-
     if rag_system.as_ref().is_none() {
         return Ok(HttpResponse::ServiceUnavailable().json(RagResponse {
             success: false,
