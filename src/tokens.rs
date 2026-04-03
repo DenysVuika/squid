@@ -245,6 +245,7 @@ mod tests {
             ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
                 content: Some("Answer 1".to_string().into()),
                 name: None,
+                ..Default::default()
             }),
             ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text("Question 2".to_string()),
