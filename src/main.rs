@@ -253,13 +253,15 @@ async fn main() {
             }
             llm::run_ask_command(
                 question,
-                message.as_deref(),
-                *no_stream,
-                file.as_deref(),
-                prompt.as_deref(),
-                agent.as_deref(),
-                *rag,
-                *no_rag,
+                llm::AskCommandOptions {
+                    message: message.as_deref(),
+                    no_stream: *no_stream,
+                    file: file.as_deref(),
+                    prompt: prompt.as_deref(),
+                    agent: agent.as_deref(),
+                    rag_flag: *rag,
+                    no_rag_flag: *no_rag,
+                },
                 &app_config,
             )
             .await;

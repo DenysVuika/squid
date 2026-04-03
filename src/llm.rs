@@ -41,6 +41,29 @@ const CODE_REVIEW_MAKEFILE_PROMPT: &str = include_str!("./assets/review-makefile
 const CODE_REVIEW_MARKDOWN_PROMPT: &str = include_str!("./assets/review-md.md");
 const CODE_REVIEW_YAML_PROMPT: &str = include_str!("./assets/review-yaml.md");
 
+/// Options for the ask command
+pub struct AskCommandOptions<'a> {
+    pub message: Option<&'a str>,
+    pub no_stream: bool,
+    pub file: Option<&'a Path>,
+    pub prompt: Option<&'a Path>,
+    pub agent: Option<&'a str>,
+    pub rag_flag: bool,
+    pub no_rag_flag: bool,
+}
+
+/// Parameters for LLM query functions
+pub struct LlmQueryParams<'a> {
+    pub question: &'a str,
+    pub file_content: Option<&'a str>,
+    pub file_path: Option<&'a str>,
+    pub system_prompt: Option<&'a str>,
+    pub model: &'a str,
+    pub app_config: &'a config::Config,
+    pub session: Option<&'a mut ChatSession>,
+    pub db: Option<&'a db::Database>,
+}
+
 /// Combines persona and task-specific prompt into a complete system prompt
 /// Renders templates with secure context variables
 pub fn combine_prompts(task_prompt: &str) -> String {
@@ -153,28 +176,21 @@ pub fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
 /// Sends a streaming request to the LLM and handles tool calls
 /// Optionally saves the conversation to a session if session_id and db are provided
 pub async fn ask_llm_streaming(
-    question: &str,
-    file_content: Option<&str>,
-    file_path: Option<&str>,
-    system_prompt: Option<&str>,
-    model: &str,
-    app_config: &config::Config,
-    session: Option<&mut ChatSession>,
-    db: Option<&db::Database>,
+    params: LlmQueryParams<'_>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using Model: {}", model);
+    debug!("Using API URL: {}", params.app_config.api_url);
+    debug!("Using Model: {}", params.model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(&app_config.api_url)
-        .with_api_key(app_config.get_api_key());
+        .with_api_base(&params.app_config.api_url)
+        .with_api_key(params.app_config.get_api_key());
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path);
+    let user_message = compose_user_message(params.question, params.file_content, params.file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = params.system_prompt.unwrap_or(&default_prompt);
 
     // Render template variables in system message
     let renderer = template::TemplateRenderer::new();
@@ -202,7 +218,7 @@ pub async fn ask_llm_streaming(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(model)
+        .model(params.model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .stream_options(ChatCompletionStreamOptions {
@@ -358,7 +374,7 @@ pub async fn ask_llm_streaming(
                     let args = tool_call.function.arguments.clone();
                     let tool_call_id = tool_call.id.clone();
 
-                    let config_clone = app_config.clone();
+                    let config_clone = params.app_config.clone();
                     let handle = tokio::spawn(async move {
                         let result: serde_json::Value =
                             tools::call_tool(&name, &args, None, &config_clone).await;
@@ -403,7 +419,7 @@ pub async fn ask_llm_streaming(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(model)
+            .model(params.model)
             .messages(messages)
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
@@ -455,16 +471,16 @@ pub async fn ask_llm_streaming(
     writeln!(lock)?;
 
     // Save to session if provided
-    if let Some(sess) = session
-        && let Some(database) = db
+    if let Some(sess) = params.session
+        && let Some(database) = params.db
     {
         // Save session metadata FIRST (before messages, due to foreign key constraint)
         if sess.title.is_none() {
             // Generate title from first user message
-            let title = if question.len() > 100 {
-                format!("{}...", &question[..97])
+            let title = if params.question.len() > 100 {
+                format!("{}...", &params.question[..97])
             } else {
-                question.to_string()
+                params.question.to_string()
             };
             sess.title = Some(title);
         }
@@ -478,9 +494,9 @@ pub async fn ask_llm_streaming(
         // Save user message
         let user_msg = crate::session::ChatMessage {
             role: "user".to_string(),
-            content: question.to_string(),
-            sources: if let Some(path) = file_path {
-                if let Some(content) = file_content {
+            content: params.question.to_string(),
+            sources: if let Some(path) = params.file_path {
+                if let Some(content) = params.file_content {
                     vec![Source {
                         title: path.to_string(),
                         content: content.to_string(),
@@ -541,29 +557,20 @@ pub async fn ask_llm_streaming(
 
 /// Sends a non-streaming request to the LLM and handles tool calls
 /// Optionally saves the conversation to a session if session_id and db are provided
-pub async fn ask_llm(
-    question: &str,
-    file_content: Option<&str>,
-    file_path: Option<&str>,
-    system_prompt: Option<&str>,
-    model: &str,
-    app_config: &config::Config,
-    session: Option<&mut ChatSession>,
-    db: Option<&db::Database>,
-) -> Result<String, Box<dyn std::error::Error>> {
-    debug!("Using API URL: {}", app_config.api_url);
-    debug!("Using Model: {}", model);
+pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::error::Error>> {
+    debug!("Using API URL: {}", params.app_config.api_url);
+    debug!("Using Model: {}", params.model);
 
     let config = OpenAIConfig::new()
-        .with_api_base(&app_config.api_url)
-        .with_api_key(app_config.get_api_key());
+        .with_api_base(&params.app_config.api_url)
+        .with_api_key(params.app_config.get_api_key());
 
     let client = Client::with_config(config);
 
-    let user_message = compose_user_message(question, file_content, file_path);
+    let user_message = compose_user_message(params.question, params.file_content, params.file_path);
 
     let default_prompt = combine_prompts(ASK_PROMPT);
-    let system_prompt_str = system_prompt.unwrap_or(&default_prompt);
+    let system_prompt_str = params.system_prompt.unwrap_or(&default_prompt);
 
     // Render template variables in system message
     let renderer = template::TemplateRenderer::new();
@@ -591,7 +598,7 @@ pub async fn ask_llm(
     ];
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(model)
+        .model(params.model)
         .messages(initial_messages.clone())
         .tools(tools::get_tools())
         .build()?;
@@ -637,7 +644,7 @@ pub async fn ask_llm(
                 let args = tc.function.arguments.clone();
                 let tool_call_clone = tool_call.clone();
 
-                let config_clone = app_config.clone();
+                let config_clone = params.app_config.clone();
                 let handle = tokio::spawn(async move {
                     let result: serde_json::Value =
                         tools::call_tool(&name, &args, None, &config_clone).await;
@@ -683,7 +690,7 @@ pub async fn ask_llm(
         }
 
         let follow_up_request = CreateChatCompletionRequestArgs::default()
-            .model(model)
+            .model(params.model)
             .messages(messages)
             .build()?;
 
@@ -716,15 +723,15 @@ pub async fn ask_llm(
         let answer_str = answer.to_string();
 
         // Save to session if provided
-        if let Some(sess) = session
-            && let Some(database) = db
+        if let Some(sess) = params.session
+            && let Some(database) = params.db
         {
             // Save session metadata FIRST (before messages, due to foreign key constraint)
             if sess.title.is_none() {
-                let title = if question.len() > 100 {
-                    format!("{}...", &question[..97])
+                let title = if params.question.len() > 100 {
+                    format!("{}...", &params.question[..97])
                 } else {
-                    question.to_string()
+                    params.question.to_string()
                 };
                 sess.title = Some(title);
             }
@@ -738,9 +745,9 @@ pub async fn ask_llm(
             // Save user message
             let user_msg = crate::session::ChatMessage {
                 role: "user".to_string(),
-                content: question.to_string(),
-                sources: if let Some(path) = file_path {
-                    if let Some(content) = file_content {
+                content: params.question.to_string(),
+                sources: if let Some(path) = params.file_path {
+                    if let Some(content) = params.file_content {
                         vec![Source {
                             title: path.to_string(),
                             content: content.to_string(),
@@ -798,15 +805,15 @@ pub async fn ask_llm(
     let answer_str = answer.to_string();
 
     // Save to session if provided (for simple responses without tool calls)
-    if let Some(sess) = session
-        && let Some(database) = db
+    if let Some(sess) = params.session
+        && let Some(database) = params.db
     {
         // Save session metadata FIRST (before messages, due to foreign key constraint)
         if sess.title.is_none() {
-            let title = if question.len() > 100 {
-                format!("{}...", &question[..97])
+            let title = if params.question.len() > 100 {
+                format!("{}...", &params.question[..97])
             } else {
-                question.to_string()
+                params.question.to_string()
             };
             sess.title = Some(title);
         }
@@ -820,9 +827,9 @@ pub async fn ask_llm(
         // Save user message
         let user_msg = crate::session::ChatMessage {
             role: "user".to_string(),
-            content: question.to_string(),
-            sources: if let Some(path) = file_path {
-                if let Some(content) = file_content {
+            content: params.question.to_string(),
+            sources: if let Some(path) = params.file_path {
+                if let Some(content) = params.file_content {
                     vec![Source {
                         title: path.to_string(),
                         content: content.to_string(),
@@ -914,16 +921,10 @@ async fn initialize_rag_if_needed(
 /// and agent model, then dispatches to the LLM (streaming or non-streaming).
 pub async fn run_ask_command(
     question: &str,
-    message: Option<&str>,
-    no_stream: bool,
-    file: Option<&Path>,
-    prompt: Option<&Path>,
-    agent: Option<&str>,
-    rag_flag: bool,
-    no_rag_flag: bool,
+    options: AskCommandOptions<'_>,
     app_config: &config::Config,
 ) {
-    let full_question = if let Some(m) = message {
+    let full_question = if let Some(m) = options.message {
         format!("{} {}", question, m)
     } else {
         question.to_string()
@@ -931,7 +932,7 @@ pub async fn run_ask_command(
 
     info!("Q: {}", full_question);
 
-    let file_content = if let Some(file_path) = file {
+    let file_content = if let Some(file_path) = options.file {
         let ignore_patterns = validate::PathValidator::load_ignore_patterns();
         let validator = validate::PathValidator::with_ignore_file(Some(ignore_patterns));
 
@@ -975,7 +976,7 @@ pub async fn run_ask_command(
         None
     };
 
-    let custom_prompt = if let Some(prompt_path) = prompt {
+    let custom_prompt = if let Some(prompt_path) = options.prompt {
         match std::fs::read_to_string(prompt_path) {
             Ok(content) => {
                 info!("Using custom system prompt ({} bytes)", content.len());
@@ -1003,8 +1004,13 @@ pub async fn run_ask_command(
         None
     };
 
-    let rag_system =
-        initialize_rag_if_needed(app_config.rag.enabled, rag_flag, no_rag_flag, app_config).await;
+    let rag_system = initialize_rag_if_needed(
+        app_config.rag.enabled,
+        options.rag_flag,
+        options.no_rag_flag,
+        app_config,
+    )
+    .await;
 
     let rag_context = if let Some(ref system) = rag_system {
         println!("🦑: Using RAG for enhanced context...");
@@ -1033,7 +1039,9 @@ pub async fn run_ask_command(
         (None, file_opt) => file_opt,
     };
 
-    let agent_id = agent.unwrap_or(app_config.agents.default_agent.as_str());
+    let agent_id = options
+        .agent
+        .unwrap_or(app_config.agents.default_agent.as_str());
     let model = match app_config.get_agent(agent_id) {
         Some(agent_config) => {
             info!(
@@ -1070,32 +1078,32 @@ pub async fn run_ask_command(
         }
     };
 
-    if no_stream {
-        match ask_llm(
-            &full_question,
-            enhanced_file_content.as_deref(),
-            file.and_then(|p| p.to_str()),
-            custom_prompt.as_deref(),
-            &model,
+    if options.no_stream {
+        match ask_llm(LlmQueryParams {
+            question: &full_question,
+            file_content: enhanced_file_content.as_deref(),
+            file_path: options.file.and_then(|p| p.to_str()),
+            system_prompt: custom_prompt.as_deref(),
+            model: &model,
             app_config,
-            Some(&mut session),
-            db.as_ref(),
-        )
+            session: Some(&mut session),
+            db: db.as_ref(),
+        })
         .await
         {
             Ok(response) => println!("\n🦑: {}", response),
             Err(e) => error!("Failed to get response: {}", e),
         }
-    } else if let Err(e) = ask_llm_streaming(
-        &full_question,
-        enhanced_file_content.as_deref(),
-        file.and_then(|p| p.to_str()),
-        custom_prompt.as_deref(),
-        &model,
+    } else if let Err(e) = ask_llm_streaming(LlmQueryParams {
+        question: &full_question,
+        file_content: enhanced_file_content.as_deref(),
+        file_path: options.file.and_then(|p| p.to_str()),
+        system_prompt: custom_prompt.as_deref(),
+        model: &model,
         app_config,
-        Some(&mut session),
-        db.as_ref(),
-    )
+        session: Some(&mut session),
+        db: db.as_ref(),
+    })
     .await
     {
         error!("Failed to get response: {}", e);
@@ -1246,31 +1254,31 @@ pub async fn run_review_command(
     };
 
     if no_stream {
-        match ask_llm(
-            &question,
-            Some(&enhanced_content),
-            file.to_str(),
-            Some(&combined_review_prompt),
-            &model,
+        match ask_llm(LlmQueryParams {
+            question: &question,
+            file_content: Some(&enhanced_content),
+            file_path: file.to_str(),
+            system_prompt: Some(&combined_review_prompt),
+            model: &model,
             app_config,
-            Some(&mut session),
-            db.as_ref(),
-        )
+            session: Some(&mut session),
+            db: db.as_ref(),
+        })
         .await
         {
             Ok(response) => println!("\n🦑: {}", response),
             Err(e) => error!("Failed to get review: {}", e),
         }
-    } else if let Err(e) = ask_llm_streaming(
-        &question,
-        Some(&enhanced_content),
-        file.to_str(),
-        Some(&combined_review_prompt),
-        &model,
+    } else if let Err(e) = ask_llm_streaming(LlmQueryParams {
+        question: &question,
+        file_content: Some(&enhanced_content),
+        file_path: file.to_str(),
+        system_prompt: Some(&combined_review_prompt),
+        model: &model,
         app_config,
-        Some(&mut session),
-        db.as_ref(),
-    )
+        session: Some(&mut session),
+        db: db.as_ref(),
+    })
     .await
     {
         error!("Failed to get review: {}", e);
