@@ -772,11 +772,13 @@ pub async fn chat_stream(
                     && let Err(e) = session_manager_clone.update_token_usage(
                         &session_id,
                         &agent_id_for_stream,
-                        total_input_tokens,
-                        total_output_tokens,
-                        total_reasoning_tokens,
-                        total_cache_tokens,
-                        context_window,
+                        crate::session::TokenUsageUpdate {
+                            input_tokens: total_input_tokens,
+                            output_tokens: total_output_tokens,
+                            reasoning_tokens: total_reasoning_tokens,
+                            cache_tokens: total_cache_tokens,
+                            context_window,
+                        },
                     )
                 {
                     debug!("Failed to update token usage: {}", e);

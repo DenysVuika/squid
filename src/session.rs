@@ -73,6 +73,16 @@ pub struct TokenUsage {
     pub context_utilization: f64,
 }
 
+/// Parameters for updating token usage
+#[derive(Debug, Clone)]
+pub struct TokenUsageUpdate {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+    pub context_window: u32,
+}
+
 impl TokenUsage {
     /// Calculate context utilization percentage (0.0 to 1.0)
     pub fn update_utilization(&mut self) {
@@ -432,11 +442,7 @@ impl SessionManager {
         &self,
         session_id: &str,
         agent_id: &str,
-        input_tokens: i64,
-        output_tokens: i64,
-        reasoning_tokens: i64,
-        cache_tokens: i64,
-        context_window: u32,
+        usage: TokenUsageUpdate,
     ) -> Result<(), String> {
         // Get or load session
         let mut session = self
@@ -447,10 +453,15 @@ impl SessionManager {
         session.set_model(agent_id.to_string());
 
         // Set context window
-        session.set_context_window(context_window);
+        session.set_context_window(usage.context_window);
 
         // Add token usage
-        session.add_tokens(input_tokens, output_tokens, reasoning_tokens, cache_tokens);
+        session.add_tokens(
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.reasoning_tokens,
+            usage.cache_tokens,
+        );
 
         // Update session in database
         if let Err(e) = self.db.save_session(&session) {
@@ -634,7 +645,17 @@ mod tests {
         // Update token usage multiple times (simulates streaming updates)
         for i in 1..=5 {
             manager
-                .update_token_usage(&session_id, "test-model", i * 5, i * 5, 0, 0, 8192)
+                .update_token_usage(
+                    &session_id,
+                    "test-model",
+                    TokenUsageUpdate {
+                        input_tokens: i * 5,
+                        output_tokens: i * 5,
+                        reasoning_tokens: 0,
+                        cache_tokens: 0,
+                        context_window: 8192,
+                    },
+                )
                 .unwrap();
         }
 
