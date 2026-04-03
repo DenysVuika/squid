@@ -78,8 +78,8 @@ impl PluginRegistry {
                         metadata.is_global = self.is_global_dir(plugin_dir);
                         
                         // Check for ID conflicts (workspace plugins override global)
-                        if let Some(existing) = plugins_map.get(&metadata.id) {
-                            if metadata.is_global && !existing.is_global {
+                        if let Some(existing) = plugins_map.get(&metadata.id)
+                            && metadata.is_global && !existing.is_global {
                                 // Don't override workspace plugin with global
                                 debug!(
                                     "Skipping global plugin '{}' - overridden by workspace plugin",
@@ -87,7 +87,6 @@ impl PluginRegistry {
                                 );
                                 continue;
                             }
-                        }
                         
                         info!(
                             "Loaded plugin: {} v{} from {}",

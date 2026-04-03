@@ -83,7 +83,7 @@ impl PluginMetadata {
         // Check if index.js exists
         let index_path = self.index_js_path();
         if !index_path.exists() {
-            return Err(format!("Missing index.js in plugin directory"));
+            return Err("Missing index.js in plugin directory".to_string());
         }
         
         // Validate API version compatibility (currently only support "1.0")

@@ -2,7 +2,7 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use actix_cors::Cors;
 use log::{error, info, warn};
 use rust_embed::RustEmbed;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{api, config, db, rag, session, workspace};

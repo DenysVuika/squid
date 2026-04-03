@@ -239,8 +239,8 @@ pub async fn ask_llm_streaming(
     let mut step_order = 0i32;
     let mut total_input_tokens = 0i64;
     let mut total_output_tokens = 0i64;
-    let mut total_reasoning_tokens = 0i64;
-    let mut total_cache_tokens = 0i64;
+    let total_reasoning_tokens = 0i64;
+    let total_cache_tokens = 0i64;
 
     while let Some(result) = stream.next().await {
         let response = result?;
@@ -593,8 +593,8 @@ pub async fn ask_llm(
     // Log token usage statistics
     let mut total_input_tokens = 0i64;
     let mut total_output_tokens = 0i64;
-    let mut total_reasoning_tokens = 0i64;
-    let mut total_cache_tokens = 0i64;
+    let total_reasoning_tokens = 0i64;
+    let total_cache_tokens = 0i64;
     
     if let Some(usage) = &response.usage {
         debug!(
@@ -706,8 +706,8 @@ pub async fn ask_llm(
         let answer_str = answer.to_string();
 
         // Save to session if provided
-        if let Some(sess) = session {
-            if let Some(database) = db {
+        if let Some(sess) = session
+            && let Some(database) = db {
                 // Save session metadata FIRST (before messages, due to foreign key constraint)
                 if sess.title.is_none() {
                     let title = if question.len() > 100 {
@@ -771,7 +771,6 @@ pub async fn ask_llm(
                     debug!("Failed to update session: {}", e);
                 }
             }
-        }
 
         return Ok(answer_str);
     }
@@ -780,8 +779,8 @@ pub async fn ask_llm(
     let answer_str = answer.to_string();
 
     // Save to session if provided (for simple responses without tool calls)
-    if let Some(sess) = session {
-        if let Some(database) = db {
+    if let Some(sess) = session
+        && let Some(database) = db {
             // Save session metadata FIRST (before messages, due to foreign key constraint)
             if sess.title.is_none() {
                 let title = if question.len() > 100 {
@@ -845,7 +844,6 @@ pub async fn ask_llm(
                 debug!("Failed to update session: {}", e);
             }
         }
-    }
 
     Ok(answer_str)
 }

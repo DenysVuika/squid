@@ -30,12 +30,11 @@ impl PluginManager {
         
         // Add plugin directories based on config
         // 1. Global plugins
-        if self.config.plugins.load_global {
-            if let Some(global_dir) = get_global_plugins_dir() {
+        if self.config.plugins.load_global
+            && let Some(global_dir) = get_global_plugins_dir() {
                 debug!("Adding global plugin directory: {}", global_dir.display());
                 registry.add_directory(global_dir);
             }
-        }
         
         // 2. Workspace plugins
         if self.config.plugins.load_workspace {
@@ -61,7 +60,7 @@ impl PluginManager {
         for plugin in plugins {
             let tool = ChatCompletionTools::Function(ChatCompletionTool {
                 function: FunctionObjectArgs::default()
-                    .name(&plugin.tool_name())
+                    .name(plugin.tool_name())
                     .description(&plugin.description)
                     .parameters(plugin.input_schema.clone())
                     .build()?,
@@ -163,7 +162,7 @@ impl PluginManager {
             .await
             .map_err(|_| format!("Plugin '{}' exceeded timeout of {}s", plugin_id, timeout_duration.as_secs()))?
             .map_err(|e| format!("Plugin task panicked: {}", e))
-            .and_then(|r| r.map_err(|e| e.into()))?;
+            .and_then(|r| r)?;
         
         // Validate output against schema
         let output_validator = SchemaValidator::new(&metadata.output_schema)?;

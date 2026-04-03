@@ -41,11 +41,10 @@ impl PluginContext {
         };
 
         // Ensure working directory exists
-        if !working_dir.exists() {
-            if let Err(e) = std::fs::create_dir_all(&working_dir) {
+        if !working_dir.exists()
+            && let Err(e) = std::fs::create_dir_all(&working_dir) {
                 debug!("Warning: Failed to create working directory {:?}: {}", working_dir, e);
             }
-        }
 
         Self {
             path_validator,

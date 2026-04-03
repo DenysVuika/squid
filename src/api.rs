@@ -11,7 +11,7 @@ use async_openai::{
     },
 };
 use futures::stream::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
