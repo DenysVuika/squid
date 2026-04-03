@@ -69,7 +69,7 @@ pub async fn start_server(
     }
 
     // Change to working directory
-    if working_dir_path != PathBuf::from(".") {
+    if working_dir_path != Path::new(".") {
         if let Err(e) = std::env::set_current_dir(&working_dir_path) {
             error!("Failed to change to working directory {:?}: {}", working_dir_path, e);
             println!("🦑: Failed to change to working directory {:?} - {}", working_dir_path, e);
