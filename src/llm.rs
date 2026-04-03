@@ -282,34 +282,30 @@ pub async fn ask_llm_streaming(
                 accumulated_content.push_str(content);
 
                 // Check for <think>...</think> blocks in the content
-                loop {
-                    if let Some(think_start) = accumulated_content.find("<think>") {
-                        if let Some(think_end) = accumulated_content.find("</think>") {
-                            if think_end > think_start {
-                                let reasoning_text =
-                                    accumulated_content[think_start + 7..think_end].to_string();
-                                if !reasoning_text.trim().is_empty() {
-                                    thinking_steps.push(ThinkingStep {
-                                        step_type: "reasoning".to_string(),
-                                        step_order,
-                                        content: Some(reasoning_text),
-                                        tool_name: None,
-                                        tool_arguments: None,
-                                        tool_result: None,
-                                        tool_error: None,
-                                        content_before_tool: None,
-                                    });
-                                    step_order += 1;
-                                }
-                                // Remove the <think> block from accumulated content for final display
-                                accumulated_content = format!(
-                                    "{}{}",
-                                    &accumulated_content[..think_start],
-                                    &accumulated_content[think_end + 8..]
-                                );
-                            } else {
-                                break;
+                while let Some(think_start) = accumulated_content.find("<think>") {
+                    if let Some(think_end) = accumulated_content.find("</think>") {
+                        if think_end > think_start {
+                            let reasoning_text =
+                                accumulated_content[think_start + 7..think_end].to_string();
+                            if !reasoning_text.trim().is_empty() {
+                                thinking_steps.push(ThinkingStep {
+                                    step_type: "reasoning".to_string(),
+                                    step_order,
+                                    content: Some(reasoning_text),
+                                    tool_name: None,
+                                    tool_arguments: None,
+                                    tool_result: None,
+                                    tool_error: None,
+                                    content_before_tool: None,
+                                });
+                                step_order += 1;
                             }
+                            // Remove the <think> block from accumulated content for final display
+                            accumulated_content = format!(
+                                "{}{}",
+                                &accumulated_content[..think_start],
+                                &accumulated_content[think_end + 8..]
+                            );
                         } else {
                             break;
                         }
@@ -459,10 +455,11 @@ pub async fn ask_llm_streaming(
     writeln!(lock)?;
 
     // Save to session if provided
-    if let Some(sess) = session {
-        if let Some(database) = db {
-            // Save session metadata FIRST (before messages, due to foreign key constraint)
-            if sess.title.is_none() {
+    if let Some(sess) = session
+        && let Some(database) = db
+    {
+        // Save session metadata FIRST (before messages, due to foreign key constraint)
+        if sess.title.is_none() {
                 // Generate title from first user message
                 let title = if question.len() > 100 {
                     format!("{}...", &question[..97])
@@ -538,7 +535,6 @@ pub async fn ask_llm_streaming(
                 debug!("Failed to update session: {}", e);
             }
         }
-    }
 
     Ok(accumulated_content.trim().to_string())
 }
