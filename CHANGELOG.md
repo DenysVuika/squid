@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Web UI Configuration**: New `web` section in `squid.config.json` for web client settings
+  - `web.sounds`: Toggle notification sounds in the web chat interface (default: `true`)
+  - Environment variable `SQUID_WEB_SOUNDS` overrides config file setting
 - **Enhanced Thinking Indicators**: Randomized thinking messages and visual feedback after tool execution for better UX (inspired by Claude Code/Qwen Code)
 - **Unified Working Directory Configuration**: New `working_dir` config field (default: `./workspace`) with `SQUID_WORKING_DIR` environment variable support. Centralizes workspace path management across CLI, server, and Docker. Plugins now work with relative paths only for enhanced security
 

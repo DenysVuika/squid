@@ -153,7 +153,7 @@ const Chatbot = () => {
     toggleRag,
     toggleTools,
   } = useChatStore();
-  const { ragEnabled, isLoaded } = useConfigStore();
+  const { ragEnabled, isLoaded, webSounds } = useConfigStore();
 
   // Local UI state
   const [text, setText] = useState<string>('');
@@ -249,10 +249,12 @@ const Chatbot = () => {
       // Check if the last message is from assistant
       const lastMessage = messages[messages.length - 1];
       if (lastMessage?.from === 'assistant') {
-        playNotificationSound();
+        if (webSounds) {
+          playNotificationSound();
+        }
       }
     }
-  }, [status, messages]);
+  }, [status, messages, webSounds]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -590,11 +592,11 @@ const Chatbot = () => {
                           })()}
                           {/* Render content and tools in order using split markers (for loaded sessions with contentBeforeTool) */}
                           {message.from === 'assistant' &&
-                          !message.thinkingSteps?.some((s) => s.type === 'reasoning') &&
-                          message.thinkingSteps &&
-                          message.thinkingSteps.some(
-                            (s) => s.type === 'tool' && (s.contentBeforeTool !== undefined || s.result || s.error)
-                          ) ? (
+                            !message.thinkingSteps?.some((s) => s.type === 'reasoning') &&
+                            message.thinkingSteps &&
+                            message.thinkingSteps.some(
+                              (s) => s.type === 'tool' && (s.contentBeforeTool !== undefined || s.result || s.error)
+                            ) ? (
                             <>
                               {(() => {
                                 let contentPosition = 0;
@@ -732,7 +734,7 @@ const Chatbot = () => {
                                   {/* Split mode: content after approval */}
                                   {version.content &&
                                     version.content.length >
-                                      (message.toolApprovals[0].contentBeforeApproval?.length || 0) && (
+                                    (message.toolApprovals[0].contentBeforeApproval?.length || 0) && (
                                       <MessageContent>
                                         <MessageResponse>
                                           {version.content.substring(
@@ -776,9 +778,9 @@ const Chatbot = () => {
                               {/* Normal message content (reasoning mode or no approvals) */}
                               <MessageContent>
                                 {message.from === 'assistant' &&
-                                !version.content &&
-                                status === 'streaming' &&
-                                !message.thinkingSteps ? (
+                                  !version.content &&
+                                  status === 'streaming' &&
+                                  !message.thinkingSteps ? (
                                   <ThinkingShimmer className="text-muted-foreground" />
                                 ) : (
                                   <MessageResponse preserveWhitespace={message.from === 'user'}>

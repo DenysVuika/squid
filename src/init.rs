@@ -338,6 +338,7 @@ pub async fn run(
         rag: final_rag_config,
         plugins: crate::config::PluginsConfig::default(),
         server: crate::config::Config::default().server,
+        web: crate::config::WebConfig::default(),
         agents: agents_config,
     };
 

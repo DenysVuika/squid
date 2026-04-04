@@ -43,6 +43,7 @@ const STUB_CONFIG = {
   api_url: '',
   context_window: 0,
   rag_enabled: false,
+  web_sounds: true,
 };
 
 const makeAgent = (overrides: Partial<AgentInfo> = {}): AgentInfo => ({

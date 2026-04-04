@@ -590,6 +590,7 @@ export interface ConfigResponse {
   api_url: string;
   context_window: number;
   rag_enabled: boolean;
+  web_sounds: boolean;
 }
 
 /**
