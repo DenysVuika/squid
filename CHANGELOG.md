@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Environment variable `SQUID_WEB_SOUNDS` overrides config file setting
 - **Enhanced Thinking Indicators**: Randomized thinking messages and visual feedback after tool execution for better UX (inspired by Claude Code/Qwen Code)
 - **Unified Working Directory Configuration**: New `working_dir` config field (default: `./workspace`) with `SQUID_WORKING_DIR` environment variable support. Centralizes workspace path management across CLI, server, and Docker. Plugins now work with relative paths only for enhanced security
+- **Bundled Plugins Support**: Added support for loading plugins bundled with the executable
+  - New `load_bundled` field in `plugins` config section (enabled by default)
+  - Bundled plugins are loaded from the executable's `plugins/` directory
+  - Plugin override priority: workspace > global > bundled
+  - Environment variable `SQUID_PLUGINS_LOAD_BUNDLED` to toggle bundled plugins
 
 ### Changed
 

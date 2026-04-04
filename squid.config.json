@@ -20,6 +20,7 @@
     "enabled": true,
     "load_global": true,
     "load_workspace": true,
+    "load_bundled": true,
     "default_timeout_seconds": 30,
     "max_memory_mb": 128
   },

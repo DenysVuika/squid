@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::plugins::context::PluginContext;
 use crate::plugins::metadata::PluginMetadata;
-use crate::plugins::registry::{PluginRegistry, get_global_plugins_dir, get_workspace_plugins_dir};
+use crate::plugins::registry::{
+    PluginRegistry, get_bundled_plugins_dir, get_global_plugins_dir, get_workspace_plugins_dir,
+};
 use crate::plugins::runtime::PluginRuntime;
 use crate::plugins::validator::SchemaValidator;
 use async_openai::types::chat::{ChatCompletionTool, ChatCompletionTools, FunctionObjectArgs};
@@ -45,6 +47,14 @@ impl PluginManager {
                 workspace_dir.display()
             );
             registry.add_directory(workspace_dir);
+        }
+
+        // 3. Bundled plugins (shipped with executable)
+        if self.config.plugins.load_bundled {
+            if let Some(bundled_dir) = get_bundled_plugins_dir() {
+                debug!("Adding bundled plugin directory: {}", bundled_dir.display());
+                registry.add_directory(bundled_dir);
+            }
         }
 
         // Discover all plugins
