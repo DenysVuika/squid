@@ -323,17 +323,11 @@ async fn main() {
                                             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                                             .unwrap_or_else(|| "unknown".to_string());
 
-                                    let session_info = log
-                                        .session_id
-                                        .map(|sid| format!(" [session: {}]", &sid[..8]))
-                                        .unwrap_or_default();
-
                                     println!(
-                                        "[{}] {} {}{}: {}",
+                                        "[{}] {} {}: {}",
                                         timestamp,
                                         log.level.to_uppercase(),
                                         log.target,
-                                        session_info,
                                         log.message
                                     );
                                 }
