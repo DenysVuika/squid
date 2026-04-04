@@ -10,6 +10,7 @@ vi.mock('@/lib/chat-api', () => ({
 
 const INITIAL_STATE = {
   ragEnabled: false,
+  webSounds: true,
   apiUrl: '',
   contextWindow: 0,
   isLoading: false,
@@ -20,6 +21,7 @@ const MOCK_CONFIG = {
   api_url: 'http://localhost:8080',
   context_window: 8192,
   rag_enabled: true,
+  web_sounds: true,
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

@@ -125,6 +125,26 @@ impl Default for PluginsConfig {
     }
 }
 
+/// Web client configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfig {
+    /// Enable notification sounds in the web client
+    #[serde(default = "default_web_sounds")]
+    pub sounds: bool,
+}
+
+fn default_web_sounds() -> bool {
+    true
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self {
+            sounds: default_web_sounds(),
+        }
+    }
+}
+
 /// Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -194,6 +214,8 @@ pub struct Config {
     pub plugins: PluginsConfig,
     #[serde(default)]
     pub server: ServerConfig,
+    #[serde(default)]
+    pub web: WebConfig,
     #[serde(default, flatten)]
     pub agents: AgentsConfig,
 }
@@ -234,6 +256,7 @@ impl Default for Config {
             rag: RagConfig::default(),
             plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
+            web: WebConfig::default(),
             agents: AgentsConfig::default(),
         }
     }
@@ -381,6 +404,14 @@ impl Config {
         {
             debug!("Overriding SQUID_SERVER_ALLOW_NETWORK from environment");
             config.server.allow_network = enabled;
+        }
+
+        // Web client configuration overrides
+        if let Ok(sounds) = std::env::var("SQUID_WEB_SOUNDS")
+            && let Ok(enabled) = sounds.parse()
+        {
+            debug!("Overriding SQUID_WEB_SOUNDS from environment");
+            config.web.sounds = enabled;
         }
 
         config

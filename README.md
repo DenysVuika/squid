@@ -476,6 +476,18 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     - Testing the Web UI across different devices
   - The console output indicates whether the server is accessible from the local network
 
+- `web.sounds`: Enable notification sounds in the web chat interface (optional, default: `true`)
+  - When disabled, no sound plays when the assistant finishes responding
+  - Set via `squid.config.json`:
+    ```json
+    {
+      "web": {
+        "sounds": true
+      }
+    }
+    ```
+  - Or via environment variable (takes precedence): `SQUID_WEB_SOUNDS=false`
+
 ### Agents
 
 Squid uses an **agent-based architecture** where each agent has its own model, system prompt, and tool permissions. This allows you to create specialized assistants for different tasks.

@@ -1387,6 +1387,7 @@ pub struct ConfigResponse {
     pub api_url: String,
     pub context_window: u32,
     pub rag_enabled: bool,
+    pub web_sounds: bool,
 }
 
 /// Get API configuration (default model, etc.)
@@ -1397,6 +1398,7 @@ pub async fn get_config(app_config: web::Data<Arc<config::Config>>) -> Result<Ht
         api_url: app_config.api_url.clone(),
         context_window: app_config.context_window,
         rag_enabled: app_config.rag.enabled,
+        web_sounds: app_config.web.sounds,
     };
 
     Ok(HttpResponse::Ok().json(response))
