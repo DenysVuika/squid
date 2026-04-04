@@ -488,7 +488,7 @@ pub async fn ask_llm_streaming(
         if let Err(e) = database.save_session(sess) {
             debug!("Failed to save session: {}", e);
         } else {
-            debug!("Session saved successfully: {}", sess.id);
+            debug!("Session saved successfully");
         }
 
         // Save user message
@@ -514,7 +514,7 @@ pub async fn ask_llm_streaming(
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
             debug!("Failed to save user message to session: {}", e);
         } else {
-            debug!("User message saved successfully to session {}", sess.id);
+            debug!("User message saved successfully to session");
         }
 
         // Save assistant message
@@ -739,7 +739,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
             if let Err(e) = database.save_session(sess) {
                 debug!("Failed to save session: {}", e);
             } else {
-                debug!("Session saved successfully: {}", sess.id);
+                debug!("Session saved successfully");
             }
 
             // Save user message
@@ -765,7 +765,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
             if let Err(e) = database.save_message(&sess.id, &user_msg) {
                 debug!("Failed to save user message to session: {}", e);
             } else {
-                debug!("User message saved successfully to session {}", sess.id);
+                debug!("User message saved successfully to session");
             }
 
             // Save assistant message (no thinking steps for non-streaming)
@@ -821,7 +821,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         if let Err(e) = database.save_session(sess) {
             debug!("Failed to save session: {}", e);
         } else {
-            debug!("Session saved successfully: {}", sess.id);
+            debug!("Session saved successfully");
         }
 
         // Save user message
@@ -847,7 +847,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
             debug!("Failed to save user message to session: {}", e);
         } else {
-            debug!("User message saved successfully to session {}", sess.id);
+            debug!("User message saved successfully to session");
         }
 
         // Save assistant message
@@ -1109,7 +1109,7 @@ pub async fn run_ask_command(
         error!("Failed to get response: {}", e);
     }
 
-    println!("💾 Session saved: {}", &session.id[..8]);
+    println!("💾 Session saved");
 }
 
 /// Handles the `review` command: validates and reads the file, initialises RAG,
@@ -1284,7 +1284,7 @@ pub async fn run_review_command(
         error!("Failed to get review: {}", e);
     }
 
-    println!("💾 Session saved: {}", &session.id[..8]);
+    println!("💾 Session saved");
 }
 
 #[cfg(test)]
