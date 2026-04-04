@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Light Agent Default**: Changed default model from `local-model` to `gemma-4-e2b-it` with `google/gemma-3` pricing model
+- **Default Agent Models**: Changed `general-assistant`, `code-reviewer`, `pirate`, and `shakespeare` defaults from `local-model` to `qwen3.5-4b`
 - **Plugin Security**: Plugins no longer have access to actual workspace filesystem path - `project_dir()` returns `"."` to enforce relative path usage
 - **Docker Compose**: Replaced hardcoded `--dir /workspace` with `SQUID_WORKING_DIR=/workspace` environment variable
 

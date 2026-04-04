@@ -86,9 +86,9 @@
       "name": "Light",
       "enabled": true,
       "description": "Lightweight assistant with minimal permissions",
-      "model": "liquid/lfm2.5-1.2b",
+      "model": "gemma-4-e2b-it",
       "context_window": 8192,
-      "pricing_model": "gpt-4o-mini",
+      "pricing_model": "google/gemma-3",
       "permissions": {
         "allow": [
           "now"
