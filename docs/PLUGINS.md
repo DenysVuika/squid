@@ -16,12 +16,15 @@ Squid supports a powerful JavaScript-based plugin system that allows you to exte
 
 ### 1. Create a Plugin Directory
 
-Plugins can be stored in two locations:
+Plugins can be stored in three locations:
 
 - **Workspace plugins**: `./plugins/` (project-specific)
 - **Global plugins**: `~/.squid/plugins/` (shared across projects)
+- **Bundled plugins**: Shipped with the executable (when installed from crates)
 
-Workspace plugins override global plugins with the same ID.
+Workspace plugins override global plugins, which override bundled plugins with the same ID.
+
+**Development note**: During development (`cargo build`), the `plugins/` directory is automatically copied to `target/debug/plugins/` so the executable can find bundled plugins alongside global and workspace plugins.
 
 ```bash
 mkdir -p plugins/my-plugin
@@ -503,6 +506,7 @@ Increase timeout in config:
     "enabled": true,
     "load_global": true,
     "load_workspace": true,
+    "load_bundled": true,
     "default_timeout_seconds": 30,
     "max_memory_mb": 128
   }
@@ -512,8 +516,15 @@ Increase timeout in config:
 - **`enabled`**: Enable/disable plugin system
 - **`load_global`**: Load plugins from `~/.squid/plugins/`
 - **`load_workspace`**: Load plugins from `./plugins/`
+- **`load_bundled`**: Load bundled plugins shipped with the executable (default: true)
 - **`default_timeout_seconds`**: Maximum execution time
 - **`max_memory_mb`**: Memory limit per plugin
+
+### Environment Variables
+
+Plugin configuration can be overridden via environment variables:
+
+- **`SQUID_PLUGINS_LOAD_BUNDLED`**: Set to `false` to disable loading bundled plugins (e.g., `SQUID_PLUGINS_LOAD_BUNDLED=false`)
 
 ## Advanced Topics
 

@@ -6,6 +6,7 @@ use std::time::SystemTime;
 fn main() {
     let static_dir = Path::new("static");
     let web_dir = Path::new("web");
+    let plugins_dir = Path::new("plugins");
 
     // Tell Cargo to re-run this script when web sources or bundled assets change.
     println!("cargo:rerun-if-changed=web/src");
@@ -18,6 +19,7 @@ fn main() {
     println!("cargo:rerun-if-changed=web/tsconfig.node.json");
     println!("cargo:rerun-if-changed=web/vite.config.ts");
     println!("cargo:rerun-if-changed=static");
+    println!("cargo:rerun-if-changed=plugins");
 
     // Attempt to build the web frontend if npm is available and static/ is
     // missing or stale. The build is best-effort: when Node.js is not
@@ -135,6 +137,7 @@ fn main() {
     }
 
     ensure_static_dir(static_dir);
+    copy_bundled_plugins(plugins_dir);
 }
 
 fn web_build_required(web_dir: &Path, static_dir: &Path) -> bool {
@@ -222,4 +225,75 @@ fn which_npm() -> Result<String, ()> {
             }
         })
         .ok_or(())
+}
+
+/// Copy bundled plugins directory to the build output directory.
+/// This ensures plugins are available next to the executable during development.
+fn copy_bundled_plugins(plugins_dir: &Path) {
+    // OUT_DIR points to target/debug/build/<crate>-<hash>/out
+    // We want target/debug/plugins (or target/release/plugins)
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
+
+    // Navigate from OUT_DIR to the profile directory (debug or release)
+    // OUT_DIR: /path/to/target/debug/build/squid-rs-<hash>/out
+    // We want: /path/to/target/debug/plugins
+    let profile_dir = Path::new(&out_dir)
+        .parent() // /path/to/target/debug/build/squid-rs-<hash>
+        .and_then(|p| p.parent()) // /path/to/target/debug/build
+        .and_then(|p| p.parent()) // /path/to/target/debug
+        .expect("Failed to resolve profile directory");
+
+    let dest_plugins = profile_dir.join("plugins");
+
+    if !plugins_dir.exists() {
+        eprintln!(
+            "cargo:warning=Plugins directory does not exist: {}",
+            plugins_dir.display()
+        );
+        return;
+    }
+
+    // Copy plugins if source is newer than destination
+    let needs_copy = !dest_plugins.exists()
+        || latest_modified(plugins_dir)
+            .map(|src_mtime| {
+                latest_modified(&dest_plugins)
+                    .map(|dst_mtime| src_mtime > dst_mtime)
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true);
+
+    if needs_copy {
+        if dest_plugins.exists() {
+            let _ = fs::remove_dir_all(&dest_plugins);
+        }
+
+        if let Err(e) = copy_dir_all(plugins_dir, &dest_plugins) {
+            eprintln!("cargo:warning=Failed to copy plugins directory: {}", e);
+            return;
+        }
+
+        eprintln!(
+            "cargo:warning=Copied bundled plugins to {}",
+            dest_plugins.display()
+        );
+    }
+}
+
+/// Recursively copy a directory
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if ty.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }

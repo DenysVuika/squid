@@ -85,6 +85,9 @@ pub struct PluginsConfig {
     /// Load workspace plugins from ./plugins
     #[serde(default = "default_load_workspace")]
     pub load_workspace: bool,
+    /// Load bundled plugins from executable directory
+    #[serde(default = "default_load_bundled")]
+    pub load_bundled: bool,
     /// Default timeout for plugin execution in seconds
     #[serde(default = "default_plugin_timeout")]
     pub default_timeout_seconds: u64,
@@ -105,6 +108,10 @@ fn default_load_workspace() -> bool {
     true
 }
 
+fn default_load_bundled() -> bool {
+    true
+}
+
 fn default_plugin_timeout() -> u64 {
     30
 }
@@ -119,6 +126,7 @@ impl Default for PluginsConfig {
             enabled: default_plugins_enabled(),
             load_global: default_load_global(),
             load_workspace: default_load_workspace(),
+            load_bundled: default_load_bundled(),
             default_timeout_seconds: default_plugin_timeout(),
             max_memory_mb: default_max_memory_mb(),
         }
@@ -412,6 +420,14 @@ impl Config {
         {
             debug!("Overriding SQUID_WEB_SOUNDS from environment");
             config.web.sounds = enabled;
+        }
+
+        // Plugin configuration overrides
+        if let Ok(load_bundled) = std::env::var("SQUID_PLUGINS_LOAD_BUNDLED")
+            && let Ok(enabled) = load_bundled.parse()
+        {
+            debug!("Overriding SQUID_PLUGINS_LOAD_BUNDLED from environment");
+            config.plugins.load_bundled = enabled;
         }
 
         config

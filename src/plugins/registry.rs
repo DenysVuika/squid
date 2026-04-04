@@ -11,6 +11,12 @@ pub struct PluginRegistry {
 
     /// Plugin directories to search
     plugin_dirs: Vec<PathBuf>,
+
+    /// Track which directories are global plugin directories
+    global_dirs: Vec<PathBuf>,
+
+    /// Track which directories are bundled plugin directories
+    bundled_dirs: Vec<PathBuf>,
 }
 
 impl PluginRegistry {
@@ -19,13 +25,21 @@ impl PluginRegistry {
         Self {
             plugins: Arc::new(RwLock::new(HashMap::new())),
             plugin_dirs: Vec::new(),
+            global_dirs: Vec::new(),
+            bundled_dirs: Vec::new(),
         }
     }
 
     /// Add a plugin directory to search
     pub fn add_directory(&mut self, dir: PathBuf) {
         if dir.exists() && dir.is_dir() {
-            self.plugin_dirs.push(dir);
+            self.plugin_dirs.push(dir.clone());
+            // Track the type of directory
+            if self.is_global_dir(&dir) {
+                self.global_dirs.push(dir);
+            } else if self.is_bundled_dir(&dir) {
+                self.bundled_dirs.push(dir);
+            }
         }
     }
 
@@ -75,27 +89,51 @@ impl PluginRegistry {
                             continue;
                         }
 
-                        // Mark if this is a global plugin
+                        // Mark the source of this plugin
                         metadata.is_global = self.is_global_dir(plugin_dir);
+                        let is_bundled = self.is_bundled_dir(plugin_dir);
 
-                        // Check for ID conflicts (workspace plugins override global)
-                        if let Some(existing) = plugins_map.get(&metadata.id)
-                            && metadata.is_global
-                            && !existing.is_global
-                        {
-                            // Don't override workspace plugin with global
-                            debug!(
-                                "Skipping global plugin '{}' - overridden by workspace plugin",
-                                metadata.id
-                            );
-                            continue;
+                        // Check for ID conflicts (workspace plugins override global and bundled)
+                        if let Some(existing) = plugins_map.get(&metadata.id) {
+                            // Workspace plugins override global and bundled
+                            if !metadata.is_global && !is_bundled {
+                                // This is a workspace plugin, it should override
+                                debug!(
+                                    "Workspace plugin '{}' overrides existing plugin",
+                                    metadata.id
+                                );
+                                // Continue to insert, will override existing
+                            } else if metadata.is_global && !existing.is_global {
+                                // Don't override workspace plugin with global or bundled
+                                debug!(
+                                    "Skipping global plugin '{}' - overridden by workspace plugin",
+                                    metadata.id
+                                );
+                                continue;
+                            } else if is_bundled && (!existing.is_global || metadata.is_global) {
+                                // Don't override workspace or global with bundled
+                                debug!(
+                                    "Skipping bundled plugin '{}' - overridden by existing plugin",
+                                    metadata.id
+                                );
+                                continue;
+                            }
                         }
 
+                        let source = if metadata.is_global {
+                            "global"
+                        } else if is_bundled {
+                            "bundled"
+                        } else {
+                            "workspace"
+                        };
+
                         info!(
-                            "Loaded plugin: {} v{} from {}",
+                            "Loaded plugin: {} v{} from {} ({})",
                             metadata.title,
                             metadata.version,
-                            path.display()
+                            path.display(),
+                            source
                         );
 
                         plugins_map.insert(metadata.id.clone(), metadata);
@@ -138,6 +176,16 @@ impl PluginRegistry {
         // Check if path contains .squid (typically ~/.squid/plugins)
         dir.to_string_lossy().contains(".squid")
     }
+
+    /// Check if a directory is a bundled plugin directory
+    fn is_bundled_dir(&self, dir: &Path) -> bool {
+        // Bundled plugins are in the executable directory's plugins subdirectory
+        if let Some(bundled_dir) = get_bundled_plugins_dir() {
+            dir == &bundled_dir
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for PluginRegistry {
@@ -154,6 +202,16 @@ pub fn get_global_plugins_dir() -> Option<PathBuf> {
 /// Get the workspace plugins directory path
 pub fn get_workspace_plugins_dir() -> PathBuf {
     PathBuf::from("./plugins")
+}
+
+/// Get the bundled plugins directory path (relative to executable)
+/// This is used when plugins are bundled with the executable (e.g., from crates.io)
+pub fn get_bundled_plugins_dir() -> Option<PathBuf> {
+    // Get the directory of the current executable
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe_path| exe_path.parent().map(|p| p.to_path_buf()))
+        .map(|exe_dir| exe_dir.join("plugins"))
 }
 
 #[cfg(test)]
@@ -177,5 +235,14 @@ mod tests {
     fn test_workspace_dir() {
         let dir = get_workspace_plugins_dir();
         assert_eq!(dir, PathBuf::from("./plugins"));
+    }
+
+    #[test]
+    fn test_bundled_dir() {
+        let dir = get_bundled_plugins_dir();
+        // Should be in the executable's directory
+        assert!(dir.is_some());
+        let dir = dir.unwrap();
+        assert!(dir.ends_with("plugins"));
     }
 }
