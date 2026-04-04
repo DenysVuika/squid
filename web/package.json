@@ -17,7 +17,7 @@
     "@ai-sdk/react": "^3.0.81",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.26.2",
-    "@streamdown/cjk": "^1.0.2",
+    "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.0.2",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
