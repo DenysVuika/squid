@@ -26,7 +26,7 @@ impl SchemaValidator {
             let error_messages: Vec<String> = self
                 .schema
                 .iter_errors(data)
-                .map(|e| format!("{}: {}", e.instance_path, e))
+                .map(|e| format!("{}: {}", e.instance_path(), e))
                 .collect();
 
             debug!("Schema validation failed: {:?}", error_messages);
