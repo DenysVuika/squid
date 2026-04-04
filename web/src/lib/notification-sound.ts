@@ -4,7 +4,12 @@
  */
 export const playNotificationSound = (): void => {
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    // Type definition for webkit prefixed AudioContext (Safari support)
+    interface WindowWithWebkit extends Window {
+      webkitAudioContext?: typeof AudioContext;
+    }
+
+    const AudioContextClass = window.AudioContext || (window as WindowWithWebkit).webkitAudioContext;
     if (!AudioContextClass) {
       console.warn('AudioContext not supported in this browser');
       return;
