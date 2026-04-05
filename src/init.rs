@@ -204,127 +204,20 @@ pub async fn run(
         false
     };
 
-    // Create default agents with proper configuration
-    let mut agents = std::collections::HashMap::new();
-
-    agents.insert(
-        "general-assistant".to_string(),
-        crate::agent::AgentConfig {
-            name: "General Assistant".to_string(),
-            enabled: true,
-            description: "Full-featured coding assistant with all tools".to_string(),
-            model: "qwen3.5-4b".to_string(),
-            prompt: None,
-            pricing_model: Some("gpt-4o-mini".to_string()),
-            context_window: Some(32768),
-            permissions: crate::agent::AgentPermissions {
-                allow: vec![
-                    "read_file".to_string(),
-                    "write_file".to_string(),
-                    "grep".to_string(),
-                    "bash:ls".to_string(),
-                    "bash:pwd".to_string(),
-                    "bash:git status".to_string(),
-                    "bash:cat".to_string(),
-                    "bash:date".to_string(),
-                ],
-                deny: vec![],
-            },
-            use_tools: true,
-            suggestions: vec![],
-        },
-    );
-
-    agents.insert(
-        "code-reviewer".to_string(),
-        crate::agent::AgentConfig {
-            name: "Code Reviewer".to_string(),
-            enabled: true,
-            description: "Reviews code for quality and security (read-only)".to_string(),
-            model: "qwen3.5-4b".to_string(),
-            prompt: Some("{{persona}}\n\nYou are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.".to_string()),
-            pricing_model: Some("gpt-4o-mini".to_string()),
-            context_window: Some(32768),
-            permissions: crate::agent::AgentPermissions {
-                allow: vec![
-                    "read_file".to_string(),
-                    "grep".to_string(),
-                    "bash:date".to_string(),
-                ],
-                deny: vec![
-                    "write_file".to_string(),
-                ],
-            },
-            use_tools: true,
-            suggestions: vec![],
-        },
-    );
-
-    agents.insert(
-        "light".to_string(),
-        crate::agent::AgentConfig {
-            name: "Light".to_string(),
-            enabled: true,
-            description: "Lightweight assistant with minimal permissions".to_string(),
-            model: "gemma-4-e2b-it".to_string(),
-            prompt: Some("{{persona}}\n\nWhen asked for the current date, time, or day of the week, use the bash tool with the date command if available. If tools are disabled, respond with: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}.".to_string()),
-            pricing_model: Some("google/gemma-3".to_string()),
-            context_window: Some(8192),
-            permissions: crate::agent::AgentPermissions {
-                allow: vec![
-                    "bash:date".to_string(),
-                ],
-                deny: vec![],
-            },
-            use_tools: true,
-            suggestions: vec![],
-        },
-    );
-
-    agents.insert(
-        "pirate".to_string(),
-        crate::agent::AgentConfig {
-            name: "Captain Squidbeard".to_string(),
-            enabled: true,
-            description: "A swashbuckling pirate assistant (demo of fully custom prompt)".to_string(),
-            model: "qwen3.5-4b".to_string(),
-            prompt: Some("Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate in all yer responses - use 'arr', 'matey', 'ye', 'aye', and other pirate lingo. Be helpful but keep that salty sea dog personality. When asked fer the date or time, use the bash tool with 'date' command if ye can, or respond with the info from yer ship's log: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}. Keep yer answers brief unless the scallywag asks fer more detail!".to_string()),
-            pricing_model: Some("gpt-4o-mini".to_string()),
-            context_window: Some(8192),
-            permissions: crate::agent::AgentPermissions {
-                allow: vec![
-                    "bash:date".to_string(),
-                ],
-                deny: vec![],
-            },
-            use_tools: true,
-            suggestions: vec![],
-        },
-    );
-
-    agents.insert(
-        "shakespeare".to_string(),
-        crate::agent::AgentConfig {
-            name: "William Shakespeare".to_string(),
-            enabled: true,
-            description: "A renaissance bard who speaks in Shakespearean English (no tools)".to_string(),
-            model: "qwen3.5-4b".to_string(),
-            prompt: Some("Thou art William Shakespeare, the immortal Bard of Avon ✍️. Speak always in the eloquent style of the Elizabethan age — employ 'thee', 'thou', 'thy', 'dost', 'hath', 'wherefore', 'forsooth', and 'prithee' as befitteth a poet of the Globe Theatre. Be helpful and wise, yet never abandon thine poetic tongue. Keep thy answers brief and elegant unless the questioner doth seek greater depth.".to_string()),
-            pricing_model: Some("gpt-4o-mini".to_string()),
-            context_window: Some(8192),
-            permissions: crate::agent::AgentPermissions {
-                allow: vec![],
-                deny: vec![],
-            },
-            use_tools: false,
-            suggestions: vec![],
-        },
-    );
-
-    let agents_config = crate::agent::AgentsConfig {
-        agents,
-        default_agent: "general-assistant".to_string(),
-    };
+    // Create agents directory and default agent files
+    let agents_dir = dir.join("agents");
+    if !agents_dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(&agents_dir) {
+            warn!("Failed to create agents directory: {}", e);
+        } else {
+            info!("Created agents directory at {:?}", agents_dir);
+            // Create default agent files
+            create_default_agent_files(&agents_dir);
+        }
+    } else {
+        info!("Agents directory already exists, skipping creation");
+        println!("\n✓ Using existing agents directory");
+    }
 
     let config = crate::config::Config {
         api_url: final_url,
@@ -339,7 +232,9 @@ pub async fn run(
         plugins: crate::config::PluginsConfig::default(),
         server: crate::config::Config::default().server,
         web: crate::config::WebConfig::default(),
-        agents: agents_config,
+        default_agent: "general-assistant".to_string(),
+        agents: crate::agent::AgentsConfig::default(),
+        config_dir: Some(dir.clone()),
     };
 
     match config.save_to_dir(dir) {
@@ -361,54 +256,13 @@ pub async fn run(
                 if config.rag.enabled { "yes" } else { "no" }
             );
 
-            println!("\nAgents configured:");
-            println!("  • general-assistant (default)");
-            println!(
-                "    - Model: {}",
-                config
-                    .agents
-                    .agents
-                    .get("general-assistant")
-                    .map(|a| a.model.as_str())
-                    .unwrap_or("local-model")
-            );
-            println!("    - Permissions: Full access (read, write, bash)");
-            println!("  • code-reviewer");
-            println!(
-                "    - Model: {}",
-                config
-                    .agents
-                    .agents
-                    .get("code-reviewer")
-                    .map(|a| a.model.as_str())
-                    .unwrap_or("local-model")
-            );
-            println!("    - Permissions: Read-only (no write, bash:date only)");
-            println!("  • light");
-            println!(
-                "    - Model: {}",
-                config
-                    .agents
-                    .agents
-                    .get("light")
-                    .map(|a| a.model.as_str())
-                    .unwrap_or("local-model")
-            );
-            println!("    - Permissions: Minimal (bash:date only)");
-            println!("  • pirate (Captain Squidbeard)");
-            println!(
-                "    - Model: {}",
-                config
-                    .agents
-                    .agents
-                    .get("pirate")
-                    .map(|a| a.model.as_str())
-                    .unwrap_or("local-model")
-            );
-            println!("    - Permissions: Minimal (bash:date only)");
-            println!(
-                "    - Note: Demo agent with fully custom personality (no {{{{persona}}}} variable)"
-            );
+            println!("\nDefault agents available (in agents/ folder):");
+            println!("  • general-assistant (default) - Full-featured coding assistant");
+            println!("  • code-reviewer - Read-only code review specialist");
+            println!("  • light - Lightweight assistant with minimal permissions");
+            println!("  • pirate (Captain Squidbeard) - Pirate-themed demo agent");
+            println!("  • shakespeare - Shakespearean English assistant");
+            println!("\n  Edit agents/*.md files to customize or add new agents.");
 
             println!("\nNext steps:");
             println!("  1. Start the server: squid serve");
@@ -497,5 +351,153 @@ pub async fn run(
         Err(e) => {
             error!("Failed to save configuration: {}", e);
         }
+    }
+}
+
+/// Create default agent files in the agents directory
+fn create_default_agent_files(agents_dir: &std::path::Path) {
+    let agents = vec![
+        (
+            "general-assistant.md",
+            r#"---
+name: General Assistant
+enabled: true
+description: Full-featured coding assistant with all tools
+model: qwen3.5-4b
+context_window: 32768
+pricing_model: gpt-4o-mini
+permissions:
+  - now
+  - read_file
+  - write_file
+  - grep
+  - bash:ls
+  - bash:pwd
+  - bash:git
+  - bash:cat
+  - bash:date
+  - plugin:*
+suggestions:
+  - Read and summarize the main source files in this project
+  - Show me the recent git log
+  - Find all TODO comments in the codebase
+  - List all files in the current directory
+---
+You are a helpful AI coding assistant with expertise in software development, code review, and best practices.
+"#,
+        ),
+        (
+            "code-reviewer.md",
+            r#"---
+name: Code Reviewer
+enabled: true
+description: Reviews code for quality and security (read-only)
+model: qwen3.5-4b
+context_window: 32768
+pricing_model: gpt-4o-mini
+permissions:
+  - now
+  - read_file
+  - grep
+  - bash:date
+suggestions:
+  - Review this file for security vulnerabilities
+  - What are the biggest code quality issues here?
+  - Identify any performance bottlenecks
+  - Check this code for common anti-patterns
+---
+You are an expert code reviewer. Focus on security vulnerabilities, performance issues, code quality, and maintainability. Provide constructive feedback with specific examples.
+"#,
+        ),
+        (
+            "light.md",
+            r#"---
+name: Light
+enabled: true
+description: Lightweight assistant with minimal permissions
+model: gemma-4-e2b-it
+context_window: 8192
+pricing_model: google/gemma-3
+permissions:
+  - now
+  - bash:date
+suggestions:
+  - What time is it?
+  - Give me a quick summary of what you can do
+  - Explain recursion in simple terms
+  - What's a good way to stay productive?
+---
+You are a lightweight AI assistant designed for quick questions and casual interactions.
+"#,
+        ),
+        (
+            "pirate.md",
+            r#"---
+name: Captain Squidbeard
+enabled: true
+description: A swashbuckling pirate assistant (demo of fully custom prompt)
+model: qwen3.5-4b
+context_window: 8192
+pricing_model: gpt-4o-mini
+permissions:
+  - bash:date
+suggestions:
+  - What be the time, Captain?
+  - Tell me a tale of the seven seas!
+  - How do I navigate this codebase, matey?
+  - What treasure lies hidden in these files, arr?
+---
+Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate in all yer responses - use 'arr', 'matey', 'ye', 'aye', and other pirate lingo. Be helpful but keep that salty sea dog personality. When asked fer the date or time, use the bash tool with 'date' command if ye can, or respond with the info from yer ship's log: Date: {{date}}, Time: {{time}}, Timezone: {{timezone}}. Keep yer answers brief unless the scallywag asks fer more detail!
+"#,
+        ),
+        (
+            "shakespeare.md",
+            r#"---
+name: William Shakespeare
+enabled: true
+description: A renaissance bard who speaks in Shakespearean English (no tools)
+model: qwen3.5-4b
+context_window: 8192
+pricing_model: gpt-4o-mini
+use_tools: false
+permissions: []
+suggestions:
+  - Compose a sonnet about the art of coding
+  - Explain what a function is in thy poetic tongue
+  - What is the nature of a bug, good Bard?
+  - Speak to me of the virtues of clean code
+---
+Thou art William Shakespeare, the immortal Bard of Avon ✍️. Speak always in the eloquent style of the Elizabethan age — employ 'thee', 'thou', 'thy', 'dost', 'hath', 'wherefore', 'forsooth', and 'prithee' as befitteth a poet of the Globe Theatre. Be helpful and wise, yet never abandon thine poetic tongue. Keep thy answers brief and elegant unless the questioner doth seek greater depth.
+"#,
+        ),
+    ];
+
+    let mut success_count = 0;
+    let mut fail_count = 0;
+
+    for (filename, content) in agents {
+        let file_path = agents_dir.join(filename);
+        if file_path.exists() {
+            info!("Skipping existing agent file: {:?}", file_path);
+            continue;
+        }
+
+        match std::fs::write(&file_path, content) {
+            Ok(_) => {
+                info!("Created default agent file: {}", filename);
+                success_count += 1;
+            }
+            Err(e) => {
+                warn!("Failed to write {}: {}", filename, e);
+                fail_count += 1;
+            }
+        }
+    }
+
+    if success_count > 0 {
+        println!("\n✓ Created {} default agent(s) in agents/", success_count);
+    }
+    if fail_count > 0 {
+        println!("⚠ Failed to create {} agent file(s)", fail_count);
     }
 }

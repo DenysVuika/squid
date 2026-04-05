@@ -410,7 +410,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
   - CLI override: `squid serve --dir /custom/path` (overrides config)
 
 - **Template Variables**: Agent prompts support variable substitution using the Tera template engine
-  - Variables are automatically available in agent prompts (in `squid.config.json`)
+  - Variables are automatically available in agent prompts (defined in `agents/*.md` files)
   - System prompts and built-in prompts also support template variables
   - Available variables (secure and privacy-safe by default):
     - `{{persona}}` - Base AI personality and tool usage guidelines from `src/assets/persona.md` (use in custom agent prompts to include core behavior)
@@ -426,34 +426,31 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     - `{{kernel_version}}` - Kernel version
     - `{{arch}}` - System architecture (e.g., `x86_64`, `aarch64`)
     - `{{os_family}}` - OS family (e.g., `unix`, `windows`)
-  - Example usage in agent prompt:
-    ```json
-    {
-      "agents": {
-        "code-reviewer": {
-          "prompt": "{{persona}}\n\nYou are an expert code reviewer on {{os}} ({{arch}}) at {{now}}..."
-        }
-      }
-    }
+  - Example usage in agent file (`agents/code-reviewer.md`):
+    ```yaml
+    ---
+    name: Code Reviewer
+    model: qwen2.5-coder
+    permissions:
+      - read_file
+      - grep
+    ---
+    {{persona}}
+
+    You are an expert code reviewer on {{os}} ({{arch}}) at {{now}}...
     ```
     **Note**: Include `{{persona}}` at the start of custom agent prompts to preserve base personality and tool usage guidelines
   - **Fully custom prompts** (without `{{persona}}`): For specialized agents with completely custom behavior, omit `{{persona}}`:
-    ```json
-    {
-      "agents": {
-        "pirate": {
-          "name": "Captain Squidbeard",
-          "prompt": "Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate..."
-        },
-        "shakespeare": {
-          "name": "William Shakespeare",
-          "use_tools": false,
-          "prompt": "Thou art William Shakespeare, the immortal Bard of Avon ✍️. Speak always in the eloquent style of the Elizabethan age..."
-        }
-      }
-    }
+    ```yaml
+    ---
+    name: Captain Squidbeard
+    model: qwen2.5-coder
+    permissions:
+      - bash:date
+    ---
+    Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate...
     ```
-    This creates agents with no inherited guidelines — useful for demos, experiments, or highly specialized personalities. Pair with `"use_tools": false` for persona agents that should never invoke tools; the Tools button will be hidden automatically in the Web UI.
+    This creates agents with no inherited guidelines — useful for demos, experiments, or highly specialized personalities. Pair with `use_tools: false` for persona agents that should never invoke tools; the Tools button will be hidden automatically in the Web UI.
     ![Custom Prompt](docs/assets/custom-prompts-pirate.png)
   - Templates use Tera syntax - see [Tera documentation](https://keats.github.io/tera/) for advanced features
 
@@ -490,50 +487,39 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
 
 ### Agents
 
-Squid uses an **agent-based architecture** where each agent has its own model, system prompt, and tool permissions. This allows you to create specialized assistants for different tasks.
+Squid uses an **agent-based architecture** where each agent has its own model, system prompt, and tool permissions. Agents are defined as individual `.md` files with YAML frontmatter in an `agents/` folder. This allows you to create specialized assistants for different tasks and easily share or version-control them.
 
-**Agent Configuration Example:**
+**Agent File Example (`agents/code-reviewer.md`):**
 
-```json
-{
-  "agents": {
-    "code-reviewer": {
-      "name": "Code Reviewer",
-      "enabled": true,
-      "description": "Reviews code for best practices and potential issues",
-      "model": "anthropic/claude-sonnet-4-5",
-      "context_window": 200000,
-      "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
-      "permissions": {
-        "allow": ["now", "read_file", "grep"],
-        "deny": ["write_file", "bash"]
-      }
-    },
-    "general-assistant": {
-      "name": "General Assistant",
-      "enabled": true,
-      "description": "Full-featured coding assistant",
-      "model": "qwen2.5-coder-7b-instruct",
-      "context_window": 32768,
-      "pricing_model": "gpt-4o",
-      "suggestions": [
-        "Read and summarize the main source files",
-        "Show me the recent git log",
-        "Find all TODO comments in the codebase"
-      ],
-      "permissions": {
-        "allow": ["now", "read_file", "write_file", "grep", "bash"],
-        "deny": []
-      }
-    }
-  },
-  "default_agent": "general-assistant"
-}
+```yaml
+---
+name: Code Reviewer
+enabled: true
+description: Reviews code for best practices and potential issues
+model: anthropic/claude-sonnet-4-5
+context_window: 200000
+pricing_model: gpt-4o
+permissions:
+  - now
+  - read_file
+  - grep
+suggestions:
+  - Review this file for security vulnerabilities
+  - What are the biggest code quality issues here?
+---
+You are a code reviewer. Focus on security, performance, and maintainability.
 ```
 
-**Agent Properties:**
+**Agent File Structure:**
 
-- **id** (object key): Unique identifier for the agent (e.g., `"code-reviewer"`)
+Each `.md` file in the `agents/` folder has two parts:
+
+1. **YAML frontmatter** (between `---` delimiters) — metadata and configuration
+2. **Markdown body** — the system prompt that defines the agent's personality and behavior
+
+**Agent Properties (YAML frontmatter):**
+
+- **filename** (the file stem): Unique identifier for the agent (e.g., `code-reviewer.md` → `"code-reviewer"`)
 - **name**: Display name shown in the UI
 - **enabled**: Whether the agent appears in the agent selector (default: `true`)
 - **description**: Brief explanation of the agent's purpose
@@ -543,37 +529,34 @@ Squid uses an **agent-based architecture** where each agent has its own model, s
 - **pricing_model** (optional): Model ID to use for cost estimation in the UI
   - Required for local models to calculate token costs
   - Maps your local model to a known cloud model's pricing (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
-  - Cloud models use their own pricing automatically and don't need this field
-  - Example: Set to `"gpt-4o"` for high-capability models or `"gpt-4o-mini"` for smaller models
 - **context_window** (optional): Maximum context window size in tokens for this agent
   - Overrides the global `context_window` setting for this specific agent
-  - Used for accurate token usage tracking and context utilization calculations
-  - If not specified, uses the global `context_window` from the root config
-  - Example: `32768` for Qwen2.5-Coder, `200000` for Claude 3.5 Sonnet, `128000` for GPT-4
-- **prompt** (optional): Custom system prompt for this agent
-  - Overrides the default system prompt
-  - Defines the agent's personality and behavior
 - **use_tools** (optional): Whether this agent can use tools at all (default: `true`)
   - When set to `false`, all tool usage is disabled for this agent regardless of `permissions`
   - The Tools toggle button is hidden in the Web UI for agents with `use_tools: false`
-  - Enforced server-side — the client cannot override this setting
   - Useful for pure persona agents (e.g. a Shakespeare chatbot) that should never call tools
-  - Example: `"use_tools": false`
 - **suggestions** (optional): A list of suggested prompts displayed in the Web UI for this agent
   - Shown as clickable chips above the input box when no messages have been sent yet
-  - Automatically updates when the user switches agents
-  - Agents with no `suggestions` field show no suggestion bar
-  - Tailor suggestions to each agent's capabilities (e.g. code-related prompts for a code reviewer)
-  - Example: `"suggestions": ["Review this file for security issues", "Find all TODOs"]`
-- **permissions**: Tool execution permissions specific to this agent
-  - **allow**: Tools this agent can use without confirmation
-  - **deny**: Tools this agent cannot use at all
+  - Tailor suggestions to each agent's capabilities
+- **permissions**: Tool execution permissions (allow-only list)
+  - A YAML list of tools this agent can use **without confirmation**
+  - Anything **not** in this list is **denied by default**
   - Supports granular bash permissions (e.g., `"bash:ls"`, `"bash:git status"`)
+  - Wildcard `"plugin:*"` grants access to all plugins
   - ⚠️ **Important**: Dangerous bash commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** regardless of permissions
+
+**Agents Directory:**
+
+The `agents/` folder is resolved in this priority:
+
+1. `SQUID_AGENTS_DIR` environment variable (explicit override)
+2. `agents/` folder relative to `squid.config.json`
+3. `agents/` in the current working directory
+4. Bundled agents shipped with the executable (from crates.io distribution)
 
 **Default Agent:**
 
-The `default_agent` field specifies which agent is selected by default when starting a new session.
+The `default_agent` field in `squid.config.json` specifies which agent is selected by default when starting a new session.
 
 **Multiple Agent Workflows:**
 
@@ -916,8 +899,7 @@ Fetches available agents configured in your `squid.config.json` file. Each agent
         "Find all TODO comments in the codebase"
       ],
       "permissions": {
-        "allow": ["now", "read_file", "write_file", "grep", "bash"],
-        "deny": []
+        "allow": ["now", "read_file", "write_file", "grep", "bash"]
       }
     },
     {
@@ -927,8 +909,7 @@ Fetches available agents configured in your `squid.config.json` file. Each agent
       "model": "anthropic/claude-sonnet-4-5",
       "enabled": true,
       "permissions": {
-        "allow": ["now", "read_file", "grep"],
-        "deny": ["write_file", "bash"]
+        "allow": ["now", "read_file", "grep"]
       }
     }
   ],
@@ -937,8 +918,8 @@ Fetches available agents configured in your `squid.config.json` file. Each agent
 ```
 
 **Features:**
-- Returns all enabled agents from your configuration
-- Each agent includes its model, description, and tool permissions
+- Returns all enabled agents loaded from the `agents/` folder
+- Each agent includes its model, description, and tool permissions (allow-only)
 - Optional `pricing_model` field for cost estimation (useful for local models)
 - Used by Web UI agent selector to display available assistants
 

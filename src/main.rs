@@ -193,7 +193,7 @@ async fn main() {
 
     // Load config early to initialize logger with correct log level
     // For init command, we'll use defaults since config doesn't exist yet
-    let app_config = if matches!(cli.command, Commands::Init { .. }) {
+    let mut app_config = if matches!(cli.command, Commands::Init { .. }) {
         config::Config::default()
     } else {
         config::Config::load()
@@ -225,8 +225,14 @@ async fn main() {
             Some(db_path_buf),
             Some(db_level),
         );
+
+        // Load agents from files after logger is initialized (so logs are visible)
+        app_config.load_agents();
     } else {
         logger::init(Some(&app_config.log_level));
+
+        // Load agents for non-serve commands as well
+        app_config.load_agents();
     }
 
     match &cli.command {
