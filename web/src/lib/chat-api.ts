@@ -562,6 +562,24 @@ export interface AgentsResponse {
   default_agent: string;
 }
 
+export interface AgentTokenStats {
+  agent_id: string;
+  total_sessions: number;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cache_tokens: number;
+  total_cost_usd: number;
+  avg_cost_per_session: number;
+  first_used_at: number;
+  last_used_at: number;
+}
+
+export interface AllAgentTokenStatsResponse {
+  agents: AgentTokenStats[];
+}
+
 /**
  * Fetch available agents from the API
  *
@@ -584,6 +602,65 @@ export async function fetchAgents(apiUrl: string): Promise<AgentsResponse> {
 
   const data: AgentsResponse = await response.json();
   return data;
+}
+
+/**
+ * Fetch token statistics for all agents
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with agent statistics
+ *
+ * @example
+ * ```typescript
+ * const stats = await fetchAllAgentStats('');
+ * console.log(`Found stats for ${stats.agents.length} agents`);
+ * ```
+ */
+export async function fetchAllAgentStats(apiUrl: string): Promise<AllAgentTokenStatsResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/agents/stats` : '/api/agents/stats';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch agent statistics: HTTP ${response.status}`);
+  }
+
+  const data: AllAgentTokenStatsResponse = await response.json();
+  return data;
+}
+
+/**
+ * Fetch token statistics for a specific agent
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param agentId - The agent ID to get statistics for
+ * @returns Promise with agent statistics or null if not found
+ *
+ * @example
+ * ```typescript
+ * const stats = await fetchAgentStats('', 'general-assistant');
+ * if (stats) {
+ *   console.log(`Total tokens: ${stats.total_tokens}`);
+ * }
+ * ```
+ */
+export async function fetchAgentStats(apiUrl: string, agentId: string): Promise<AgentTokenStats | null> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/agents/${agentId}/stats` : `/api/agents/${agentId}/stats`;
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch agent statistics: HTTP ${response.status}`);
+    }
+
+    const data: AgentTokenStats = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch agent statistics:', error);
+    return null;
+  }
 }
 
 export interface ConfigResponse {

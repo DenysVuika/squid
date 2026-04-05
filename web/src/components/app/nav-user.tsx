@@ -6,6 +6,7 @@ import {
     FileText,
     LogOut,
     Sparkles,
+    BarChart3,
 } from "lucide-react"
 
 import {
@@ -104,6 +105,10 @@ export function NavUser({
                             <DropdownMenuItem onClick={() => navigate('/logs')}>
                                 <FileText />
                                 Logs
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate('/agent-stats')}>
+                                <BarChart3 />
+                                Agent Statistics
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { fetchAgents, fetchConfig, type AgentInfo, type TokenUsage } from '@/lib/chat-api';
+import { fetchAgents, fetchAgentStats, fetchConfig, type AgentInfo, type AgentTokenStats, type TokenUsage } from '@/lib/chat-api';
 import { toast } from 'sonner';
 
 interface AgentStore {
@@ -10,6 +10,7 @@ interface AgentStore {
   selectedAgent: string;
   sessionAgentId: string | null;
   tokenUsage: TokenUsage;
+  agentStats: AgentTokenStats | null;
   isLoading: boolean;
   agentSelectorOpen: boolean;
 
@@ -19,6 +20,7 @@ interface AgentStore {
   setSessionAgentId: (agentId: string | null) => void;
   updateTokenUsage: (usage: Partial<TokenUsage>) => void;
   resetTokenUsage: () => void;
+  loadAgentStats: (agentId: string) => Promise<void>;
   setAgentSelectorOpen: (open: boolean) => void;
   getAgentModelForPricing: () => string;
 }
@@ -42,6 +44,7 @@ export const useAgentStore = create<AgentStore>()(
       selectedAgent: '',
       sessionAgentId: null,
       tokenUsage: initialTokenUsage,
+      agentStats: null,
       isLoading: false,
       agentSelectorOpen: false,
 
@@ -144,6 +147,35 @@ export const useAgentStore = create<AgentStore>()(
       // Reset token usage to initial state
       resetTokenUsage: () => {
         set({ tokenUsage: initialTokenUsage });
+      },
+
+      // Load agent lifetime statistics
+      loadAgentStats: async (agentId: string) => {
+        try {
+          const stats = await fetchAgentStats('', agentId);
+          if (stats) {
+            set({ agentStats: stats });
+          } else {
+            // If no stats yet, use initial token usage
+            set({
+              agentStats: {
+                agent_id: agentId,
+                total_sessions: 0,
+                total_tokens: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                reasoning_tokens: 0,
+                cache_tokens: 0,
+                total_cost_usd: 0,
+                avg_cost_per_session: 0,
+                first_used_at: 0,
+                last_used_at: 0,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to load agent stats:', error);
+        }
       },
 
       // Set agent selector open state

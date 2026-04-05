@@ -529,6 +529,8 @@ Each `.md` file in the `agents/` folder has two parts:
 - **pricing_model** (optional): Model ID to use for cost estimation in the UI
   - Required for local models to calculate token costs
   - Maps your local model to a known cloud model's pricing (e.g., `"gpt-4o"`, `"gpt-4o-mini"`)
+  - Used to calculate lifetime cost savings when running local models vs cloud APIs
+  - View accumulated savings in the Agent Statistics page (user menu → Agent Statistics)
 - **context_window** (optional): Maximum context window size in tokens for this agent
   - Overrides the global `context_window` setting for this specific agent
 - **use_tools** (optional): Whether this agent can use tools at all (default: `true`)
@@ -700,6 +702,7 @@ The web server will:
 - **Chat Page** - Interactive chat interface with session management sidebar
   - 📊 **Token usage indicator** - Real-time context utilization percentage (e.g., "5.6% • 7.1K / 128K")
   - 💰 **Cost tracking** - Displays estimated cost for both cloud and local models
+  - 📈 **Lifetime agent statistics** - See accumulated token usage and cost savings across all sessions (especially valuable when running local models to track total savings vs cloud APIs)
   - 🗂️ **Session sidebar** - Browse and switch between past conversations
   - ✏️ **Auto-generated titles** - Sessions titled from first message, editable inline
   - 📎 **Multi-file attachments** - Add context from multiple files
