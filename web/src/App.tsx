@@ -8,7 +8,7 @@ import { DocumentManager } from './components/app/document-manager';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
-import { FileText, MessageSquare, Files, Database } from 'lucide-react';
+import { MessageSquare, Files, Database } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
@@ -95,12 +95,7 @@ function AppContent() {
                   <MessageSquare className="h-4 w-4" />
                   Back to Chat
                 </Button>
-              ) : (
-                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/logs')}>
-                  <FileText className="h-4 w-4" />
-                  Logs
-                </Button>
-              )}
+              ) : null}
             </div>
           </div>
           {!isLogsPage && (
