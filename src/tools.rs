@@ -109,6 +109,18 @@ pub fn get_tools() -> Vec<ChatCompletionTools> {
         }),
         ChatCompletionTools::Function(ChatCompletionTool {
             function: FunctionObjectArgs::default()
+                .name("now")
+                .description("Get the current date and time. Returns the current timestamp in RFC 3339 format along with timezone information.")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }))
+                .build()
+                .expect("Failed to build now function"),
+        }),
+        ChatCompletionTools::Function(ChatCompletionTool {
+            function: FunctionObjectArgs::default()
                 .name("demo_tool")
                 .description("A demo tool for testing the approval workflow. Returns a simple message with the provided input. This tool is safe and only used for testing - it doesn't modify anything.")
                 .parameters(json!({
@@ -634,6 +646,18 @@ pub async fn execute_tool_direct(
                 }
             }
         }
+        "now" => {
+            let now = chrono::Local::now();
+            info!("Current time tool called: {}", now.to_rfc3339());
+            json!({
+                "content": format!(
+                    "Current date and time: {}\nLocal timezone: {}\nUnix timestamp: {}",
+                    now.to_rfc3339(),
+                    now.format("%Z"),
+                    now.timestamp()
+                )
+            })
+        }
         "demo_tool" => {
             let message = args["message"].as_str().unwrap_or("No message provided");
             let delay = args["delay_seconds"].as_u64().unwrap_or(0);
@@ -1049,6 +1073,18 @@ pub async fn call_tool(
                             json!({"error": format!("Command failed: {}", e)})
                         }
                     }
+                }
+                "now" => {
+                    let now = chrono::Local::now();
+                    info!("Current time tool called: {}", now.to_rfc3339());
+                    json!({
+                        "content": format!(
+                            "Current date and time: {}\nLocal timezone: {}\nUnix timestamp: {}",
+                            now.to_rfc3339(),
+                            now.format("%Z"),
+                            now.timestamp()
+                        )
+                    })
                 }
                 "demo_tool" => {
                     let message = args["message"].as_str().unwrap_or("No message provided");

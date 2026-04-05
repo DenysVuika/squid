@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`now` Tool**: New tool for getting the current date and time. Returns RFC 3339 timestamp with timezone and Unix timestamp. Models can call this dynamically during conversations instead of relying on `bash:date` or the static `{{now}}` template variable
 - **File-Based Agent Configuration**: Agents are now defined as individual `.md` files with YAML frontmatter in an `agents/` folder instead of embedded in `squid.config.json`
   - Each agent file contains metadata (name, model, permissions, suggestions) in YAML frontmatter and the system prompt as markdown body
   - Agents directory configurable via `SQUID_AGENTS_DIR` environment variable

@@ -446,7 +446,7 @@ See **[CLI Reference - Init Command](docs/CLI.md#init-command)**.
     name: Captain Squidbeard
     model: qwen2.5-coder
     permissions:
-      - bash:date
+      - now
     ---
     Ye be Captain Squidbeard 🏴‍☠️, a cunning pirate squid sailin' the seven seas of code! Speak like a proper pirate...
     ```
