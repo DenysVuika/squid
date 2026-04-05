@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent Token Statistics**: Token usage statistics are now tracked per agent (not per session)
+  - New `agent_token_stats` table tracks lifetime usage for each agent
+  - Statistics include: total tokens, input/output/reasoning/cache tokens, cost, session count
+  - Average cost per session calculation for cost savings insights
+  - New API endpoints: `GET /api/agents/stats` (all agents) and `GET /api/agents/{id}/stats` (specific agent)
+  - New "Agent Statistics" page in web UI with detailed breakdown per agent
+  - Accessible from user menu (click user avatar → Agent Statistics)
+  - **Lifetime savings tracking**: Especially useful for local models to see accumulated cost savings vs cloud APIs
 - **`now` Tool**: New tool for getting the current date and time. Returns RFC 3339 timestamp with timezone and Unix timestamp. Models can call this dynamically during conversations instead of relying on `bash:date` or the static `{{now}}` template variable
 - **File-Based Agent Configuration**: Agents are now defined as individual `.md` files with YAML frontmatter in an `agents/` folder instead of embedded in `squid.config.json`
   - Each agent file contains metadata (name, model, permissions, suggestions) in YAML frontmatter and the system prompt as markdown body

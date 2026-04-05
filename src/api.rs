@@ -1455,6 +1455,111 @@ pub async fn get_agents(app_config: web::Data<Arc<config::Config>>) -> Result<Ht
     }))
 }
 
+/// Response structure for agent token statistics
+#[derive(Debug, Serialize)]
+pub struct AgentTokenStatsResponse {
+    pub agent_id: String,
+    pub total_sessions: i64,
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+    pub total_cost_usd: f64,
+    pub avg_cost_per_session: f64,
+    pub first_used_at: i64,
+    pub last_used_at: i64,
+}
+
+/// Response structure for all agent statistics
+#[derive(Debug, Serialize)]
+pub struct AllAgentTokenStatsResponse {
+    pub agents: Vec<AgentTokenStatsResponse>,
+}
+
+/// Get token statistics for all agents
+pub async fn get_agent_stats(
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching agent token statistics");
+
+    let all_stats = match session_manager.get_all_agent_token_stats() {
+        Ok(stats) => stats,
+        Err(e) => {
+            return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch agent token statistics: {}", e)
+            })));
+        }
+    };
+
+    let agents: Vec<AgentTokenStatsResponse> = all_stats
+        .into_iter()
+        .map(|stat| {
+            let avg_cost_per_session = if stat.total_sessions > 0 {
+                stat.total_cost_usd / stat.total_sessions as f64
+            } else {
+                0.0
+            };
+
+            AgentTokenStatsResponse {
+                agent_id: stat.agent_id,
+                total_sessions: stat.total_sessions,
+                total_tokens: stat.total_tokens,
+                input_tokens: stat.input_tokens,
+                output_tokens: stat.output_tokens,
+                reasoning_tokens: stat.reasoning_tokens,
+                cache_tokens: stat.cache_tokens,
+                total_cost_usd: stat.total_cost_usd,
+                avg_cost_per_session,
+                first_used_at: stat.first_used_at,
+                last_used_at: stat.last_used_at,
+            }
+        })
+        .collect();
+
+    Ok(HttpResponse::Ok().json(AllAgentTokenStatsResponse { agents }))
+}
+
+/// Get token statistics for a specific agent
+pub async fn get_agent_stats_by_id(
+    agent_id: web::Path<String>,
+    session_manager: web::Data<Arc<session::SessionManager>>,
+) -> Result<HttpResponse, Error> {
+    debug!("Fetching token statistics for agent: {}", agent_id);
+
+    match session_manager.get_agent_token_stats(&agent_id) {
+        Ok(Some(stat)) => {
+            let avg_cost_per_session = if stat.total_sessions > 0 {
+                stat.total_cost_usd / stat.total_sessions as f64
+            } else {
+                0.0
+            };
+
+            let response = AgentTokenStatsResponse {
+                agent_id: stat.agent_id,
+                total_sessions: stat.total_sessions,
+                total_tokens: stat.total_tokens,
+                input_tokens: stat.input_tokens,
+                output_tokens: stat.output_tokens,
+                reasoning_tokens: stat.reasoning_tokens,
+                cache_tokens: stat.cache_tokens,
+                total_cost_usd: stat.total_cost_usd,
+                avg_cost_per_session,
+                first_used_at: stat.first_used_at,
+                last_used_at: stat.last_used_at,
+            };
+
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Ok(None) => Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Agent statistics not found"
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to fetch agent token statistics: {}", e)
+        }))),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ToolApprovalRequest {
     pub approval_id: String,

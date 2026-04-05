@@ -469,11 +469,40 @@ impl SessionManager {
             return Err(format!("Failed to update token usage: {}", e));
         }
 
+        // Update agent token stats in database
+        if let Err(e) = self.db.update_agent_token_stats(
+            agent_id,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.reasoning_tokens,
+            usage.cache_tokens,
+            0.0, // cost_usd - not calculated yet
+        ) {
+            log::error!("Failed to update agent token stats: {}", e);
+        }
+
         // Update cache
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(session_id.to_string(), session);
 
         Ok(())
+    }
+
+    /// Get token stats for a specific agent
+    pub fn get_agent_token_stats(
+        &self,
+        agent_id: &str,
+    ) -> Result<Option<crate::db::AgentTokenStatsRow>, String> {
+        self.db
+            .get_agent_token_stats(agent_id)
+            .map_err(|e| format!("Failed to get agent token stats: {}", e))
+    }
+
+    /// Get token stats for all agents
+    pub fn get_all_agent_token_stats(&self) -> Result<Vec<crate::db::AgentTokenStatsRow>, String> {
+        self.db
+            .get_all_agent_token_stats()
+            .map_err(|e| format!("Failed to get all agent token stats: {}", e))
     }
 }
 

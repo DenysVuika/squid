@@ -198,6 +198,13 @@ impl Database {
             include_str!("../migrations/012_rename_model_to_agent.sql"),
         )?;
 
+        // Migration 013: Agent token stats
+        run_migration(
+            13,
+            "Agent token stats",
+            include_str!("../migrations/013_agent_token_stats.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -785,6 +792,150 @@ impl Database {
 
         Ok(results)
     }
+
+    // Agent token stats helper methods
+
+    /// Update or insert agent token stats by accumulating values
+    pub fn update_agent_token_stats(
+        &self,
+        agent_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+        reasoning_tokens: i64,
+        cache_tokens: i64,
+        cost_usd: f64,
+    ) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        // Try to update existing stats
+        let updated = conn.execute(
+            "UPDATE agent_token_stats 
+             SET total_sessions = total_sessions + 1,
+                 total_tokens = total_tokens + ?1 + ?2 + ?3 + ?4,
+                 input_tokens = input_tokens + ?1,
+                 output_tokens = output_tokens + ?2,
+                 reasoning_tokens = reasoning_tokens + ?3,
+                 cache_tokens = cache_tokens + ?4,
+                 total_cost_usd = total_cost_usd + ?5,
+                 last_used_at = ?6
+             WHERE agent_id = ?7",
+            params![
+                input_tokens,
+                output_tokens,
+                reasoning_tokens,
+                cache_tokens,
+                cost_usd,
+                now,
+                agent_id
+            ],
+        )?;
+
+        // If no rows updated, insert new stats
+        if updated == 0 {
+            let total_tokens = input_tokens + output_tokens + reasoning_tokens + cache_tokens;
+            conn.execute(
+                "INSERT INTO agent_token_stats 
+                 (agent_id, total_sessions, total_tokens, input_tokens, output_tokens, 
+                  reasoning_tokens, cache_tokens, total_cost_usd, first_used_at, last_used_at)
+                 VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    agent_id,
+                    total_tokens,
+                    input_tokens,
+                    output_tokens,
+                    reasoning_tokens,
+                    cache_tokens,
+                    cost_usd,
+                    now,
+                    now
+                ],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Get token stats for a specific agent
+    pub fn get_agent_token_stats(
+        &self,
+        agent_id: &str,
+    ) -> SqliteResult<Option<AgentTokenStatsRow>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT agent_id, total_sessions, total_tokens, input_tokens, output_tokens, 
+                    reasoning_tokens, cache_tokens, total_cost_usd, first_used_at, last_used_at
+             FROM agent_token_stats 
+             WHERE agent_id = ?1",
+        )?;
+
+        let result = stmt.query_row(params![agent_id], |row| {
+            Ok(AgentTokenStatsRow {
+                agent_id: row.get(0)?,
+                total_sessions: row.get(1)?,
+                total_tokens: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                reasoning_tokens: row.get(5)?,
+                cache_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                first_used_at: row.get(8)?,
+                last_used_at: row.get(9)?,
+            })
+        });
+
+        match result {
+            Ok(stats) => Ok(Some(stats)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get token stats for all agents
+    pub fn get_all_agent_token_stats(&self) -> SqliteResult<Vec<AgentTokenStatsRow>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT agent_id, total_sessions, total_tokens, input_tokens, output_tokens, 
+                    reasoning_tokens, cache_tokens, total_cost_usd, first_used_at, last_used_at
+             FROM agent_token_stats 
+             ORDER BY total_tokens DESC",
+        )?;
+
+        let stats = stmt
+            .query_map([], |row| {
+                Ok(AgentTokenStatsRow {
+                    agent_id: row.get(0)?,
+                    total_sessions: row.get(1)?,
+                    total_tokens: row.get(2)?,
+                    input_tokens: row.get(3)?,
+                    output_tokens: row.get(4)?,
+                    reasoning_tokens: row.get(5)?,
+                    cache_tokens: row.get(6)?,
+                    total_cost_usd: row.get(7)?,
+                    first_used_at: row.get(8)?,
+                    last_used_at: row.get(9)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<AgentTokenStatsRow>>>()?;
+
+        Ok(stats)
+    }
+}
+
+/// Row type returned by agent token stats queries
+pub struct AgentTokenStatsRow {
+    pub agent_id: String,
+    pub total_sessions: i64,
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_tokens: i64,
+    pub total_cost_usd: f64,
+    pub first_used_at: i64,
+    pub last_used_at: i64,
 }
 
 #[cfg(test)]

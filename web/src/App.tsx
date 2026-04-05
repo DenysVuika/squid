@@ -5,6 +5,7 @@ import { FileViewer } from './components/app/file-viewer';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
 import { DocumentManager } from './components/app/document-manager';
+import { AgentStatsCard } from './components/app/agent-stats';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
@@ -57,10 +58,11 @@ function AppContent() {
   };
 
   const isLogsPage = location.pathname === '/logs';
+  const isAgentStatsPage = location.pathname === '/agent-stats';
 
   return (
     <SidebarProvider className="h-full">
-      {!isLogsPage && (
+      {!isLogsPage && !isAgentStatsPage && (
         <AppSidebar
           sessions={sessions}
           onSessionSelect={handleSessionSelect}
@@ -71,13 +73,13 @@ function AppContent() {
       <SidebarInset className="flex flex-col overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b">
           <div className="flex flex-1 items-center gap-2 px-4">
-            {!isLogsPage && (
+            {!isLogsPage && !isAgentStatsPage && (
               <>
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
               </>
             )}
-            {isLogsPage && (
+            {(isLogsPage || isAgentStatsPage) && (
               <>
                 <button
                   onClick={() => navigate('/')}
@@ -96,9 +98,15 @@ function AppContent() {
                   Back to Chat
                 </Button>
               ) : null}
+              {isAgentStatsPage ? (
+                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/')}>
+                  <MessageSquare className="h-4 w-4" />
+                  Back to Chat
+                </Button>
+              ) : null}
             </div>
           </div>
-          {!isLogsPage && (
+          {!isLogsPage && !isAgentStatsPage && (
             <>
               <Separator orientation="vertical" className="h-4" />
               {isLoaded && ragEnabled && (
@@ -135,6 +143,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<ChatBot />} />
               <Route path="/logs" element={<Logs />} />
+              <Route path="/agent-stats" element={<AgentStatsCard apiUrl="" />} />
               <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>

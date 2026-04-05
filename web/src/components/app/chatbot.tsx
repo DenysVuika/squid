@@ -131,10 +131,12 @@ const Chatbot = () => {
     agentGroups,
     selectedAgent,
     tokenUsage,
+    agentStats,
     agentSelectorOpen,
     setSelectedAgent,
     setAgentSelectorOpen,
     loadAgents,
+    loadAgentStats,
     getAgentModelForPricing,
   } = useAgentStore();
   const {
@@ -208,6 +210,13 @@ const Chatbot = () => {
     void loadAgents();
   }, [loadAgents]);
 
+  // Load agent stats when selected agent changes
+  useEffect(() => {
+    if (selectedAgent) {
+      void loadAgentStats(selectedAgent);
+    }
+  }, [selectedAgent, loadAgentStats]);
+
   // Track previous activeSessionId to detect actual changes
   const prevActiveSessionIdRef = useRef<string | null>(null);
 
@@ -252,9 +261,13 @@ const Chatbot = () => {
         if (webSounds) {
           playNotificationSound();
         }
+        // Reload agent stats to include the latest session
+        if (selectedAgent) {
+          void loadAgentStats(selectedAgent);
+        }
       }
     }
-  }, [status, messages, webSounds]);
+  }, [status, messages, webSounds, selectedAgent, loadAgentStats]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -401,20 +414,21 @@ const Chatbot = () => {
           maxTokens={tokenUsage.context_window || 128000}
           modelId={getAgentModelForPricing()}
           usage={{
-            inputTokens: tokenUsage.input_tokens,
-            outputTokens: tokenUsage.output_tokens,
-            totalTokens: tokenUsage.total_tokens,
+            // Use agent lifetime stats if available, fallback to session stats during streaming
+            inputTokens: agentStats?.input_tokens ?? tokenUsage.input_tokens,
+            outputTokens: agentStats?.output_tokens ?? tokenUsage.output_tokens,
+            totalTokens: agentStats?.total_tokens ?? tokenUsage.total_tokens,
             inputTokenDetails: {
-              noCacheTokens: tokenUsage.input_tokens - tokenUsage.cache_tokens,
-              cacheReadTokens: tokenUsage.cache_tokens,
+              noCacheTokens: (agentStats?.input_tokens ?? tokenUsage.input_tokens) - (agentStats?.cache_tokens ?? tokenUsage.cache_tokens),
+              cacheReadTokens: agentStats?.cache_tokens ?? tokenUsage.cache_tokens,
               cacheWriteTokens: undefined,
             },
             outputTokenDetails: {
-              textTokens: tokenUsage.output_tokens - tokenUsage.reasoning_tokens,
-              reasoningTokens: tokenUsage.reasoning_tokens,
+              textTokens: (agentStats?.output_tokens ?? tokenUsage.output_tokens) - (agentStats?.reasoning_tokens ?? tokenUsage.reasoning_tokens),
+              reasoningTokens: agentStats?.reasoning_tokens ?? tokenUsage.reasoning_tokens,
             },
           }}
-          usedTokens={tokenUsage.total_tokens}
+          usedTokens={agentStats?.total_tokens ?? tokenUsage.total_tokens}
         >
           <ContextTrigger />
           <ContextContent>
