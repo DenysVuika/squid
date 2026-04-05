@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File-Based Agent Configuration**: Agents are now defined as individual `.md` files with YAML frontmatter in an `agents/` folder instead of embedded in `squid.config.json`
+  - Each agent file contains metadata (name, model, permissions, suggestions) in YAML frontmatter and the system prompt as markdown body
+  - Agents directory configurable via `SQUID_AGENTS_DIR` environment variable
+  - Default agents bundled with the executable and copied to the build output directory
+  - New agents can be added by creating additional `.md` files in the `agents/` folder
 - **Web UI Configuration**: New `web` section in `squid.config.json` for web client settings
   - `web.sounds`: Toggle notification sounds in the web chat interface (default: `true`)
   - Environment variable `SQUID_WEB_SOUNDS` overrides config file setting
@@ -22,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Allow-Only Permission Model**: Agent permissions now use an allow-only model — anything not explicitly in the `permissions` list is denied by default. The `deny` field has been removed
 - **Light Agent Default**: Changed default model from `local-model` to `gemma-4-e2b-it` with `google/gemma-3` pricing model
 - **Default Agent Models**: Changed `general-assistant`, `code-reviewer`, `pirate`, and `shakespeare` defaults from `local-model` to `qwen3.5-4b`
 - **Plugin Security**: Plugins no longer have access to actual workspace filesystem path - `project_dir()` returns `"."` to enforce relative path usage

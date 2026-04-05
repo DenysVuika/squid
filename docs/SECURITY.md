@@ -187,47 +187,36 @@ squid ask "Search for passwords in the project"
 
 ### 🎛️ Tool Permissions (Per-Agent)
 
-Squid uses **agent-based permissions** where each agent defines which tools can run automatically (without confirmation) or should never run at all.
+Squid uses **agent-based permissions** with an **allow-only model**. Each agent defines which tools can run automatically in its `agents/*.md` file. Anything not explicitly allowed is **denied by default**.
 
-**Configuration:**
+**Agent File Example (`agents/general-assistant.md`):**
 
-```json
-{
-  "agents": {
-    "general-assistant": {
-      "name": "General Assistant",
-      "enabled": true,
-      "description": "Full-featured coding assistant",
-      "model": "qwen2.5-coder",
-      "permissions": {
-        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
-        "deny": []
-      }
-    },
-    "code-reviewer": {
-      "name": "Code Reviewer",
-      "enabled": true,
-      "description": "Reviews code (read-only)",
-      "model": "qwen2.5-coder",
-      "permissions": {
-        "allow": ["now", "read_file", "grep"],
-        "deny": ["write_file", "bash"]
-      }
-    }
-  },
-  "default_agent": "general-assistant"
-}
+```yaml
+---
+name: General Assistant
+enabled: true
+description: Full-featured coding assistant
+model: qwen2.5-coder
+permissions:
+  - now
+  - read_file
+  - write_file
+  - grep
+  - bash:ls
+  - bash:git
+---
+You are a helpful AI coding assistant...
 ```
 
 **Fields:**
-- `allow` - Tools that run automatically without user confirmation
-- `deny` - Tools that are completely blocked and will never run
+- `permissions` — A YAML list of tools that run automatically without user confirmation
+- Anything **not** in this list is **denied by default**
 
 **Default Behavior:**
-- Each agent defines its own permission set
+- Each agent defines its own permission set in its `.md` file
 - CLI commands use the `default_agent` permissions
 - Web UI uses the selected agent's permissions
-- All other tools require confirmation on first use
+- All other tools are blocked (deny by default)
 
 **Interactive Permission Management:**
 
@@ -246,20 +235,19 @@ Can I read this file?
 **Options:**
 - **Yes (this time)** - Allow once, ask again next time
 - **No (skip)** - Deny once, ask again next time  
-- **Always (add to allow list)** - Allow this tool permanently for the current agent, auto-save to config
-- **Never (add to deny list)** - Block this tool permanently for the current agent, auto-save to config
+- **Always (add to allow list)** - Allow this tool permanently for the current agent
+- **Never (remove from allow list)** - Block this tool by removing it from the allow list
 
 **Permission Priority:**
 
-1. **Deny list** (highest priority) - Tool is blocked immediately
-2. **Allow list** - Tool runs without confirmation
-3. **Default** - User is prompted for approval
+1. **Not in allow list** (highest priority) — Tool is blocked immediately
+2. **In allow list** — Tool runs without confirmation
 
 **Security Notes:**
-- Permissions are stored per-agent in `squid.config.json`
+- Permissions are defined per-agent in `agents/*.md` files
 - Different agents can have different permission levels
 - Path validation still applies to allowed tools (whitelist/blacklist/.squidignore)
-- Denied tools return an error to the LLM without user interaction
+- Tools not in the allow list are denied without user interaction
 
 #### 🎯 Granular Bash Permissions
 
@@ -272,43 +260,31 @@ Each agent's bash permissions support **granular control** for fine-grained mana
 - `"bash:git status"` - Allows only `git status` commands specifically
 - `"bash:cat"` - Allows only `cat` commands
 
-**Example Agent Configuration with Granular Bash Permissions:**
+**Example Agent Configuration with Granular Bash Permissions (`agents/safe-explorer.md`):**
 
-```json
-{
-  "agents": {
-    "safe-explorer": {
-      "name": "Safe Explorer",
-      "enabled": true,
-      "description": "Read-only agent with safe bash commands",
-      "model": "qwen2.5-coder",
-      "permissions": {
-        "allow": [
-          "now",
-          "read_file", 
-          "grep",
-          "bash:ls",
-          "bash:git status",
-          "bash:pwd"
-        ],
-        "deny": [
-          "write_file",
-          "bash:rm",
-          "bash:sudo"
-        ]
-      }
-    }
-  }
-}
+```yaml
+---
+name: Safe Explorer
+enabled: true
+description: Read-only agent with safe bash commands
+model: qwen2.5-coder
+permissions:
+  - now
+  - read_file
+  - grep
+  - bash:ls
+  - bash:git status
+  - bash:pwd
+---
+You are a safe explorer that helps users navigate and understand codebases...
 ```
 
 This agent configuration:
 - ✅ Auto-approves `ls` commands without prompting
 - ✅ Auto-approves `git status` (but not other git commands)
 - ✅ Auto-approves `pwd` command
-- ❌ Blocks all `rm` commands (in addition to built-in blocking)
-- ❌ Blocks all `sudo` commands (in addition to built-in blocking)
-- ❓ Prompts for other bash commands (like `cat`, `echo`, `git log`)
+- ❌ All other bash commands are denied (including `rm`, `sudo`, `cat`, `echo`, etc.)
+- ❓ Other allowed tools (`now`, `read_file`, `grep`) run without prompting
 
 **How Granular Permissions Work:**
 
@@ -508,17 +484,13 @@ squid ask "Delete all temporary files with rm -rf /tmp/*"
 # wget, and kill operations are not allowed.
 ```
 
-**Even with "bash" in agent allow list:**
-```json
-{
-  "agents": {
-    "general-assistant": {
-      "permissions": {
-        "allow": ["bash"]  // Allow all bash? NO - dangerous commands still blocked!
-      }
-    }
-  }
-}
+**Even with `"bash"` in agent allow list:**
+```yaml
+---
+name: general-assistant
+permissions:
+  - bash  # Allow all bash? NO - dangerous commands still blocked!
+---
 ```
 
 ```bash

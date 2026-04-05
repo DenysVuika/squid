@@ -367,10 +367,10 @@ squid init /path/to/project
 - **RAG Setup**: Optional document search and retrieval features
 
 **What gets created:**
-- Default agents: `general-assistant` (full access), `code-reviewer` (read-only), `light` (minimal permissions), and `pirate` (demo agent with custom personality)
-- All agents configured with "local-model" (general-assistant and code-reviewer use 32768 token context, light and pirate use 8192)
-- Code-reviewer and light agents use `{{persona}}` to include base personality; pirate agent demonstrates fully custom prompt without `{{persona}}`
-- Can be customized later by editing the `agents` section in `squid.config.json`
+- `agents/` folder with default agent files: `general-assistant.md` (full access), `code-reviewer.md` (read-only), `light.md` (minimal permissions), `pirate.md` (demo agent with custom personality), and `shakespeare.md` (persona agent with no tools)
+- All agents configured with `qwen3.5-4b` model (general-assistant and code-reviewer use 32768 token context, light and pirate use 8192)
+- Code-reviewer and light agents use `{{persona}}` to include base personality; pirate and shakespeare demonstrate fully custom prompts without `{{persona}}`
+- Can be customized later by editing files in the `agents/` folder
 
 **Example session:**
 ```
@@ -389,13 +389,14 @@ Settings:
   Log Level: error
   RAG Enabled: no
 
-Agents configured:
-  • general-assistant (default)
-    - Model: local-model
-    - Permissions: Full access (read, write, bash)
-  • code-reviewer
-    - Model: local-model
-    - Permissions: Read-only (no write, no bash)
+Default agents available (in agents/ folder):
+  • general-assistant (default) - Full-featured coding assistant
+  • code-reviewer - Read-only code review specialist
+  • light - Lightweight assistant with minimal permissions
+  • pirate (Captain Squidbeard) - Pirate-themed demo agent
+  • shakespeare - Shakespearean English assistant
+
+  Edit agents/*.md files to customize or add new agents.
 
 Next steps:
   1. Start the server: squid serve
@@ -471,21 +472,8 @@ The `squid.config.json` file created by `squid init`:
   "context_window": 32768,
   "log_level": "error",
   "database_path": "squid.db",
-  "agents": {
-    "general-assistant": {
-      "name": "General Assistant",
-      "enabled": true,
-      "description": "Full-featured coding assistant",
-      "model": "qwen2.5-coder",
-      "context_window": 32768,
-      "permissions": {
-        "allow": ["now", "read_file", "write_file", "grep", "bash:ls", "bash:git"],
-        "deny": []
-      }
-    }
-  },
   "default_agent": "general-assistant",
-  "version": "0.7.0"
+  "version": "0.13.0"
 }
 ```
 
@@ -498,8 +486,7 @@ The `squid.config.json` file created by `squid init`:
 | `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
 | `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
 | `database_path` | string | Path to SQLite database file |
-| `agents` | object | Agent configurations (see Agents section in README) |
-| `default_agent` | string | Default agent to use |
+| `default_agent` | string | Default agent to use (agents are loaded from the `agents/` folder) |
 | `version` | string | Config file version |
 
 ### Alternative: Environment Variables

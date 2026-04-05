@@ -1,9 +1,11 @@
-use log::{debug, info};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::agent::{AgentConfig, AgentPermissions, AgentsConfig};
+use crate::agent::{
+    AgentConfig, AgentPermissions, AgentsConfig, get_agents_dir, load_agents_from_dir,
+};
 
 /// RAG (Retrieval-Augmented Generation) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,8 +226,19 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub web: WebConfig,
-    #[serde(default, flatten)]
+    /// Default agent ID (agents are loaded from files, not from config)
+    #[serde(default = "default_agent_id")]
+    pub default_agent: String,
+
+    // Non-serialized fields
+    #[serde(skip)]
     pub agents: AgentsConfig,
+    #[serde(skip)]
+    pub config_dir: Option<PathBuf>,
+}
+
+fn default_agent_id() -> String {
+    "general-assistant".to_string()
 }
 
 fn default_context_window() -> u32 {
@@ -265,7 +278,9 @@ impl Default for Config {
             plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
             web: WebConfig::default(),
+            default_agent: default_agent_id(),
             agents: AgentsConfig::default(),
+            config_dir: None,
         }
     }
 }
@@ -430,7 +445,30 @@ impl Config {
             config.plugins.load_bundled = enabled;
         }
 
+        // Store config directory for agents loading
+        config.config_dir = config_path.parent().map(|p| p.to_path_buf());
+
         config
+    }
+
+    /// Load agents from the agents directory
+    pub fn load_agents(&mut self) {
+        let agents_dir = get_agents_dir(self.config_dir.as_deref());
+        let agents = load_agents_from_dir(&agents_dir);
+
+        if agents.is_empty() {
+            warn!(
+                "No agents loaded from {:?}. Create .md files with YAML frontmatter.",
+                agents_dir
+            );
+        } else {
+            info!("Loaded {} agents from {:?}", agents.len(), agents_dir);
+        }
+
+        self.agents = AgentsConfig {
+            agents,
+            default_agent: self.default_agent.clone(),
+        };
     }
 
     /// Check if a configuration file exists in the current directory or parent directories
@@ -544,7 +582,9 @@ impl Config {
         self.get_agent(&self.agents.default_agent)
     }
 
-    /// Add a tool to an agent's allow list and save config
+    /// Add a tool to an agent's allow list
+    /// Note: This modifies the in-memory config only.
+    /// To persist changes, update the agent's .md file directly.
     pub fn allow_tool_for_agent(
         &mut self,
         agent_id: &str,
@@ -558,19 +598,17 @@ impl Config {
             .get_mut(agent_id)
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
 
-        // Remove from deny list if present
-        agent.permissions.deny.retain(|t| t != &tool_str);
-
         // Add to allow list if not already present
         if !agent.permissions.allow.contains(&tool_str) {
             agent.permissions.allow.push(tool_str);
         }
 
-        self.save_to_dir(&PathBuf::from("."))?;
         Ok(())
     }
 
-    /// Add a tool to an agent's deny list and save config
+    /// Remove a tool from an agent's allow list
+    /// Note: This modifies the in-memory config only.
+    /// To persist changes, update the agent's .md file directly.
     pub fn deny_tool_for_agent(
         &mut self,
         agent_id: &str,
@@ -587,12 +625,6 @@ impl Config {
         // Remove from allow list if present
         agent.permissions.allow.retain(|t| t != &tool_str);
 
-        // Add to deny list if not already present
-        if !agent.permissions.deny.contains(&tool_str) {
-            agent.permissions.deny.push(tool_str);
-        }
-
-        self.save_to_dir(&PathBuf::from("."))?;
         Ok(())
     }
 }

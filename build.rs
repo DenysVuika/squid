@@ -7,6 +7,7 @@ fn main() {
     let static_dir = Path::new("static");
     let web_dir = Path::new("web");
     let plugins_dir = Path::new("plugins");
+    let agents_dir = Path::new("agents");
 
     // Tell Cargo to re-run this script when web sources or bundled assets change.
     println!("cargo:rerun-if-changed=web/src");
@@ -20,6 +21,7 @@ fn main() {
     println!("cargo:rerun-if-changed=web/vite.config.ts");
     println!("cargo:rerun-if-changed=static");
     println!("cargo:rerun-if-changed=plugins");
+    println!("cargo:rerun-if-changed=agents");
 
     // Attempt to build the web frontend if npm is available and static/ is
     // missing or stale. The build is best-effort: when Node.js is not
@@ -138,6 +140,7 @@ fn main() {
 
     ensure_static_dir(static_dir);
     copy_bundled_plugins(plugins_dir);
+    copy_bundled_agents(agents_dir);
 }
 
 fn web_build_required(web_dir: &Path, static_dir: &Path) -> bool {
@@ -276,6 +279,50 @@ fn copy_bundled_plugins(plugins_dir: &Path) {
         eprintln!(
             "cargo:warning=Copied bundled plugins to {}",
             dest_plugins.display()
+        );
+    }
+}
+
+/// Copy bundled agents directory to the build output directory.
+/// This ensures default agents are available next to the executable during development.
+fn copy_bundled_agents(agents_dir: &Path) {
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
+
+    let profile_dir = Path::new(&out_dir)
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .expect("Failed to resolve profile directory");
+
+    let dest_agents = profile_dir.join("agents");
+
+    if !agents_dir.exists() {
+        // Agents directory is optional — users may provide their own
+        return;
+    }
+
+    let needs_copy = !dest_agents.exists()
+        || latest_modified(agents_dir)
+            .map(|src_mtime| {
+                latest_modified(&dest_agents)
+                    .map(|dst_mtime| src_mtime > dst_mtime)
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true);
+
+    if needs_copy {
+        if dest_agents.exists() {
+            let _ = fs::remove_dir_all(&dest_agents);
+        }
+
+        if let Err(e) = copy_dir_all(agents_dir, &dest_agents) {
+            eprintln!("cargo:warning=Failed to copy agents directory: {}", e);
+            return;
+        }
+
+        eprintln!(
+            "cargo:warning=Copied bundled agents to {}",
+            dest_agents.display()
         );
     }
 }

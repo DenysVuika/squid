@@ -399,13 +399,6 @@ pub fn check_tool_permission(
                 }
             }
 
-            // Check if plugin itself is explicitly denied
-            if permissions.deny.contains(&name.to_string()) {
-                return ToolPermissionStatus::Denied {
-                    reason: format!("Plugin '{}' is denied by agent configuration", name),
-                };
-            }
-
             // Check if plugin is explicitly allowed or wildcard allowed
             if permissions.allow.contains(&name.to_string())
                 || permissions.allow.contains(&"plugin:*".to_string())
@@ -413,7 +406,7 @@ pub fn check_tool_permission(
                 return ToolPermissionStatus::Allowed;
             }
 
-            // Otherwise needs approval
+            // Otherwise needs approval (deny by default)
             return ToolPermissionStatus::NeedsApproval;
         } else {
             return ToolPermissionStatus::Denied {
@@ -422,15 +415,8 @@ pub fn check_tool_permission(
         }
     }
 
-    // Check if tool is denied
-    if permissions.deny.contains(&name.to_string()) {
-        warn!("Tool '{}' denied by agent '{}'", name, agent_id);
-        return ToolPermissionStatus::Denied {
-            reason: format!("Tool '{}' denied by agent configuration", name),
-        };
-    }
-
     // Check if tool is allowed (with granular bash command support)
+    // Allow-only model: if not in allow list, it's denied
     let auto_allowed = if name == "bash" {
         let command = args["command"].as_str().unwrap_or("");
 
@@ -441,14 +427,23 @@ pub fn check_tool_permission(
 
         // Check for granular bash permissions
         let command_trimmed = command.trim();
-        permissions.allow.iter().any(|perm| {
+        let has_granular_permission = permissions.allow.iter().any(|perm| {
             if let Some(bash_cmd) = perm.strip_prefix("bash:") {
                 command_trimmed == bash_cmd
                     || command_trimmed.starts_with(&format!("{} ", bash_cmd))
             } else {
                 false
             }
-        })
+        });
+
+        if has_granular_permission {
+            return ToolPermissionStatus::Allowed;
+        }
+
+        // Bash not in allow list - denied by default
+        return ToolPermissionStatus::Denied {
+            reason: format!("Bash commands not allowed for agent '{}'", agent_id),
+        };
     } else {
         permissions.allow.contains(&name.to_string())
     };
@@ -460,7 +455,10 @@ pub fn check_tool_permission(
         );
         ToolPermissionStatus::Allowed
     } else {
-        ToolPermissionStatus::NeedsApproval
+        // Tool not in allow list - denied by default
+        ToolPermissionStatus::Denied {
+            reason: format!("Tool '{}' not in allow list for agent '{}'", name, agent_id),
+        }
     }
 }
 
