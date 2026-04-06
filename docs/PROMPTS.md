@@ -1,384 +1,80 @@
 # System Prompts Reference
 
-This document describes all the system prompts used in the `squid` CLI tool.
+Squid uses specialized system prompts stored in `src/assets/` to guide the LLM's behavior for different commands.
 
-## Overview
+## Prompt Architecture
 
-Squid uses specialized system prompts to guide the LLM's behavior for different commands. These prompts are stored in `src/assets/` and are compiled into the binary.
-
-### Prompt Architecture
-
-As of v0.4.0, squid uses a **modular prompt composition** system:
-
-- **`persona.md`** - Shared AI assistant personality and role definition
-- **Task-specific prompts** - Instructions for specific commands (`ask-prompt.md`, `code-review.md`, etc.)
-
-At runtime, the persona is automatically combined with the task-specific prompt to create the complete system message:
+Squid uses **modular prompt composition**:
 
 ```
-[PERSONA] + [TASK-SPECIFIC INSTRUCTIONS] = COMPLETE SYSTEM PROMPT
+[persona.md] + [task-specific prompt] = Complete System Prompt
 ```
 
-This architecture provides:
-- **Consistency** - Same personality across all commands
-- **Maintainability** - Update persona once, affects all prompts
-- **Clarity** - Separates "who you are" from "what you do"
+- **`persona.md`** — Shared AI assistant personality (professional, direct, honest)
+- **Task-specific** — `ask-prompt.md`, `code-review.md`, `review-*.md`
+
+The persona is automatically prepended to all task-specific prompts at runtime.
 
 ## Available Prompts
 
-### 0. Shared Persona (`persona.md`)
+### Ask Command (`ask-prompt.md`)
 
-**Used by:** All commands (automatically combined with task prompts)  
-**Location:** `src/assets/persona.md`  
-**Purpose:** Define the AI assistant's personality and role
-
-**Content:**
-- Defines the assistant as helpful and professional
-- Introduces the squid 🦑 personality (adaptable, precise, equipped with tools)
-- Sets the tone: friendly yet professional
-
-**Note:** This prompt is automatically prepended to all task-specific prompts at runtime. You don't interact with it directly, but it shapes the assistant's behavior across all commands.
-
----
-
-### 1. Ask Command Prompt (`ask-prompt.md`)
-
-**Used by:** `ask` command (default, unless overridden with `-p`/`--prompt`)  
-**Location:** `src/assets/ask-prompt.md`  
-**Purpose:** General-purpose assistant with intelligent tool usage
-
-**Key features:**
-- Guides LLM on when to use `read_file` and `write_file` tools
-- Provides clear examples of tool usage scenarios
-- Encourages proactive file reading based on user questions
-- Helps LLM understand natural language file requests
-
-**Examples of when this prompt is active:**
-```bash
-squid ask "Read Cargo.toml and list dependencies"
-squid ask "What's in the README file?"
-squid ask "Create a notes.txt with my tasks"
-```
-
-**Using a custom prompt instead:**
-```bash
-# Override with your own system prompt
-squid ask -p custom-prompt.md "Your question here"
-squid ask --prompt expert-coder.md -f main.rs "Review this code"
-```
-
----
-
-### 2. Code Review Prompts
-
-#### Generic Code Review (`code-review.md`)
-
-**Used by:** `review` command (fallback for unknown file types)  
-**Location:** `src/assets/code-review.md`  
-**Purpose:** General code quality review
-
-**Focus areas:**
-- Code quality and best practices
-- Potential bugs and issues
-- Performance considerations
-- Maintainability and readability
-
-#### Rust Review (`review-rust.md`)
-
-**Used by:** `review` command for `.rs` files  
-**Location:** `src/assets/review-rust.md`  
-**Purpose:** Rust-specific code review
-
-**Focus areas:**
-- Ownership and borrowing
-- Memory safety
-- Idiomatic Rust patterns
-- Error handling
-- Performance (unnecessary clones, allocations)
-- Safety (unwrap, panic, unsafe)
-
-**Example:**
-```bash
-squid review src/main.rs
-```
-
-#### TypeScript/JavaScript Review (`review-typescript.md`)
-
-**Used by:** `review` command for `.ts`, `.js`, `.tsx`, `.jsx` files  
-**Location:** `src/assets/review-typescript.md`  
-**Purpose:** TypeScript and JavaScript code review
-
-**Focus areas:**
-- Type safety (`any` usage, type assertions)
-- Modern ES6+ features
-- Async/await patterns
-- Security (XSS, injection vulnerabilities)
-- Memory leaks (event listeners, closures)
-- Performance optimizations
-
-**Example:**
-```bash
-squid review src/App.tsx
-```
-
-#### HTML Review (`review-html.md`)
-
-**Used by:** `review` command for `.html`, `.htm` files  
-**Location:** `src/assets/review-html.md`  
-**Purpose:** HTML semantic and accessibility review
-
-**Focus areas:**
-- Semantic HTML elements
-- Accessibility (ARIA, alt text, labels)
-- SEO best practices
-- Performance (inline scripts/styles)
-- Document structure
-- Forms and interactive elements
-
-**Example:**
-```bash
-squid review index.html
-```
-
-#### CSS Review (`review-css.md`)
-
-**Used by:** `review` command for `.css`, `.scss`, `.sass` files  
-**Location:** `src/assets/review-css.md`  
-**Purpose:** CSS performance and maintainability review
-
-**Focus areas:**
-- Performance (selectors, animations)
-- Responsive design
-- Maintainability (naming, organization)
-- Browser compatibility
-- Accessibility (focus styles, contrast)
-- Modern CSS features
-
-**Example:**
-```bash
-squid review styles/main.css
-```
-
-## How Prompts Are Selected
-
-### Ask Command
-
-The `ask` command uses `ask-prompt.md` by default, but can be overridden with the `-p`/`--prompt` flag:
+Default for `squid ask`. Guides the LLM to proactively use tools (read files, search code, run safe commands) when helpful.
 
 ```bash
-# Default: uses built-in ask-prompt.md
-squid ask "What is Rust?"
-
-# Custom: uses your own system prompt
-squid ask -p my-prompt.md "What is Rust?"
+squid ask "What is Rust?"                        # Uses ask-prompt.md
+squid ask -p custom-prompt.md "question"         # Override with custom prompt
+squid ask -f main.rs -p expert.md "Review this"  # Custom + file context
 ```
 
-```rust
-// In src/main.rs
-const ASK_PROMPT: &str = include_str!("./assets/ask-prompt.md");
-```
-
-**When to use custom prompts:**
-- Specialized domain knowledge (security expert, performance analyst, etc.)
-- Different response styles (concise, verbose, tutorial-style, etc.)
-- Specific workflows or methodologies
-- Custom tool usage patterns
-
-### Review Command
+### Code Review Prompts
 
 The `review` command automatically selects the appropriate prompt based on file extension:
 
-```rust
-fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
-    match extension {
-        "rs" => CODE_REVIEW_RUST_PROMPT,
-        "ts" | "js" | "tsx" | "jsx" => CODE_REVIEW_TYPESCRIPT_PROMPT,
-        "html" | "htm" => CODE_REVIEW_HTML_PROMPT,
-        "css" | "scss" | "sass" => CODE_REVIEW_CSS_PROMPT,
-        _ => CODE_REVIEW_PROMPT,  // Generic fallback
-    }
-}
-```
-
-## Customizing Prompts
-
-### Option 1: Edit Built-in Prompts (Permanent)
-
-To customize the built-in prompts:
-
-1. Edit the corresponding `.md` file in `src/assets/`
-2. Rebuild the project: `cargo build --release`
-3. The new prompt is now compiled into the binary
-
-**Example:** Customize Rust reviews
-```bash
-# Edit the prompt
-vim src/assets/review-rust.md
-
-# Rebuild
-cargo build --release
-
-# Test
-./target/release/squid review sample-files/example.rs
-```
-
-### Option 2: Use Custom Prompts (Per-Command)
-
-For the `ask` command, you can use custom prompts without rebuilding:
+| File Types | Prompt File | Focus |
+|-----------|-------------|-------|
+| `.rs` | `review-rust.md` | Ownership, memory safety, idioms |
+| `.ts`, `.js`, `.tsx`, `.jsx` | `review-typescript.md` | Type safety, async patterns, XSS |
+| `.html`, `.htm` | `review-html.md` | Semantics, accessibility, SEO |
+| `.css`, `.scss`, `.sass` | `review-css.md` | Performance, responsive, maintainability |
+| `.py` | `review-py.md` | Python best practices |
+| `.go` | `review-go.md` | Go idioms, concurrency |
+| `.java` | `review-java.md` | Java patterns, null safety |
+| `.sql` | `review-sql.md` | Query optimization, injection |
+| `.sh` | `review-sh.md` | Shell scripting, safety |
+| `.json` | `review-json.md` | Schema, structure |
+| `.yaml`, `.yml` | `review-yaml.md` | Syntax, structure |
+| `.md` | `review-md.md` | Markdown style, links |
+| `Dockerfile`, `*.dockerfile` | `review-docker.md` | Container best practices |
+| `Makefile` | `review-makefile.md` | Build patterns |
+| Other | `code-review.md` | Generic code quality |
 
 ```bash
-# Create your custom prompt
+squid review src/main.rs          # Auto-selects review-rust.md
+squid review App.tsx              # Auto-selects review-typescript.md
+squid review index.html           # Auto-selects review-html.md
+```
+
+## Custom Prompts
+
+Use the `-p`/`--prompt` flag with `squid ask` to override the default system prompt:
+
+```bash
+# Create a custom prompt
 cat > security-expert.md << 'EOF'
-You are a security expert specializing in code security analysis.
-Focus on identifying vulnerabilities, security best practices, and potential attack vectors.
+You are a security expert. Focus on vulnerabilities and best practices.
 EOF
 
-# Use it with the ask command
-squid ask -p security-expert.md "Review this authentication code"
+# Use it
+squid ask -p security-expert.md "Review this auth code"
 squid ask -f auth.rs -p security-expert.md "Find security issues"
 ```
 
-**Benefits:**
-- No rebuild required
-- Easy to experiment with different prompts
-- Share prompts with team members
-- Version control your custom prompts
-
-## Prompt Best Practices
-
-When editing prompts, follow these guidelines:
-
-### 1. Be Specific
-- Clearly define the LLM's role and capabilities
-- List specific areas to focus on
-- Provide concrete examples
-
-### 2. Use Examples
-- Show example user requests and expected behavior
-- Demonstrate tool usage patterns
-- Include edge cases
-
-### 3. Structure Clearly
-- Use headings and sections
-- Bullet points for lists
-- Separate different concerns
-
-### 4. Guide Tool Usage
-- Explicitly state when to use tools
-- Provide clear criteria for tool invocation
-- Include examples of tool-triggering phrases
-
-### 5. Set Expectations
-- Define output format
-- Specify level of detail
-- Clarify response style
-
-## Adding New Prompts
-
-To add a new specialized prompt:
-
-1. **Create the prompt file:**
-   ```bash
-   touch src/assets/review-python.md
-   ```
-
-2. **Define the constant in `main.rs`:**
-   ```rust
-   const CODE_REVIEW_PYTHON_PROMPT: &str = include_str!("./assets/review-python.md");
-   ```
-
-3. **Add to the selection logic:**
-   ```rust
-   fn get_review_prompt_for_file(file_path: &Path) -> &'static str {
-       match extension {
-           "py" => CODE_REVIEW_PYTHON_PROMPT,  // New!
-           // ... existing matches
-       }
-   }
-   ```
-
-4. **Write the prompt content** (see existing prompts for structure)
-
-5. **Test thoroughly** with example files
-
-## Prompt Templates
-
-### Basic Structure
-
-```markdown
-# Role Definition
-You are a [specific role] assistant...
-
-## Available Tools (if applicable)
-1. **tool_name** - Description
-   - When to use
-   - Examples
-
-## When to [Perform Action]
-- Criterion 1
-- Criterion 2
-- Examples
-
-## Focus Areas
-- Area 1: Description
-- Area 2: Description
-
-## Response Format
-- How to structure responses
-- Level of detail
-- Tone and style
-
-## Examples
-**User**: "Example question"
-**You**: [Expected behavior]
-```
+To permanently modify built-in prompts, edit the files in `src/assets/` and rebuild (`cargo build --release`).
 
 ## Viewing Prompts
 
-To view the current prompts:
-
 ```bash
-# View all prompts
-ls -la src/assets/*.md
-
-# View a specific prompt
-cat src/assets/ask-prompt.md
-
-# View with formatting
-bat src/assets/review-rust.md  # if you have bat installed
+ls src/assets/*.md          # List all prompts
+cat src/assets/persona.md   # View base persona
 ```
-
-## Troubleshooting
-
-### LLM not using tools as expected
-
-**Problem:** LLM doesn't read files when asked  
-**Solution:** Check `ask-prompt.md` includes clear tool usage examples
-
-### Irrelevant review feedback
-
-**Problem:** Code reviews focus on wrong areas  
-**Solution:** Update the specific review prompt to emphasize desired focus areas
-
-### Verbose or terse responses
-
-**Problem:** Responses too long or too short  
-**Solution:** Adjust "Response Style" section in the prompt
-
-## Version History
-
-- **v0.4.0**: 
-  - Added `-p`/`--prompt` flag for custom system prompts in `ask` command
-  - Introduced modular prompt architecture with `persona.md`
-  - Task prompts now focus on instructions only (persona separated)
-- **v0.3.0**: Added `ask-prompt.md` for intelligent tool usage
-- **v0.3.0**: Initial specialized review prompts (Rust, TypeScript, HTML, CSS)
-
-## Related Documentation
-
-- **[Security Features](SECURITY.md)** - Tool approval and security
-- **[Examples](EXAMPLES.md)** - Comprehensive usage examples and workflows
-
----
-
-**Note:** All prompts are compiled into the binary at build time. Changes require rebuilding the project.
