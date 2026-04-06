@@ -78,8 +78,3 @@ To permanently modify built-in prompts, edit the files in `src/assets/` and rebu
 ls src/assets/*.md          # List all prompts
 cat src/assets/persona.md   # View base persona
 ```
-
-## Version History
-
-- **v0.4.0**: Added `-p`/`--prompt` flag, modular persona architecture
-- **v0.3.0**: Initial specialized review prompts
