@@ -658,10 +658,21 @@ squid ask "How do I set up the development environment?"
 3. Ensure volumes are mounted: `docker compose config`
 4. Restart containers: `docker compose restart`
 
+### Database Verification
+
+Verify RAG tables directly in the SQLite database:
+
+```bash
+sqlite3 squid.db
+.tables                 # Should show: rag_documents, rag_chunks, rag_embeddings
+SELECT COUNT(*) FROM rag_documents;
+SELECT COUNT(*) FROM rag_chunks;
+SELECT COUNT(*) FROM rag_embeddings;
+.quit
+```
+
 ## See Also
 
-- [Main README](../README.md) - Overview and quick start
-- [CLI Reference](CLI.md) - Complete CLI documentation
-- [Security Features](SECURITY.md) - Security and permissions
-- [RAG Testing Guide](RAG_TESTING.md) - Testing RAG functionality
-- [Configuration](../README.md#configuration) - Configuration options
+- [Main README](../README.md) — Overview and quick start
+- [CLI Reference](CLI.md) — Complete CLI documentation
+- [Security Features](SECURITY.md) — Security and permissions

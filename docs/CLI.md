@@ -158,38 +158,16 @@ The review command automatically selects the appropriate review prompt based on 
 Start the Squid web server with REST API and Web UI.
 
 ```bash
-# Start server on default port (3000)
-squid serve
-
-# Start on custom port
-squid serve --port 8080
-
-# Specify custom host
-squid serve --host 0.0.0.0 --port 3000
+squid serve                          # http://localhost:3000
+squid serve --port 8080              # Custom port
+squid serve --host 0.0.0.0 --port 3000  # LAN access
 ```
 
-The serve command starts:
-- **Web UI** at `http://localhost:3000`
-- **REST API** at `http://localhost:3000/api/*`
-- **Health endpoint** at `http://localhost:3000/health`
-
 **Options:**
-- `-p, --port <PORT>` - Port to bind to (default: 3000)
-- `-h, --host <HOST>` - Host to bind to (default: 127.0.0.1)
+- `-p, --port <PORT>` — Port to bind to (default: 3000)
+- `-h, --host <HOST>` — Host to bind to (default: 127.0.0.1)
 
-**API Endpoints:**
-- `POST /api/chat` - Send chat messages
-- `GET /api/sessions` - List chat sessions
-- `GET /api/sessions/:id` - Get session details
-- `DELETE /api/sessions/:id` - Delete session
-- `PUT /api/sessions/:id/title` - Update session title
-- `GET /api/logs` - Get application logs
-- `GET /api/agents` - List available agents
-- `POST /api/rag/index` - Index documents for RAG
-- `GET /api/rag/documents` - List indexed documents
-- And more...
-
-See [REST API Documentation](../README.md#api-endpoints) for details.
+The server launches the Web UI, REST API, and health endpoint. See [API.md](API.md) for full endpoint documentation.
 
 ## RAG Commands
 
@@ -345,124 +323,31 @@ The logs are stored in the SQLite database (`squid.db`) alongside your chat sess
 
 ## Init Command
 
-Initialize Squid configuration for a project. Creates a `squid.config.json` file with your LLM connection settings, default agents (general-assistant, code-reviewer, and light), and preferences.
+Initialize Squid configuration. Creates `squid.config.json` with LLM connection settings and default agents.
 
 ### Interactive Mode (Default)
 
-Run `squid init` to be prompted for all configuration values:
-
 ```bash
-# Initialize in current directory
-squid init
-
-# Initialize in a specific directory
-squid init ./my-project
-squid init /path/to/project
+squid init                        # Current directory
+squid init ./my-project           # Specific directory
 ```
 
-**Interactive prompts:**
-- **API URL**: The base URL for your LLM service (e.g., `http://127.0.0.1:1234/v1`)
-- **API Key**: Optional API key (leave empty for local models like LM Studio or Ollama)
-- **Log Level**: Logging verbosity (`error`, `warn`, `info`, `debug`, `trace`)
-- **RAG Setup**: Optional document search and retrieval features
-
-**What gets created:**
-- `agents/` folder with default agent files: `general-assistant.md` (full access), `code-reviewer.md` (read-only), `light.md` (minimal permissions), `pirate.md` (demo agent with custom personality), and `shakespeare.md` (persona agent with no tools)
-- All agents configured with `qwen3.5-4b` model (general-assistant and code-reviewer use 32768 token context, light and pirate use 8192)
-- Code-reviewer and light agents use `{{persona}}` to include base personality; pirate and shakespeare demonstrate fully custom prompts without `{{persona}}`
-- Can be customized later by editing files in the `agents/` folder
-
-**Example session:**
-```
-$ squid init
-INFO: Initializing squid configuration in "."...
-? API URL: http://127.0.0.1:1234/v1
-? API Key (optional, press Enter to skip): 
-? Log Level: error
-? Enable RAG (Retrieval-Augmented Generation)? (y/N): n
-
-✅ Configuration saved to: "squid.config.json"
-
-Settings:
-  API URL: http://127.0.0.1:1234/v1
-  API Key: [not set]
-  Log Level: error
-  RAG Enabled: no
-
-Default agents available (in agents/ folder):
-  • general-assistant (default) - Full-featured coding assistant
-  • code-reviewer - Read-only code review specialist
-  • light - Lightweight assistant with minimal permissions
-  • pirate (Captain Squidbeard) - Pirate-themed demo agent
-  • shakespeare - Shakespearean English assistant
-
-  Edit agents/*.md files to customize or add new agents.
-
-Next steps:
-  1. Start the server: squid serve
-  2. Or use CLI: squid ask "your question"
-  3. Open Web UI: http://localhost:3000
-```
+Prompts for API URL, API key, log level, and RAG setup. Creates an `agents/` folder with default agents (`general-assistant`, `code-reviewer`, `light`, `pirate`, `shakespeare`).
 
 ### Non-Interactive Mode
 
-Provide configuration values via command-line arguments to skip interactive prompts:
-
 ```bash
-# Initialize with all parameters
 squid init --url http://127.0.0.1:1234/v1 --log-level error
-
-# Initialize in a specific directory with parameters
-squid init ./my-project --url http://localhost:11434/v1 --log-level error
-
-# Partial parameters (will prompt for missing values)
-squid init --url http://127.0.0.1:1234/v1
-# Will still prompt for API Key and Log Level
-
-# Include API key for cloud services
-squid init --url https://api.openai.com/v1 --key sk-your-key-here --log-level error
+squid init ./my-project --url http://localhost:11434/v1 --key sk-your-key --log-level info
 ```
 
-**Available options:**
-- `--url <URL>` - API URL (e.g., `http://127.0.0.1:1234/v1`)
-- `--key <KEY>` - API Key (optional for local models)
-- `--log-level <LEVEL>` - Log Level (`error`, `warn`, `info`, `debug`, `trace`)
+**Options:** `--url <URL>`, `--key <KEY>`, `--log-level <LEVEL>`
 
-**Note**: Context windows and models are configured per-agent. The init command creates default agents with "local-model" and a 32768 token context window, which you can customize in `squid.config.json` after initialization.
+**Re-running `squid init`** on an existing config preserves settings and uses current values as defaults.
 
-### Re-running Init on Existing Config
+Context windows and models are configured per-agent in `squid.config.json` after initialization.
 
-When you run `squid init` on a directory that already has a config file, it will:
-- Use existing values as defaults in prompts
-- **Smart merge permissions**: Preserve your custom permissions + add new defaults
-- Update version to match current app version
-
-**Example:**
-```
-$ squid init --url http://127.0.0.1:1234/v1 --log-level info
-Found existing configuration, using current values as defaults...
-
-✅ Configuration saved to: "./squid.config.json"
-
-Settings:
-  API URL: http://127.0.0.1:1234/v1
-  API Key: [configured]
-  Log Level: info
-
-Agents configured:
-  • general-assistant (default)
-    - Model: local-model
-    - Permissions: Full access
-  • code-reviewer
-    - Model: local-model
-    - Permissions: Read-only
-```
-
-In this example:
-- Existing agent configurations are preserved and updated
-- Config version updated to match current app version
-
-### Configuration File Format
+### Configuration
 
 The `squid.config.json` file created by `squid init`:
 
@@ -477,143 +362,70 @@ The `squid.config.json` file created by `squid init`:
 }
 ```
 
-**Configuration options:**
-
 | Field | Type | Description |
 |-------|------|-------------|
 | `api_url` | string | OpenAI-compatible API endpoint URL |
 | `api_key` | string (optional) | API key for authentication |
-| `context_window` | number | Maximum context window in tokens (global default; can be overridden per-agent) |
-| `log_level` | string | Logging verbosity (error, warn, info, debug, trace) |
-| `database_path` | string | Path to SQLite database file |
-| `default_agent` | string | Default agent to use (agents are loaded from the `agents/` folder) |
+| `context_window` | number | Max context tokens (global default; per-agent override available) |
+| `log_level` | string | Logging verbosity |
+| `database_path` | string | SQLite database path |
+| `default_agent` | string | Default agent ID (loaded from `agents/` folder) |
 | `version` | string | Config file version |
 
-### Alternative: Environment Variables
+**Re-running `squid init`** on an existing config preserves your settings and uses current values as defaults.
 
-Instead of `squid.config.json`, you can create a `.env` file:
+**Alternative: `.env` file** — environment variables work, but `squid.config.json` takes precedence. Keep `.env` private (API keys), commit `squid.config.json` for team sharing.
 
-```bash
-# OpenAI API Configuration
-API_URL=http://127.0.0.1:1234/v1
-API_KEY=not-needed
-SQUID_CONTEXT_WINDOW=32768
-SQUID_DATABASE_PATH=squid.db
-SQUID_LOG_LEVEL=error
-```
-
-**Important Notes:**
-- `squid.config.json` takes precedence over `.env` variables
-- **Commit `squid.config.json`** to your repository to share project settings with your team
-- **Keep `.env` private** - it should contain sensitive information like API keys and is excluded from git
-- For cloud API services, store the actual API key in `.env` and omit `api_key` from `squid.config.json`
-
-### Common API URLs
-
-| Service | API URL |
-|---------|---------|
-| **LM Studio** | `http://127.0.0.1:1234/v1` |
-| **Ollama** | `http://localhost:11434/v1` |
-| **Docker Model Runner** | `http://localhost:12434/engines/v1` |
-| **OpenAI** | `https://api.openai.com/v1` |
-| **Mistral AI** | `https://api.mistral.ai/v1` |
-| **OpenRouter** | `https://openrouter.ai/api/v1` |
-| **Together AI** | `https://api.together.xyz/v1` |
+See [Configuration](../README.md#configuration) in the main README for full details.
 
 ## Tool Calling
 
-The LLM has been trained to intelligently use tools when needed. It understands when to read, write, or search files based on your questions.
-
-### Security Layers
-
-1. **Path Validation** - Automatically blocks system directories (`/etc`, `/root`, `~/.ssh`, etc.)
-2. **Ignore Patterns** - `.squidignore` file blocks specified files/directories (like `.gitignore`)
-3. **User Approval** - Manual confirmation required for each operation
-
-For details, see [Security Features](SECURITY.md).
-
-### Examples
-
-```bash
-# LLM intelligently reads files when you ask about them
-squid ask "Read the README.md file and summarize it"
-squid ask "What dependencies are in Cargo.toml?"
-squid ask "Analyze the main.rs file for me"
-# You'll be prompted: "Allow reading file: [filename]? (Y/n)"
-
-# LLM can write files
-squid ask "Create a hello.txt file with 'Hello, World!'"
-# You'll be prompted with a preview: "Allow writing to file: hello.txt?"
-
-# Use custom prompts with tool calling
-squid ask -p expert-coder.md "Read Cargo.toml and suggest optimizations"
-
-# LLM can search for patterns in files using grep
-squid ask "Search for all TODO comments in the src directory"
-squid ask "Find all function definitions in src/main.rs"
-squid ask "Search for 'API_URL' in the project"
-squid ask "Find all uses of 'unwrap' in the codebase"
-squid ask "Show me all error handling patterns in src/tools.rs"
-# You'll be prompted: "Allow searching for pattern '...' in: [path]? (Y/n)"
-# Results show file path, line number, and matched content
-
-# LLM can get current date and time
-squid ask "What time is it now?"
-squid ask "What's the current date?"
-# You'll be prompted: "Allow getting current date and time? (Y/n)"
-# Returns datetime in RFC 3339 format
-
-# LLM can execute safe bash commands
-squid ask "What files are in this directory?"
-squid ask "Show me the git status"
-squid ask "List all .rs files in src/"
-# You'll be prompted: "Allow executing bash command: [command]? (Y/n)"
-# Dangerous commands (rm, sudo, chmod, dd, curl, wget, kill) are automatically blocked
-
-# Use --no-stream for non-streaming mode
-squid ask --no-stream "Read Cargo.toml and list all dependencies"
-```
+The LLM can intelligently use tools when needed based on natural language.
 
 ### Available Tools
 
-- 📖 **read_file** - Read file contents from the filesystem
-- 📝 **write_file** - Write content to files
-- 🔍 **grep** - Search for patterns in files using regex (supports directories and individual files)
-- 🕐 **now** - Get current date and time in RFC 3339 format (UTC or local timezone)
-- 💻 **bash** - Execute safe, non-destructive bash commands (ls, git status, cat, etc.)
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents |
+| `write_file` | Write to files (with preview) |
+| `grep` | Regex search across files |
+| `now` | Get current date/time |
+| `bash` | Execute safe commands (ls, git, cat, etc.) |
 
-### Key Features
+### Security Layers
 
-- 🤖 **Intelligent tool usage** - LLM understands when to read/write/search files from natural language
-- 🛡️ **Path validation** - Automatic blocking of system and sensitive directories
-- 📂 **Ignore patterns** - `.squidignore` file for project-specific file blocking
-- 🔒 **Security approval** - All tool executions require user confirmation
-- 📋 **Content preview** - File write operations show what will be written
-- ⌨️ **Simple controls** - Press `Y` to allow or `N` to skip
-- 📝 **Full logging** - All tool calls are logged for transparency
-- 🔍 **Regex support** - Grep tool supports regex patterns with configurable case sensitivity
-- 💻 **Bash execution** - Run safe, read-only commands for system inspection (dangerous commands **always** blocked, even with permissions)
-- 🔐 **Privacy preserved** - With local models (LM Studio/Ollama), all file operations happen locally on your machine
-
-### Using .squidignore
-
-Create a `.squidignore` file in your project root to block specific files and directories:
+1. **Path Validation** — Blocks system directories automatically
+2. **`.squidignore`** — Project-specific file blocking (like `.gitignore`)
+3. **User Approval** — Manual confirmation for each operation
 
 ```bash
-# .squidignore - Works like .gitignore
+# LLM reads files on request
+squid ask "Read Cargo.toml and list dependencies"
+
+# LLM writes files (you see a preview first)
+squid ask "Create hello.txt with 'Hello, World!'"
+
+# LLM searches with grep
+squid ask "Find all TODO comments in src/"
+
+# LLM runs safe bash
+squid ask "What files are in this directory?"
+```
+
+**`.squidignore` example:**
+```
 *.log
 .env
 target/
 node_modules/
-__pycache__/
 ```
 
-Patterns are automatically enforced - the LLM cannot access ignored files even if approved.
+For complete security documentation, see [SECURITY.md](SECURITY.md). For detailed tool usage examples, see [EXAMPLES.md](EXAMPLES.md).
 
 ## See Also
 
-- [Main README](../README.md) - Overview and Web UI documentation
-- [Security Features](SECURITY.md) - Detailed security documentation
-- [RAG Testing Guide](RAG_TESTING.md) - Testing RAG functionality
-- [Examples](EXAMPLES.md) - More usage examples
-- [Prompts Guide](PROMPTS.md) - Custom prompt development
+- [Main README](../README.md) — Overview and Web UI documentation
+- [Security Features](SECURITY.md) — Detailed security documentation
+- [Examples](EXAMPLES.md) — More usage examples
+- [Prompts Guide](PROMPTS.md) — Custom prompt development
+- [API Reference](API.md) — REST API documentation
