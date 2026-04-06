@@ -739,6 +739,7 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid rag`** - Manage RAG document indexing
 - **`squid logs`** - View, clear, and clean up application logs
 - **`squid init`** - Initialize project configuration
+- **`squid doctor`** - Run diagnostic checks to verify setup
 
 **Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:
 - Run `squid init` to create a config file with agent configurations
@@ -774,6 +775,9 @@ squid logs cleanup
 
 # Remove logs older than 7 days
 squid logs cleanup --max-age-days 7
+
+# Verify configuration and setup
+squid doctor
 ```
 
 For complete CLI documentation, examples, and advanced usage, see [docs/CLI.md](docs/CLI.md).

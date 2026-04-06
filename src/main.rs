@@ -8,6 +8,7 @@ mod agent;
 mod api;
 mod config;
 mod db;
+mod doctor;
 mod envinfo;
 mod init;
 mod llm;
@@ -116,6 +117,8 @@ enum Commands {
         #[command(subcommand)]
         command: RagCommands,
     },
+    /// Run diagnostic checks to verify configuration and setup
+    Doctor,
 }
 
 #[derive(Subcommand)]
@@ -557,6 +560,18 @@ async fn main() {
                         println!("🦑: Failed to get statistics - {}", e);
                     }
                 },
+            }
+        }
+        Commands::Doctor => {
+            if !check_config_or_suggest_init() {
+                return;
+            }
+
+            let doctor = doctor::Doctor::new();
+            let all_passed = doctor.run(&app_config).await;
+
+            if !all_passed {
+                std::process::exit(1);
             }
         }
     }

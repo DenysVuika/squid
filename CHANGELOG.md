@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`doctor` Command**: New diagnostic command to verify configuration and setup
+  - Validates configuration file, agents directory, and database paths
+  - Checks API connectivity and verifies all declared agent models are available
+  - Validates default agent configuration
+  - Pluggable check architecture for easy extension
+  - Returns exit code 1 if any checks fail (CI/CD friendly)
+  - Usage: `squid doctor`
 - **Agent Token Statistics**: Token usage statistics are now tracked per agent (not per session)
   - New `agent_token_stats` table tracks lifetime usage for each agent
   - Statistics include: total tokens, input/output/reasoning/cache tokens, cost, session count
