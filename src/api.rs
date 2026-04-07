@@ -1471,13 +1471,15 @@ pub async fn get_agent_content(
     let agent_id = agent_id.into_inner();
     debug!("Fetching content for agent: {}", agent_id);
 
-    // Validate agent ID to prevent path traversal (allow only safe characters)
-    if !agent_id
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-    {
+    // Validate agent_id to prevent path traversal and invalid characters
+    // Allow only alphanumerics, underscore, and hyphen.
+    let is_valid_agent_id = !agent_id.is_empty()
+        && agent_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !is_valid_agent_id {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
-            "error": "Invalid agent ID"
+            "error": "Invalid agent id"
         })));
     }
 
