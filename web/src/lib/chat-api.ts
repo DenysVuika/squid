@@ -663,6 +663,30 @@ export async function fetchAgentStats(apiUrl: string, agentId: string): Promise<
   }
 }
 
+export interface AgentContentResponse {
+  id: string;
+  name: string;
+  content: string;
+}
+
+/**
+ * Fetch the raw markdown content for a specific agent
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param agentId - The ID of the agent to fetch
+ * @returns Promise with agent content
+ */
+export async function fetchAgentContent(apiUrl: string, agentId: string): Promise<AgentContentResponse> {
+  const endpoint = apiUrl ? `${apiUrl}/api/agents/${agentId}/content` : `/api/agents/${agentId}/content`;
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch agent content: HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export interface ConfigResponse {
   api_url: string;
   context_window: number;

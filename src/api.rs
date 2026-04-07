@@ -1455,6 +1455,78 @@ pub async fn get_agents(app_config: web::Data<Arc<config::Config>>) -> Result<Ht
     }))
 }
 
+/// Response for agent file content
+#[derive(Debug, Serialize)]
+pub struct AgentContentResponse {
+    pub id: String,
+    pub name: String,
+    pub content: String,
+}
+
+/// Get the raw markdown content for a specific agent
+pub async fn get_agent_content(
+    agent_id: web::Path<String>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    let agent_id = agent_id.into_inner();
+    debug!("Fetching content for agent: {}", agent_id);
+
+    // Validate agent_id to prevent path traversal and invalid characters
+    // Allow only alphanumerics, underscore, and hyphen.
+    let is_valid_agent_id = !agent_id.is_empty()
+        && agent_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !is_valid_agent_id {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Invalid agent id"
+        })));
+    }
+
+    // Check if agent exists in configuration
+    let agent = app_config.agents.agents.get(&agent_id);
+    if agent.is_none() {
+        return Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": format!("Agent '{}' not found", agent_id)
+        })));
+    }
+
+    // Read the agent file from the agents directory
+    let agents_dir = crate::agent::get_agents_dir(app_config.config_dir.as_deref());
+    let agent_file = agents_dir.join(format!("{}.md", agent_id));
+
+    // Resolve symlinks and canonicalize paths to prevent traversal
+    let agents_dir = agents_dir.canonicalize().map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Agents directory not found: {}", e))
+    })?;
+    let agent_file = match agent_file.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("Agent '{}' not found", agent_id)
+            })));
+        }
+    };
+
+    // Ensure the resolved path is still within the agents directory
+    if !agent_file.starts_with(&agents_dir) {
+        return Ok(HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Access denied"
+        })));
+    }
+
+    match std::fs::read_to_string(&agent_file) {
+        Ok(content) => Ok(HttpResponse::Ok().json(AgentContentResponse {
+            id: agent_id,
+            name: agent.unwrap().name.clone(),
+            content,
+        })),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to read agent file: {}", e)
+        }))),
+    }
+}
+
 /// Response structure for agent token statistics
 #[derive(Debug, Serialize)]
 pub struct AgentTokenStatsResponse {

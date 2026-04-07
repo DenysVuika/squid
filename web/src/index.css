@@ -118,11 +118,27 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   html,
   body,
   #root {
     @apply bg-background text-foreground;
     height: 100%;
     overflow: hidden;
+  }
+}
+
+@layer components {
+  .agent-viewer-wrap pre {
+    white-space: pre-wrap !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .agent-viewer-wrap code,
+  .agent-viewer-wrap code span {
+    white-space: pre-wrap !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 }

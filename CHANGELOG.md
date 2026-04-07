@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agent Viewer**: View agent prompt files in the web UI via new "Agents" sidebar section
+
 ## [0.13.0] - 2026-04-07
 
 ### Added

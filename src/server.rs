@@ -289,6 +289,10 @@ pub async fn start_server(
                         "/agents/{agent_id}/stats",
                         web::get().to(api::get_agent_stats_by_id),
                     )
+                    .route(
+                        "/agents/{agent_id}/content",
+                        web::get().to(api::get_agent_content),
+                    )
                     .route("/config", web::get().to(api::get_config))
                     .route("/tool-approval", web::post().to(api::handle_tool_approval))
                     .route(
