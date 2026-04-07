@@ -202,3 +202,20 @@ Fetch available agents configured in `squid.config.json`.
 - Each agent includes its model, description, and tool permissions (allow-only)
 - Optional `pricing_model` field for cost estimation (useful for local models)
 - Used by Web UI agent selector to display available assistants
+
+### `GET /api/agents/{agent_id}/content`
+
+Fetch the raw markdown prompt content for a specific agent.
+
+**Response:**
+```json
+{
+  "id": "general-assistant",
+  "name": "General Assistant",
+  "content": "---\nname: General Assistant\n...\n---\n\nYou are a helpful coding assistant..."
+}
+```
+
+**Errors:**
+- `404` — Agent not found
+- `500` — Failed to read agent file from disk
