@@ -1495,6 +1495,26 @@ pub async fn get_agent_content(
     let agents_dir = crate::agent::get_agents_dir(app_config.config_dir.as_deref());
     let agent_file = agents_dir.join(format!("{}.md", agent_id));
 
+    // Resolve symlinks and canonicalize paths to prevent traversal
+    let agents_dir = agents_dir.canonicalize().map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("Agents directory not found: {}", e))
+    })?;
+    let agent_file = match agent_file.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("Agent '{}' not found", agent_id)
+            })));
+        }
+    };
+
+    // Ensure the resolved path is still within the agents directory
+    if !agent_file.starts_with(&agents_dir) {
+        return Ok(HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Access denied"
+        })));
+    }
+
     match std::fs::read_to_string(&agent_file) {
         Ok(content) => Ok(HttpResponse::Ok().json(AgentContentResponse {
             id: agent_id,
