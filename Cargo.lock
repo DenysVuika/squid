@@ -3683,7 +3683,7 @@ dependencies = [
 
 [[package]]
 name = "squid-rs"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "actix-cors",
  "actix-files",
