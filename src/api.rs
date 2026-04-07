@@ -1471,7 +1471,17 @@ pub async fn get_agent_content(
     let agent_id = agent_id.into_inner();
     debug!("Fetching content for agent: {}", agent_id);
 
-    // Check if agent exists
+    // Validate agent ID to prevent path traversal (allow only safe characters)
+    if !agent_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Invalid agent ID"
+        })));
+    }
+
+    // Check if agent exists in configuration
     let agent = app_config.agents.agents.get(&agent_id);
     if agent.is_none() {
         return Ok(HttpResponse::NotFound().json(serde_json::json!({
