@@ -1455,6 +1455,46 @@ pub async fn get_agents(app_config: web::Data<Arc<config::Config>>) -> Result<Ht
     }))
 }
 
+/// Response for agent file content
+#[derive(Debug, Serialize)]
+pub struct AgentContentResponse {
+    pub id: String,
+    pub name: String,
+    pub content: String,
+}
+
+/// Get the raw markdown content for a specific agent
+pub async fn get_agent_content(
+    agent_id: web::Path<String>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> Result<HttpResponse, Error> {
+    let agent_id = agent_id.into_inner();
+    debug!("Fetching content for agent: {}", agent_id);
+
+    // Check if agent exists
+    let agent = app_config.agents.agents.get(&agent_id);
+    if agent.is_none() {
+        return Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": format!("Agent '{}' not found", agent_id)
+        })));
+    }
+
+    // Read the agent file from the agents directory
+    let agents_dir = crate::agent::get_agents_dir(app_config.config_dir.as_deref());
+    let agent_file = agents_dir.join(format!("{}.md", agent_id));
+
+    match std::fs::read_to_string(&agent_file) {
+        Ok(content) => Ok(HttpResponse::Ok().json(AgentContentResponse {
+            id: agent_id,
+            name: agent.unwrap().name.clone(),
+            content,
+        })),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to read agent file: {}", e)
+        }))),
+    }
+}
+
 /// Response structure for agent token statistics
 #[derive(Debug, Serialize)]
 pub struct AgentTokenStatsResponse {

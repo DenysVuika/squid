@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import ChatBot from './components/app/chatbot';
 import Logs from './components/app/logs';
 import { FileViewer } from './components/app/file-viewer';
+import { AgentViewer } from './components/app/agent-viewer';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
 import { DocumentManager } from './components/app/document-manager';
@@ -30,6 +31,9 @@ function AppContent() {
   const [showFilesPanel, setShowFilesPanel] = useState(false);
   const [showRagPanel, setShowRagPanel] = useState(false);
 
+  // State for selected agent in sidebar
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
@@ -57,29 +61,37 @@ function AppContent() {
     }
   };
 
+  const handleAgentSelect = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    navigate(`/agents/${agentId}`);
+  };
+
   const isLogsPage = location.pathname === '/logs';
   const isAgentStatsPage = location.pathname === '/agent-stats';
+  const isAgentViewerPage = location.pathname.startsWith('/agents/');
 
   return (
     <SidebarProvider className="h-full">
-      {!isLogsPage && !isAgentStatsPage && (
+      {(!isLogsPage && !isAgentStatsPage) || isAgentViewerPage ? (
         <AppSidebar
           sessions={sessions}
           onSessionSelect={handleSessionSelect}
           onNewChat={handleNewChat}
           activeSessionId={activeSessionId || undefined}
+          onAgentSelect={handleAgentSelect}
+          selectedAgentId={selectedAgentId || undefined}
         />
-      )}
+      ) : null}
       <SidebarInset className="flex flex-col overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b">
           <div className="flex flex-1 items-center gap-2 px-4">
-            {!isLogsPage && !isAgentStatsPage && (
+            {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && (
               <>
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
               </>
             )}
-            {(isLogsPage || isAgentStatsPage) && (
+            {(isLogsPage || isAgentStatsPage || isAgentViewerPage) && (
               <>
                 <button
                   onClick={() => navigate('/')}
@@ -104,9 +116,15 @@ function AppContent() {
                   Back to Chat
                 </Button>
               ) : null}
+              {isAgentViewerPage ? (
+                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/')}>
+                  <MessageSquare className="h-4 w-4" />
+                  Back to Chat
+                </Button>
+              ) : null}
             </div>
           </div>
-          {!isLogsPage && !isAgentStatsPage && (
+          {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && (
             <>
               <Separator orientation="vertical" className="h-4" />
               {isLoaded && ragEnabled && (
@@ -144,15 +162,16 @@ function AppContent() {
               <Route path="/" element={<ChatBot />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/agent-stats" element={<AgentStatsCard apiUrl="" />} />
+              <Route path="/agents/:id" element={<AgentViewer />} />
               <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>
-          {!isLogsPage && isLoaded && ragEnabled && showRagPanel && (
+          {!isLogsPage && !isAgentViewerPage && isLoaded && ragEnabled && showRagPanel && (
             <div className="border-l w-96 shrink-0 overflow-auto p-4">
               <DocumentManager />
             </div>
           )}
-          {!isLogsPage && showFilesPanel && (
+          {!isLogsPage && !isAgentViewerPage && showFilesPanel && (
             <div className="border-l w-80 shrink-0">
               <FilesSidebar />
             </div>

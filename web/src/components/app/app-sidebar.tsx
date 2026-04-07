@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { MessageSquare, Plus, Pencil, Trash2, MoreHorizontal, Minus } from 'lucide-react';
+import { MessageSquare, Plus, Pencil, Trash2, MoreHorizontal, Minus, Bot } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useSessionStore } from '@/stores/session-store';
+import { useAgentStore } from '@/stores/agent-store';
 import { NavUser } from './nav-user';
 
 interface ChatSession {
@@ -50,9 +51,11 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSessionSelect?: (sessionId: string) => void;
   onNewChat?: () => void;
   activeSessionId?: string;
+  onAgentSelect?: (agentId: string) => void;
+  selectedAgentId?: string;
 }
 
-export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, ...props }: AppSidebarProps) {
+export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, onAgentSelect, selectedAgentId, ...props }: AppSidebarProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
@@ -60,6 +63,12 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
   const [editTitle, setEditTitle] = React.useState('');
 
   const { deleteSession, updateSessionTitle } = useSessionStore();
+  const { agents, loadAgents } = useAgentStore();
+
+  // Load agents on mount
+  React.useEffect(() => {
+    void loadAgents();
+  }, [loadAgents]);
 
   const handleDeleteClick = (sessionId: string) => {
     setSessionToDelete(sessionId);
@@ -167,6 +176,55 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                        </SidebarMenuSubItem>
+                      ))
+                    )}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
+            <Collapsible defaultOpen={false} className="group/collapsible">
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton>
+                    Agents{" "}
+                    <Plus className="ml-auto group-data-[state=open]/collapsible:hidden" />
+                    <Minus className="ml-auto group-data-[state=closed]/collapsible:hidden" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub className="mx-0 border-l-0 px-1">
+                    {agents.length === 0 ? (
+                      <SidebarMenuSubItem>
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No agents available</div>
+                      </SidebarMenuSubItem>
+                    ) : (
+                      agents.map((agent) => (
+                        <SidebarMenuSubItem key={agent.id}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={agent.id === selectedAgentId}
+                              >
+                                <button
+                                  className="w-full flex items-center gap-2"
+                                  onClick={() => onAgentSelect?.(agent.id)}
+                                >
+                                  <Bot className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">{agent.name}</span>
+                                </button>
+                              </SidebarMenuSubButton>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" align="start">
+                              <div className="max-w-xs">
+                                <div className="font-medium">{agent.name}</div>
+                                {agent.description && (
+                                  <div className="text-xs text-muted-foreground mt-1">{agent.description}</div>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         </SidebarMenuSubItem>
                       ))
                     )}

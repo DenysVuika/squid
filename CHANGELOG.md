@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agent Viewer**: View agent prompt files directly in the web UI
+  - New "Agents" section in sidebar lists all available agents with collapsible submenus
+  - Clicking an agent opens a read-only view of its underlying `.md` prompt file
+  - Includes copy-to-clipboard support and syntax-highlighted markdown display
+  - Long prompt lines now wrap properly for readability
+  - New API endpoint: `GET /api/agents/{id}/content`
+
 ## [0.13.0] - 2026-04-07
 
 ### Added
