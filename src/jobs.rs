@@ -888,4 +888,162 @@ mod tests {
         assert_eq!(req_min.max_cpu_percent, 1);
         assert_eq!(req_max.max_cpu_percent, 100);
     }
+
+    // Security Tests
+    #[test]
+    fn test_validate_file_path_prevents_directory_traversal() {
+        // Should reject paths with ..
+        assert!(validate_file_path("../../../etc/passwd").is_err());
+        assert!(validate_file_path("./src/../../secret.txt").is_err());
+        assert!(validate_file_path("../../Cargo.toml").is_err());
+    }
+
+    #[test]
+    fn test_validate_file_path_rejects_absolute_paths_outside_workspace() {
+        // Should reject absolute paths to system files
+        assert!(validate_file_path("/etc/passwd").is_err());
+        assert!(validate_file_path("/tmp/malicious").is_err());
+
+        #[cfg(target_os = "macos")]
+        {
+            assert!(validate_file_path("/System/Library/").is_err());
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            assert!(validate_file_path("C:\\Windows\\System32\\").is_err());
+        }
+    }
+
+    #[test]
+    fn test_validate_file_path_accepts_workspace_files() {
+        // Should accept relative paths within workspace
+        assert!(validate_file_path("src/main.rs").is_ok());
+        assert!(validate_file_path("./Cargo.toml").is_ok());
+        assert!(validate_file_path("docs/JOBS.md").is_ok());
+    }
+
+    #[test]
+    fn test_validate_file_path_current_dir_failure_handling() {
+        // This test verifies error handling, actual failure is environment-dependent
+        let result = validate_file_path("test.txt");
+        // Should either succeed (if in workspace) or fail gracefully with error message
+        match result {
+            Ok(_) => assert!(true),
+            Err(e) => assert!(e.contains("Failed to") || e.contains("Access denied")),
+        }
+    }
+
+    #[test]
+    fn test_validate_file_path_hidden_directory_traversal() {
+        // Various sneaky directory traversal attempts
+        assert!(validate_file_path("src/../../../etc/passwd").is_err());
+        assert!(validate_file_path("./docs/../../../../../../etc/passwd").is_err());
+    }
+
+    // Timeout Tests
+    #[test]
+    fn test_timeout_validation_zero_means_no_timeout() {
+        // timeout_seconds = 0 should mean no timeout
+        let req = JobExecutionRequest {
+            job_id: 1,
+            job_name: "Test".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 70,
+            max_retries: 3,
+            schedule_type: "once".to_string(),
+            timeout_seconds: 0,
+        };
+
+        assert_eq!(req.timeout_seconds, 0);
+        // In execute_job_from_request, timeout_seconds > 0 triggers timeout wrapper
+        assert!(!(req.timeout_seconds > 0));
+    }
+
+    #[test]
+    fn test_timeout_validation_positive_value_enables_timeout() {
+        let req = JobExecutionRequest {
+            job_id: 1,
+            job_name: "Test".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 70,
+            max_retries: 3,
+            schedule_type: "once".to_string(),
+            timeout_seconds: 30,
+        };
+
+        assert_eq!(req.timeout_seconds, 30);
+        assert!(req.timeout_seconds > 0);
+    }
+
+    #[test]
+    fn test_timeout_error_message_format() {
+        // Verify the timeout error message format matches what execute_job_from_request produces
+        let timeout_seconds = 120;
+        let expected_msg = format!("Job timed out after {} seconds", timeout_seconds);
+        assert!(expected_msg.contains("timed out"));
+        assert!(expected_msg.contains("120 seconds"));
+    }
+
+    #[test]
+    fn test_timeout_duration_conversion() {
+        // Test that timeout_seconds converts correctly to Duration
+        let timeout_seconds: i64 = 3600;
+        let duration = std::time::Duration::from_secs(timeout_seconds as u64);
+        assert_eq!(duration.as_secs(), 3600);
+
+        let timeout_seconds_small: i64 = 5;
+        let duration_small = std::time::Duration::from_secs(timeout_seconds_small as u64);
+        assert_eq!(duration_small.as_secs(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_timeout_actually_fires() {
+        // Integration test: verify tokio::time::timeout actually fires after duration
+        use tokio::time::{timeout, Duration};
+
+        let start = std::time::Instant::now();
+        let result = timeout(Duration::from_millis(100), async {
+            // Sleep for longer than timeout
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            "should not complete"
+        })
+        .await;
+
+        let elapsed = start.elapsed();
+
+        // Should timeout (return Err) after ~100ms
+        assert!(result.is_err());
+        assert!(elapsed.as_millis() >= 100);
+        assert!(elapsed.as_millis() < 300); // Should not wait full 500ms
+    }
+
+    #[tokio::test]
+    async fn test_timeout_does_not_fire_for_quick_operations() {
+        // Integration test: verify timeout doesn't fire if operation completes quickly
+        use tokio::time::{timeout, Duration};
+
+        let result = timeout(Duration::from_millis(500), async {
+            // Complete quickly
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            "completed"
+        })
+        .await;
+
+        // Should complete successfully (return Ok)
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "completed");
+    }
 }

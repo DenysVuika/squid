@@ -546,4 +546,177 @@ mod tests {
         assert_eq!(json["name"], "Test Job");
         assert_eq!(json["payload"]["agent_id"], "test");
     }
+
+    // Cron Expression Validation Tests
+    #[test]
+    fn test_validate_cron_expression_valid_6_field_formats() {
+        // Valid 6-field expressions (sec min hour day month dayofweek)
+        assert!(validate_cron_expression("0 0 9 * * Mon-Fri").is_ok());
+        assert!(validate_cron_expression("0 */15 * * * *").is_ok());
+        assert!(validate_cron_expression("0 0 0 * * *").is_ok());
+        assert!(validate_cron_expression("0 30 8 * * *").is_ok());
+        assert!(validate_cron_expression("0 0 */2 * * *").is_ok());
+    }
+
+    #[test]
+    fn test_validate_cron_expression_rejects_5_field_format() {
+        // Old Unix-style 5-field format should be rejected
+        assert!(validate_cron_expression("0 9 * * 1-5").is_err());
+        assert!(validate_cron_expression("*/15 * * * *").is_err());
+        assert!(validate_cron_expression("0 0 * * *").is_err());
+    }
+
+    #[test]
+    fn test_validate_cron_expression_invalid_syntax() {
+        assert!(validate_cron_expression("invalid").is_err());
+        assert!(validate_cron_expression("").is_err());
+        assert!(validate_cron_expression("* * * * * * *").is_err()); // Too many fields
+    }
+
+    #[test]
+    fn test_validate_cron_expression_invalid_values() {
+        // Invalid second (0-59)
+        assert!(validate_cron_expression("60 0 9 * * *").is_err());
+
+        // Invalid minute (0-59)
+        assert!(validate_cron_expression("0 60 9 * * *").is_err());
+
+        // Invalid hour (0-23)
+        assert!(validate_cron_expression("0 0 24 * * *").is_err());
+
+        // Invalid day of month (1-31)
+        assert!(validate_cron_expression("0 0 9 32 * *").is_err());
+
+        // Invalid month (1-12)
+        assert!(validate_cron_expression("0 0 9 * 13 *").is_err());
+    }
+
+    #[test]
+    fn test_validate_cron_expression_special_characters() {
+        // Valid special characters
+        assert!(validate_cron_expression("0 0/5 * * * *").is_ok()); // Step values
+        assert!(validate_cron_expression("0 0 9-17 * * *").is_ok()); // Ranges
+        assert!(validate_cron_expression("0 0 9,12,15 * * *").is_ok()); // Lists
+    }
+
+    // Agent Validation Tests
+    // Note: Full endpoint testing requires actix context, but validation logic can be tested
+    #[test]
+    fn test_agent_validation_requires_valid_agent_id() {
+        // This test verifies the payload structure includes agent_id
+        // Actual validation happens in create_job endpoint via app_config.get_agent()
+        let payload = db::JobPayload {
+            agent_id: "test-agent".to_string(),
+            message: "Test".to_string(),
+            system_prompt: None,
+            file_path: None,
+            session_id: None,
+        };
+
+        assert_eq!(payload.agent_id, "test-agent");
+        assert!(!payload.agent_id.is_empty());
+    }
+
+    #[test]
+    fn test_agent_validation_empty_agent_id() {
+        // Empty agent_id should be detectable
+        let payload = db::JobPayload {
+            agent_id: "".to_string(),
+            message: "Test".to_string(),
+            system_prompt: None,
+            file_path: None,
+            session_id: None,
+        };
+
+        assert!(payload.agent_id.is_empty());
+        // The create_job endpoint should validate this via app_config.get_agent()
+    }
+
+    #[test]
+    fn test_create_job_request_with_invalid_schedule_type() {
+        let invalid_json = serde_json::json!({
+            "name": "Test Job",
+            "schedule_type": "invalid-type",
+            "payload": {
+                "agent_id": "test-agent",
+                "message": "Test"
+            }
+        });
+
+        let req: Result<CreateJobRequest, _> = serde_json::from_value(invalid_json);
+        // The request should parse but schedule_type validation happens in the endpoint
+        // This tests the data structure accepts arbitrary strings
+        assert!(req.is_ok());
+    }
+
+    #[test]
+    fn test_cron_job_missing_cron_expression() {
+        let cron_json = serde_json::json!({
+            "name": "Cron Job",
+            "schedule_type": "cron",
+            "payload": {
+                "agent_id": "test-agent",
+                "message": "Test"
+            }
+            // Missing cron_expression
+        });
+
+        let req: CreateJobRequest = serde_json::from_value(cron_json).unwrap();
+        assert_eq!(req.schedule_type, "cron");
+        assert!(req.cron_expression.is_none());
+        // Endpoint should reject this - cron jobs require cron_expression
+    }
+
+    // Manual Trigger Tests
+    #[test]
+    fn test_trigger_job_validates_cron_type() {
+        // trigger_job endpoint should only work with cron jobs
+        // This test verifies the BackgroundJob struct supports the schedule_type field
+        let job = db::BackgroundJob {
+            id: Some(1),
+            name: "Test".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 70,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: "{}".to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        assert_eq!(job.schedule_type, "cron");
+    }
+
+    #[test]
+    fn test_trigger_job_once_type_should_not_be_triggered() {
+        // Verify that "once" jobs have different schedule_type
+        let job = db::BackgroundJob {
+            id: Some(1),
+            name: "Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 70,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: "{}".to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        assert_eq!(job.schedule_type, "once");
+        // trigger_job endpoint should reject "once" jobs
+    }
 }

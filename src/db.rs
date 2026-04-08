@@ -1581,6 +1581,383 @@ mod tests {
             assert!(pending[i].priority >= pending[i + 1].priority);
         }
     }
+
+    // Pause/Resume Tests
+    #[test]
+    fn test_pause_job_sets_inactive() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Pausable Cron".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Pause the job
+        db.pause_job(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert!(!fetched.is_active);
+    }
+
+    #[test]
+    fn test_resume_job_sets_active() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Resumable Cron".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Pause then resume
+        db.pause_job(job_id).unwrap();
+        assert!(!db.get_job_by_id(job_id).unwrap().unwrap().is_active);
+
+        db.resume_job(job_id).unwrap();
+        assert!(db.get_job_by_id(job_id).unwrap().unwrap().is_active);
+    }
+
+    #[test]
+    fn test_pause_only_affects_cron_jobs() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a one-off job
+        let job = BackgroundJob {
+            id: None,
+            name: "One-off".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Attempt to pause (should only work on cron jobs)
+        db.pause_job(job_id).unwrap();
+
+        // Should still be active because it's not a cron job
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert!(fetched.is_active); // Pause SQL query filters by schedule_type = 'cron'
+    }
+
+    // Cleanup/Retention Tests
+    #[test]
+    fn test_cleanup_old_jobs() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create old completed job (simulate by manually setting timestamp)
+        let old_job = BackgroundJob {
+            id: None,
+            name: "Old Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let old_job_id = db.create_job(&old_job).unwrap();
+
+        // Manually set old timestamp (40 days ago)
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE background_jobs SET updated_at = datetime('now', '-40 days') WHERE id = ?1",
+            params![old_job_id],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Create recent completed job
+        let recent_job = BackgroundJob {
+            id: None,
+            name: "Recent Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let recent_job_id = db.create_job(&recent_job).unwrap();
+
+        // Cleanup jobs older than 30 days
+        let deleted = db.cleanup_old_jobs(30).unwrap();
+
+        // Should have deleted only the old job
+        assert_eq!(deleted, 1);
+        assert!(db.get_job_by_id(old_job_id).unwrap().is_none());
+        assert!(db.get_job_by_id(recent_job_id).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_cleanup_only_removes_completed_and_failed() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create old jobs with different statuses
+        let statuses = vec![
+            ("pending", true),   // Should NOT be deleted
+            ("running", true),   // Should NOT be deleted
+            ("completed", false), // Should be deleted
+            ("failed", false),    // Should be deleted
+        ];
+
+        let mut job_ids = vec![];
+        for (status, should_remain) in &statuses {
+            let job = BackgroundJob {
+                id: None,
+                name: format!("Job {}", status),
+                schedule_type: "once".to_string(),
+                cron_expression: None,
+                priority: 5,
+                max_cpu_percent: 50,
+                status: status.to_string(),
+                last_run: None,
+                next_run: None,
+                retries: 0,
+                max_retries: 3,
+                payload: r#"{}"#.to_string(),
+                result: None,
+                error_message: None,
+                is_active: !*should_remain,
+                timeout_seconds: 3600,
+            };
+
+            let job_id = db.create_job(&job).unwrap();
+            job_ids.push((job_id, *should_remain));
+
+            // Set old timestamp (40 days ago)
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE background_jobs SET updated_at = datetime('now', '-40 days') WHERE id = ?1",
+                params![job_id],
+            )
+            .unwrap();
+            drop(conn);
+        }
+
+        // Cleanup jobs older than 30 days
+        let deleted = db.cleanup_old_jobs(30).unwrap();
+
+        // Should have deleted only completed and failed
+        assert_eq!(deleted, 2);
+
+        // Verify which jobs remain
+        for (job_id, should_remain) in job_ids {
+            let exists = db.get_job_by_id(job_id).unwrap().is_some();
+            assert_eq!(exists, should_remain);
+        }
+    }
+
+    #[test]
+    fn test_cleanup_with_zero_retention_deletes_all_old() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a just-completed job
+        let job = BackgroundJob {
+            id: None,
+            name: "Just Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Set timestamp to 1 day ago
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE background_jobs SET updated_at = datetime('now', '-1 days') WHERE id = ?1",
+            params![job_id],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Cleanup with 0 retention (delete everything older than now)
+        let deleted = db.cleanup_old_jobs(0).unwrap();
+
+        // Should delete the 1-day-old job
+        assert_eq!(deleted, 1);
+        assert!(db.get_job_by_id(job_id).unwrap().is_none());
+    }
+
+    // Retry Logic Tests
+    #[test]
+    fn test_job_retry_increments_correctly() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // First failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 1);
+
+        // Second failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 2);
+
+        // Third failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 3);
+    }
+
+    #[test]
+    fn test_job_max_retries_check() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Max Retries".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 2,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Simulate failures up to max
+        db.increment_job_retries(job_id).unwrap();
+        db.increment_job_retries(job_id).unwrap();
+
+        let job_after = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(job_after.retries, 2);
+        assert!(job_after.retries >= job_after.max_retries); // Should not retry anymore
+    }
+
+    #[test]
+    fn test_job_retries_reset_on_completion() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Reset".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "running".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 2, // Had failures before
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job - retries stay as-is for historical record
+        db.complete_job(job_id, "cron", Some("success"), None)
+            .unwrap();
+
+        let completed = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(completed.status, "completed");
+        // Note: Retries are preserved for historical tracking
+        assert_eq!(completed.retries, 2);
+    }
 }
 
 // ============================================================================
@@ -1625,16 +2002,20 @@ impl Database {
 
         conn.execute(
             "INSERT INTO background_jobs
-             (name, schedule_type, cron_expression, priority, max_cpu_percent, payload, max_retries, is_active, timeout_seconds)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (name, schedule_type, cron_expression, priority, max_cpu_percent, status, retries, max_retries, payload, result, error_message, is_active, timeout_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 job.name,
                 job.schedule_type,
                 job.cron_expression,
                 job.priority,
                 job.max_cpu_percent,
-                job.payload,
+                job.status,
+                job.retries,
                 job.max_retries,
+                job.payload,
+                job.result,
+                job.error_message,
                 job.is_active,
                 job.timeout_seconds,
             ],
