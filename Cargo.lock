@@ -3807,6 +3807,7 @@ dependencies = [
  "tiktoken-rs",
  "tokio",
  "tokio-cron-scheduler",
+ "tokio-stream",
  "uuid",
  "walkdir",
 ]
@@ -4145,6 +4146,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

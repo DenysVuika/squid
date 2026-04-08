@@ -920,5 +920,313 @@ export async function sendToolApproval(
   }
 }
 
+/**
+ * Job-related API functions
+ */
+
+export interface JobInfo {
+  id: number;
+  name: string;
+  schedule_type: string;
+  cron_expression: string | null;
+  priority: number;
+  max_cpu_percent: number;
+  status: string;
+  last_run: string | null;
+  next_run: string | null;
+  retries: number;
+  max_retries: number;
+  payload: {
+    agent_id: string;
+    message: string;
+    system_prompt?: string;
+    file_path?: string;
+    session_id?: string;
+  };
+  result: Record<string, unknown> | null;
+  error_message: string | null;
+  is_active: boolean;
+  timeout_seconds: number;
+}
+
+export interface CreateJobRequest {
+  name: string;
+  schedule_type: string;
+  cron_expression?: string;
+  priority?: number;
+  max_cpu_percent?: number;
+  max_retries?: number;
+  timeout_seconds?: number;
+  payload: {
+    agent_id: string;
+    message: string;
+    system_prompt?: string;
+    file_path?: string;
+    session_id?: string;
+  };
+}
+
+export interface JobUpdateEvent {
+  type: 'update' | 'deleted';
+  job?: JobInfo;
+  job_id?: number;
+}
+
+/**
+ * Fetch all jobs
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @returns Promise with list of jobs
+ *
+ * @example
+ * ```typescript
+ * const jobs = await fetchJobs('');
+ * console.log(`Found ${jobs.length} jobs`);
+ * ```
+ */
+export async function fetchJobs(apiUrl: string): Promise<JobInfo[]> {
+  const endpoint = apiUrl ? `${apiUrl}/api/jobs` : '/api/jobs';
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch jobs: HTTP ${response.status}`);
+  }
+
+  const data: JobInfo[] = await response.json();
+  return data;
+}
+
+/**
+ * Fetch a single job by ID
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to fetch
+ * @returns Promise with job details or null if not found
+ */
+export async function fetchJob(apiUrl: string, jobId: number): Promise<JobInfo | null> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}` : `/api/jobs/${jobId}`;
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch job: HTTP ${response.status}`);
+    }
+
+    const data: JobInfo = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch job:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param job - The job creation request
+ * @returns Promise with created job
+ */
+export async function createJob(apiUrl: string, job: CreateJobRequest): Promise<JobInfo> {
+  const endpoint = apiUrl ? `${apiUrl}/api/jobs` : '/api/jobs';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(job),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || `Failed to create job: HTTP ${response.status}`);
+  }
+
+  const data: JobInfo = await response.json();
+  return data;
+}
+
+/**
+ * Delete a job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to delete
+ * @returns Promise with boolean indicating success
+ */
+export async function deleteJob(apiUrl: string, jobId: number): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}` : `/api/jobs/${jobId}`;
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return false;
+      }
+      throw new Error(`Failed to delete job: HTTP ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to delete job:', error);
+    return false;
+  }
+}
+
+/**
+ * Cancel a job (soft cancel - sets status to cancelled but keeps in database)
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to cancel
+ * @returns Promise with boolean indicating success
+ */
+export async function cancelJob(apiUrl: string, jobId: number): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/cancel` : `/api/jobs/${jobId}/cancel`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to cancel job: HTTP ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to cancel job:', error);
+    return false;
+  }
+}
+
+/**
+ * Pause a job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to pause
+ * @returns Promise with boolean indicating success
+ */
+export async function pauseJob(apiUrl: string, jobId: number): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/pause` : `/api/jobs/${jobId}/pause`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to pause job: HTTP ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to pause job:', error);
+    return false;
+  }
+}
+
+/**
+ * Resume a job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to resume
+ * @returns Promise with boolean indicating success
+ */
+export async function resumeJob(apiUrl: string, jobId: number): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/resume` : `/api/jobs/${jobId}/resume`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to resume job: HTTP ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to resume job:', error);
+    return false;
+  }
+}
+
+/**
+ * Manually trigger a job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to trigger
+ * @returns Promise with boolean indicating success
+ */
+export async function triggerJob(apiUrl: string, jobId: number): Promise<boolean> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/trigger` : `/api/jobs/${jobId}/trigger`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to trigger job: HTTP ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to trigger job:', error);
+    return false;
+  }
+}
+
+export interface JobUpdateHandlers {
+  onJobUpdate: (job: JobInfo) => void;
+  onJobDeleted: (jobId: number) => void;
+  onError?: (error: string) => void;
+}
+
+/**
+ * Subscribe to job updates via Server-Sent Events
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param handlers - Handlers for job update events
+ * @returns EventSource instance for managing the connection
+ *
+ * @example
+ * ```typescript
+ * const eventSource = subscribeToJobUpdates('', {
+ *   onJobUpdate: (job) => console.log('Job updated:', job),
+ *   onJobDeleted: (jobId) => console.log('Job deleted:', jobId),
+ *   onError: (error) => console.error('SSE error:', error),
+ * });
+ *
+ * // Later, close the connection
+ * eventSource.close();
+ * ```
+ */
+export function subscribeToJobUpdates(apiUrl: string, handlers: JobUpdateHandlers): EventSource {
+  const endpoint = apiUrl ? `${apiUrl}/api/jobs/events` : '/api/jobs/events';
+  const eventSource = new EventSource(endpoint);
+
+  eventSource.addEventListener('job_update', (event) => {
+    try {
+      const data: JobUpdateEvent = JSON.parse(event.data);
+      if (data.type === 'update' && data.job) {
+        handlers.onJobUpdate(data.job);
+      } else if (data.type === 'deleted' && data.job_id) {
+        handlers.onJobDeleted(data.job_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse job update event:', error);
+      handlers.onError?.('Failed to parse job update');
+    }
+  });
+
+  eventSource.onerror = (error) => {
+    console.error('Job SSE connection error:', error);
+    handlers.onError?.('SSE connection error');
+  };
+
+  return eventSource;
+}
+
 // Re-export React for the hook
 import React from 'react';

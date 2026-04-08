@@ -56,6 +56,7 @@ tera = "1.20"
 thiserror = "2.0"
 tokio = { version = "1.51", features = ["full"] }
 tokio-cron-scheduler = "0.13"
+tokio-stream = { version = "0.1", features = ["sync"] }
 chrono-tz = "0.10"
 uuid = { version = "1.23", features = ["v4", "serde"] }
 walkdir = "2.5"

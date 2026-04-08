@@ -3,6 +3,7 @@ import ChatBot from './components/app/chatbot';
 import Logs from './components/app/logs';
 import { FileViewer } from './components/app/file-viewer';
 import { AgentViewer } from './components/app/agent-viewer';
+import JobDetails from './components/app/job-details';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
 import { DocumentManager } from './components/app/document-manager';
@@ -16,6 +17,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentStore } from '@/stores/agent-store';
 import { useConfigStore } from '@/stores/config-store';
+import { useJobStore } from '@/stores/job-store';
 
 function AppContent() {
   const location = useLocation();
@@ -26,6 +28,7 @@ function AppContent() {
   const { clearMessages } = useChatStore();
   const { resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
+  const { setSelectedJob } = useJobStore();
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
@@ -66,13 +69,19 @@ function AppContent() {
     navigate(`/agents/${agentId}`);
   };
 
+  const handleJobSelect = (jobId: number) => {
+    setSelectedJob(jobId);
+    navigate(`/jobs/${jobId}`);
+  };
+
   const isLogsPage = location.pathname === '/logs';
   const isAgentStatsPage = location.pathname === '/agent-stats';
   const isAgentViewerPage = location.pathname.startsWith('/agents/');
+  const isJobDetailsPage = location.pathname.startsWith('/jobs/');
 
   return (
     <SidebarProvider className="h-full">
-      {(!isLogsPage && !isAgentStatsPage) || isAgentViewerPage ? (
+      {(!isLogsPage && !isAgentStatsPage) || isAgentViewerPage || isJobDetailsPage ? (
         <AppSidebar
           sessions={sessions}
           onSessionSelect={handleSessionSelect}
@@ -80,18 +89,19 @@ function AppContent() {
           activeSessionId={activeSessionId || undefined}
           onAgentSelect={handleAgentSelect}
           selectedAgentId={selectedAgentId || undefined}
+          onJobSelect={handleJobSelect}
         />
       ) : null}
       <SidebarInset className="flex flex-col overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b">
           <div className="flex flex-1 items-center gap-2 px-4">
-            {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && (
+            {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && !isJobDetailsPage && (
               <>
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
               </>
             )}
-            {(isLogsPage || isAgentStatsPage || isAgentViewerPage) && (
+            {(isLogsPage || isAgentStatsPage || isAgentViewerPage || isJobDetailsPage) && (
               <>
                 <button
                   onClick={() => navigate('/')}
@@ -122,9 +132,15 @@ function AppContent() {
                   Back to Chat
                 </Button>
               ) : null}
+              {isJobDetailsPage ? (
+                <Button variant="ghost" className="flex items-center gap-2" onClick={() => navigate('/')}>
+                  <MessageSquare className="h-4 w-4" />
+                  Back to Chat
+                </Button>
+              ) : null}
             </div>
           </div>
-          {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && (
+          {!isLogsPage && !isAgentStatsPage && !isAgentViewerPage && !isJobDetailsPage && (
             <>
               <Separator orientation="vertical" className="h-4" />
               {isLoaded && ragEnabled && (
@@ -163,15 +179,16 @@ function AppContent() {
               <Route path="/logs" element={<Logs />} />
               <Route path="/agent-stats" element={<AgentStatsCard apiUrl="" />} />
               <Route path="/agents/:id" element={<AgentViewer />} />
+              <Route path="/jobs/:id" element={<JobDetails />} />
               <Route path="/workspace/files/*" element={<FileViewer />} />
             </Routes>
           </div>
-          {!isLogsPage && !isAgentViewerPage && isLoaded && ragEnabled && showRagPanel && (
+          {!isLogsPage && !isAgentViewerPage && !isJobDetailsPage && isLoaded && ragEnabled && showRagPanel && (
             <div className="border-l w-96 shrink-0 overflow-auto p-4">
               <DocumentManager />
             </div>
           )}
-          {!isLogsPage && !isAgentViewerPage && showFilesPanel && (
+          {!isLogsPage && !isAgentViewerPage && !isJobDetailsPage && showFilesPanel && (
             <div className="border-l w-80 shrink-0">
               <FilesSidebar />
             </div>

@@ -1,8 +1,14 @@
 use actix_web::{HttpResponse, web};
+use actix_web::http::header;
+use futures::stream::Stream;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 use crate::{config, db};
 use crate::jobs::JobExecutionRequest;
@@ -18,9 +24,36 @@ static DB_PATH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::n
 /// Cached Database instance (initialized once at startup, shared across all API calls)
 static DB_INSTANCE: std::sync::OnceLock<Arc<db::Database>> = std::sync::OnceLock::new();
 
+/// Broadcast channel for job status updates (for SSE)
+static JOB_UPDATE_BROADCASTER: std::sync::OnceLock<tokio::sync::broadcast::Sender<JobUpdateEvent>> =
+    std::sync::OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type")]
+pub enum JobUpdateEvent {
+    #[serde(rename = "update")]
+    Update { job: JobResponse },
+    #[serde(rename = "deleted")]
+    Deleted { job_id: i64 },
+}
+
 /// Initialize the global job sender (called by scheduler at startup)
 pub fn init_job_sender(tx: mpsc::Sender<JobExecutionRequest>) {
     let _ = JOB_SENDER.set(tx);
+}
+
+/// Initialize the job update broadcaster (called at server startup)
+pub fn init_job_broadcaster() {
+    let (tx, _rx) = tokio::sync::broadcast::channel(100);
+    let _ = JOB_UPDATE_BROADCASTER.set(tx);
+}
+
+/// Broadcast a job update event to all SSE listeners
+fn broadcast_job_update(event: JobUpdateEvent) {
+    if let Some(tx) = JOB_UPDATE_BROADCASTER.get() {
+        // Ignore send errors (no active listeners)
+        let _ = tx.send(event);
+    }
 }
 
 /// Initialize the global database path and open the connection (called at server startup)
@@ -59,7 +92,7 @@ pub struct CreateJobRequest {
     pub payload: db::JobPayload,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct JobResponse {
     pub id: i64,
     pub name: String,
@@ -248,7 +281,12 @@ pub async fn create_job(
             // Fetch the created job to return
             match db.get_job_by_id(job_id) {
                 Ok(Some(created_job)) => {
-                    HttpResponse::Created().json(JobResponse::from(&created_job))
+                    let response = JobResponse::from(&created_job);
+                    // Broadcast the new job to SSE listeners
+                    broadcast_job_update(JobUpdateEvent::Update {
+                        job: response.clone(),
+                    });
+                    HttpResponse::Created().json(response)
                 }
                 Ok(None) => HttpResponse::InternalServerError().json(serde_json::json!({
                     "error": "Job created but failed to fetch"
@@ -298,6 +336,12 @@ pub async fn cancel_job(path: web::Path<i64>) -> HttpResponse {
     match db.cancel_job(job_id) {
         Ok(()) => {
             info!("Cancelled job: {}", job_id);
+            // Broadcast updated job state
+            if let Ok(Some(job)) = db.get_job_by_id(job_id) {
+                broadcast_job_update(JobUpdateEvent::Update {
+                    job: JobResponse::from(&job),
+                });
+            }
             HttpResponse::Ok().json(serde_json::json!({
                 "message": format!("Job {} cancelled successfully", job_id)
             }))
@@ -319,6 +363,8 @@ pub async fn delete_job(path: web::Path<i64>) -> HttpResponse {
     match db.delete_job(job_id) {
         Ok(()) => {
             info!("Deleted job: {}", job_id);
+            // Broadcast deletion to SSE listeners
+            broadcast_job_update(JobUpdateEvent::Deleted { job_id });
             HttpResponse::Ok().json(serde_json::json!({
                 "message": format!("Job {} deleted successfully", job_id)
             }))
@@ -340,6 +386,12 @@ pub async fn pause_job(path: web::Path<i64>) -> HttpResponse {
     match db.pause_job(job_id) {
         Ok(()) => {
             info!("Paused job: {}", job_id);
+            // Broadcast updated job state
+            if let Ok(Some(job)) = db.get_job_by_id(job_id) {
+                broadcast_job_update(JobUpdateEvent::Update {
+                    job: JobResponse::from(&job),
+                });
+            }
             HttpResponse::Ok().json(serde_json::json!({
                 "message": format!("Job {} paused successfully", job_id)
             }))
@@ -361,6 +413,12 @@ pub async fn resume_job(path: web::Path<i64>) -> HttpResponse {
     match db.resume_job(job_id) {
         Ok(()) => {
             info!("Resumed job: {}", job_id);
+            // Broadcast updated job state
+            if let Ok(Some(job)) = db.get_job_by_id(job_id) {
+                broadcast_job_update(JobUpdateEvent::Update {
+                    job: JobResponse::from(&job),
+                });
+            }
             HttpResponse::Ok().json(serde_json::json!({
                 "message": format!("Job {} resumed successfully", job_id)
             }))
@@ -718,5 +776,41 @@ mod tests {
 
         assert_eq!(job.schedule_type, "once");
         // trigger_job endpoint should reject "once" jobs
+    }
+}
+
+/// Server-Sent Events endpoint for job status updates
+pub async fn job_events() -> HttpResponse {
+    if let Some(tx) = JOB_UPDATE_BROADCASTER.get() {
+        let rx = tx.subscribe();
+        let stream = BroadcastStream::new(rx)
+            .filter_map(|result| match result {
+                Ok(event) => Some(event),
+                Err(e) => {
+                    warn!("Job SSE broadcast receive error: {}", e);
+                    None
+                }
+            })
+            .map(|event| {
+                let data = serde_json::to_string(&event).unwrap_or_else(|e| {
+                    error!("Failed to serialize job event: {}", e);
+                    String::from("{}")
+                });
+                Ok::<_, actix_web::Error>(
+                    web::Bytes::from(format!("event: job_update\ndata: {}\n\n", data)),
+                )
+            })
+            .throttle(Duration::from_millis(100)); // Limit to 10 updates/sec
+
+        HttpResponse::Ok()
+            .insert_header((header::CONTENT_TYPE, "text/event-stream"))
+            .insert_header((header::CACHE_CONTROL, "no-cache"))
+            .insert_header((header::CONNECTION, "keep-alive"))
+            .streaming(Box::pin(stream) as Pin<Box<dyn Stream<Item = Result<web::Bytes, actix_web::Error>>>>)
+    } else {
+        warn!("Job update broadcaster not initialized");
+        HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "Job update broadcaster not available"
+        }))
     }
 }

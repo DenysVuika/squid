@@ -243,6 +243,8 @@ pub async fn start_server(
     let job_scheduler = if app_config.jobs.enabled {
         // Initialize global DB path for jobs API
         jobs_api::init_db_path(db_path);
+        // Initialize job update broadcaster for SSE
+        jobs_api::init_job_broadcaster();
 
         info!("Initializing background job scheduler...");
         info!("Job Configuration:");
@@ -339,8 +341,10 @@ pub async fn start_server(
                     // Job management routes (must be before workspace catch-all)
                     .route("/jobs", web::get().to(jobs_api::list_jobs))
                     .route("/jobs", web::post().to(jobs_api::create_job))
+                    .route("/jobs/events", web::get().to(jobs_api::job_events))
                     .route("/jobs/{id}", web::get().to(jobs_api::get_job))
                     .route("/jobs/{id}", web::delete().to(jobs_api::delete_job))
+                    .route("/jobs/{id}/cancel", web::post().to(jobs_api::cancel_job))
                     .route("/jobs/{id}/pause", web::post().to(jobs_api::pause_job))
                     .route("/jobs/{id}/resume", web::post().to(jobs_api::resume_job))
                     .route("/jobs/{id}/trigger", web::post().to(jobs_api::trigger_job))
