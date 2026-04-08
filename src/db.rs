@@ -1264,6 +1264,308 @@ mod tests {
             "File not found"
         );
     }
+
+    #[test]
+    fn test_background_job_crud_lifecycle() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a one-off job
+        let job = BackgroundJob {
+            id: None,
+            name: "Test Job".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{"agent_id":"test","message":"hello"}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        // Create
+        let job_id = db.create_job(&job).unwrap();
+        assert!(job_id > 0);
+
+        // Read
+        let fetched = db.get_job_by_id(job_id).unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.name, "Test Job");
+        assert_eq!(fetched.status, "pending");
+        assert!(fetched.is_active);
+
+        // Update status to running
+        db.update_job_status(job_id, "running").unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "running");
+
+        // Update result
+        db.update_job_result(job_id, "completed", Some("done"), None)
+            .unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert_eq!(fetched.result, Some("done".to_string()));
+
+        // Get all jobs
+        let all_jobs = db.get_all_jobs().unwrap();
+        assert_eq!(all_jobs.len(), 1);
+    }
+
+    #[test]
+    fn test_background_job_complete_deactivates_one_off() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "One-off".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job (should deactivate one-off jobs)
+        db.complete_job(job_id, "once", Some("result"), None)
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert!(!fetched.is_active); // One-off job deactivated
+    }
+
+    #[test]
+    fn test_background_job_complete_keeps_cron_active() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Cron Job".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 * * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "running".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job (should keep cron jobs active)
+        db.complete_job(job_id, "cron", Some("result"), None)
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert!(fetched.is_active); // Cron job stays active
+    }
+
+    #[test]
+    fn test_background_job_retries() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Increment retries twice
+        db.increment_job_retries(job_id).unwrap();
+        db.increment_job_retries(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.retries, 2);
+
+        // Update with error
+        db.update_job_result(job_id, "failed", None, Some("timeout"))
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "failed");
+        assert_eq!(fetched.error_message, Some("timeout".to_string()));
+    }
+
+    #[test]
+    fn test_background_job_cancel() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Cancel Me".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Cancel the job
+        db.cancel_job(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "cancelled");
+        assert!(!fetched.is_active);
+    }
+
+    #[test]
+    fn test_background_job_delete() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Delete Me".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Delete the job
+        db.delete_job(job_id).unwrap();
+
+        // Verify it's gone
+        let fetched = db.get_job_by_id(job_id).unwrap();
+        assert!(fetched.is_none());
+
+        // Verify job list is empty
+        let all_jobs = db.get_all_jobs().unwrap();
+        assert!(all_jobs.is_empty());
+    }
+
+    #[test]
+    fn test_background_job_payload_parsing() {
+        let db = Database::new(":memory:").unwrap();
+
+        let payload = serde_json::json!({
+            "agent_id": "shakespeare",
+            "message": "Say hello",
+            "system_prompt": null,
+            "file_path": null,
+            "session_id": null
+        });
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Payload Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: payload.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+
+        // Parse the payload back
+        let parsed: serde_json::Value = serde_json::from_str(&fetched.payload).unwrap();
+        assert_eq!(parsed["agent_id"], "shakespeare");
+        assert_eq!(parsed["message"], "Say hello");
+    }
+
+    #[test]
+    fn test_background_job_priority_ordering() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create jobs with different priorities
+        let priorities = vec![3, 8, 1, 10, 5];
+        for priority in priorities {
+            let job = BackgroundJob {
+                id: None,
+                name: format!("Priority {}", priority),
+                schedule_type: "once".to_string(),
+                cron_expression: None,
+                priority,
+                max_cpu_percent: 50,
+                status: "pending".to_string(),
+                last_run: None,
+                next_run: None,
+                retries: 0,
+                max_retries: 3,
+                payload: r#"{}"#.to_string(),
+                result: None,
+                error_message: None,
+                is_active: true,
+            };
+            db.create_job(&job).unwrap();
+        }
+
+        // Get pending jobs (should be ordered by priority DESC)
+        let pending = db.get_pending_jobs().unwrap();
+        assert_eq!(pending.len(), 5);
+
+        // Verify descending order
+        for i in 0..pending.len() - 1 {
+            assert!(pending[i].priority >= pending[i + 1].priority);
+        }
+    }
 }
 
 // ============================================================================

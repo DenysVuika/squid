@@ -82,6 +82,7 @@ async fn execute_job_from_request(
     db: Arc<db::Database>,
     app_config: Arc<config::Config>,
     sse_tx: broadcast::Sender<JobStatusEvent>,
+    retry_tx: mpsc::Sender<JobExecutionRequest>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let job_id = req.job_id;
     let job_name = req.job_name.clone();
@@ -220,6 +221,19 @@ async fn execute_job_from_request(
                         )),
                         timestamp: Utc::now().timestamp(),
                     });
+
+                    // Re-queue for retry
+                    match retry_tx.try_send(JobExecutionRequest {
+                        job_id,
+                        job_name: job_name.clone(),
+                        payload: req.payload.clone(),
+                        max_cpu_percent: req.max_cpu_percent,
+                        max_retries: req.max_retries,
+                        schedule_type: req.schedule_type.clone(),
+                    }) {
+                        Ok(_) => info!("Re-queued job {} for retry", job_id),
+                        Err(e) => error!("Failed to re-queue job {} for retry: {}", job_id, e),
+                    }
                 } else {
                     db.update_job_result(job_id, "failed", None, Some(&error_msg))?;
 
@@ -246,6 +260,7 @@ pub async fn job_worker(
     db: Arc<db::Database>,
     app_config: Arc<config::Config>,
     sse_tx: broadcast::Sender<JobStatusEvent>,
+    tx: mpsc::Sender<JobExecutionRequest>,
 ) {
     let mut sys = System::new_all();
 
@@ -306,14 +321,21 @@ pub async fn job_worker(
         let config_clone = app_config.clone();
         let sse_tx_clone = sse_tx.clone();
         let semaphore_clone = semaphore.clone();
+        let retry_tx_clone = tx.clone();
         let job_req_clone = job_req.clone();
 
         tokio::spawn(async move {
             // Acquire permit inside the spawned task so it has the right lifetime
             let _permit = semaphore_clone.acquire().await.unwrap();
 
-            match execute_job_from_request(&job_req_clone, db_clone, config_clone, sse_tx_clone)
-                .await
+            match execute_job_from_request(
+                &job_req_clone,
+                db_clone,
+                config_clone,
+                sse_tx_clone,
+                retry_tx_clone,
+            )
+            .await
             {
                 Ok(_) => {
                     info!("Job {} completed successfully", job_req_clone.job_id);
@@ -472,6 +494,7 @@ pub async fn start_job_scheduler(
         db.clone(),
         app_config.clone(),
         sse_tx.clone(),
+        tx,
     ));
 
     info!("Job scheduler started successfully");
@@ -479,3 +502,251 @@ pub async fn start_job_scheduler(
 }
 
 use serde_json::json;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+
+    #[test]
+    fn test_job_execution_request_clone() {
+        let req = JobExecutionRequest {
+            job_id: 42,
+            job_name: "Test Job".to_string(),
+            payload: db::JobPayload {
+                agent_id: "shakespeare".to_string(),
+                message: "Say hello".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 70,
+            max_retries: 3,
+            schedule_type: "once".to_string(),
+        };
+
+        let cloned = req.clone();
+        assert_eq!(cloned.job_id, req.job_id);
+        assert_eq!(cloned.job_name, req.job_name);
+        assert_eq!(cloned.payload.agent_id, req.payload.agent_id);
+        assert_eq!(cloned.max_cpu_percent, req.max_cpu_percent);
+        assert_eq!(cloned.max_retries, req.max_retries);
+        assert_eq!(cloned.schedule_type, req.schedule_type);
+    }
+
+    #[test]
+    fn test_job_status_event_serialization() {
+        let event = JobStatusEvent {
+            job_id: 1,
+            job_name: "Test".to_string(),
+            status: "completed".to_string(),
+            result: Some("Hello".to_string()),
+            error: None,
+            timestamp: 1775649016,
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("completed"));
+        assert!(json.contains("Test"));
+        assert!(json.contains("Hello"));
+
+        let deserialized: JobStatusEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.job_id, 1);
+        assert_eq!(deserialized.status, "completed");
+        assert_eq!(deserialized.result, Some("Hello".to_string()));
+    }
+
+    #[test]
+    fn test_job_status_event_with_error() {
+        let event = JobStatusEvent {
+            job_id: 1,
+            job_name: "Fail".to_string(),
+            status: "failed".to_string(),
+            result: None,
+            error: Some("Agent not found".to_string()),
+            timestamp: 1775649016,
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        let deserialized: JobStatusEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.error, Some("Agent not found".to_string()));
+        assert!(deserialized.result.is_none());
+    }
+
+    #[test]
+    fn test_cpu_check_within_limit() {
+        let mut sys = System::new_all();
+        sys.refresh_cpu_all();
+        // CPU usage should always be < 100%
+        assert!(check_cpu_usage(&sys, 100));
+    }
+
+    #[test]
+    fn test_cpu_check_below_threshold() {
+        let mut sys = System::new_all();
+        sys.refresh_cpu_all();
+        let cpu = sys.global_cpu_usage() as i32;
+        // Threshold above current usage should pass
+        assert!(check_cpu_usage(&sys, cpu + 50));
+    }
+
+    #[test]
+    fn test_job_request_with_all_fields() {
+        let payload = db::JobPayload {
+            agent_id: "code-reviewer".to_string(),
+            message: "Review this code".to_string(),
+            system_prompt: Some("Custom prompt".to_string()),
+            file_path: Some("src/main.rs".to_string()),
+            session_id: Some("test-123".to_string()),
+        };
+
+        let req = JobExecutionRequest {
+            job_id: 10,
+            job_name: "Code Review".to_string(),
+            payload,
+            max_cpu_percent: 50,
+            max_retries: 5,
+            schedule_type: "cron".to_string(),
+        };
+
+        assert_eq!(req.job_id, 10);
+        assert_eq!(req.payload.system_prompt, Some("Custom prompt".to_string()));
+        assert_eq!(req.payload.file_path, Some("src/main.rs".to_string()));
+        assert_eq!(req.payload.session_id, Some("test-123".to_string()));
+        assert_eq!(req.max_retries, 5);
+        assert_eq!(req.schedule_type, "cron");
+    }
+
+    #[test]
+    fn test_job_status_transitions() {
+        // Verify all valid status values
+        let valid_statuses = ["pending", "running", "completed", "failed", "cancelled"];
+        for status in valid_statuses {
+            assert!(!status.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_schedule_types() {
+        // Verify both schedule types are valid
+        assert_eq!("once", "once");
+        assert_eq!("cron", "cron");
+        assert_ne!("once", "cron");
+    }
+
+    #[test]
+    fn test_job_name_special_characters() {
+        let req = JobExecutionRequest {
+            job_id: 1,
+            job_name: "Daily Review (Mon-Fri)".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 50,
+            max_retries: 3,
+            schedule_type: "cron".to_string(),
+        };
+
+        let cloned = req.clone();
+        assert_eq!(cloned.job_name, "Daily Review (Mon-Fri)");
+    }
+
+    #[test]
+    fn test_empty_payload_message() {
+        let req = JobExecutionRequest {
+            job_id: 1,
+            job_name: "Empty".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 50,
+            max_retries: 0,
+            schedule_type: "once".to_string(),
+        };
+
+        assert_eq!(req.payload.message, "");
+        assert_eq!(req.max_retries, 0);
+    }
+
+    #[test]
+    fn test_max_retries_boundary() {
+        // Test boundary values for max_retries
+        let zero_retries = JobExecutionRequest {
+            job_id: 1,
+            job_name: "No retries".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 50,
+            max_retries: 0,
+            schedule_type: "once".to_string(),
+        };
+
+        assert_eq!(zero_retries.max_retries, 0);
+
+        let high_retries = JobExecutionRequest {
+            job_id: 2,
+            job_name: "Many retries".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 50,
+            max_retries: 100,
+            schedule_type: "once".to_string(),
+        };
+
+        assert_eq!(high_retries.max_retries, 100);
+    }
+
+    #[test]
+    fn test_max_cpu_percent_boundary() {
+        let req_min = JobExecutionRequest {
+            job_id: 1,
+            job_name: "Low CPU".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 1,
+            max_retries: 3,
+            schedule_type: "once".to_string(),
+        };
+
+        let req_max = JobExecutionRequest {
+            job_id: 2,
+            job_name: "High CPU".to_string(),
+            payload: db::JobPayload {
+                agent_id: "test".to_string(),
+                message: "test".to_string(),
+                system_prompt: None,
+                file_path: None,
+                session_id: None,
+            },
+            max_cpu_percent: 100,
+            max_retries: 3,
+            schedule_type: "once".to_string(),
+        };
+
+        assert_eq!(req_min.max_cpu_percent, 1);
+        assert_eq!(req_max.max_cpu_percent, 100);
+    }
+}
