@@ -205,6 +205,13 @@ impl Database {
             include_str!("../migrations/013_agent_token_stats.sql"),
         )?;
 
+        // Migration 014: Background jobs
+        run_migration(
+            14,
+            "Background jobs",
+            include_str!("../migrations/014_background_jobs.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -1256,5 +1263,333 @@ mod tests {
             loaded_steps[1].tool_error.as_ref().unwrap(),
             "File not found"
         );
+    }
+}
+
+// ============================================================================
+// Background Jobs
+// ============================================================================
+
+/// Represents a background job (cron or one-off task)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BackgroundJob {
+    pub id: Option<i64>,
+    pub name: String,
+    pub schedule_type: String, // "cron" or "once"
+    pub cron_expression: Option<String>,
+    pub priority: i32,
+    pub max_cpu_percent: i32,
+    pub status: String,
+    pub last_run: Option<String>,
+    pub next_run: Option<String>,
+    pub retries: i32,
+    pub max_retries: i32,
+    pub payload: String, // JSON
+    pub result: Option<String>,
+    pub error_message: Option<String>,
+    pub is_active: bool,
+}
+
+/// Payload for a background job
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobPayload {
+    pub agent_id: String,
+    pub message: String,
+    pub system_prompt: Option<String>,
+    pub file_path: Option<String>,
+    pub session_id: Option<String>,
+}
+
+impl Database {
+    /// Create a new background job
+    pub fn create_job(&self, job: &BackgroundJob) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "INSERT INTO background_jobs 
+             (name, schedule_type, cron_expression, priority, max_cpu_percent, payload, max_retries, is_active)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                job.name,
+                job.schedule_type,
+                job.cron_expression,
+                job.priority,
+                job.max_cpu_percent,
+                job.payload,
+                job.max_retries,
+                job.is_active,
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all pending jobs (for restoration on startup)
+    pub fn get_pending_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
+                    status, last_run, next_run, retries, max_retries, payload, 
+                    result, error_message, is_active
+             FROM background_jobs
+             WHERE is_active = 1 AND status = 'pending'
+             ORDER BY priority DESC, created_at ASC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Get all active cron jobs (for scheduling)
+    pub fn get_active_cron_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
+                    status, last_run, next_run, retries, max_retries, payload, 
+                    result, error_message, is_active
+             FROM background_jobs
+             WHERE is_active = 1 AND schedule_type = 'cron' AND status != 'cancelled'
+             ORDER BY priority DESC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Update job status
+    pub fn update_job_status(&self, id: i64, status: &str) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        if status == "running" {
+            conn.execute(
+                "UPDATE background_jobs 
+                 SET status = ?1, last_run = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2",
+                params![status, id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE background_jobs 
+                 SET status = ?1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2",
+                params![status, id],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Update job result and error message
+    pub fn update_job_result(
+        &self,
+        id: i64,
+        status: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET status = ?1, result = ?2, error_message = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            params![status, result, error_message, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Complete a job (marks as completed, deactivates one-off jobs so they don't re-run)
+    pub fn complete_job(
+        &self,
+        id: i64,
+        schedule_type: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // One-off jobs should be deactivated so they don't get re-queued on restart
+        let is_active = if schedule_type == "cron" { 1 } else { 0 };
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET status = 'completed', result = ?1, error_message = ?2, is_active = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            params![result, error_message, is_active, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Increment job retries
+    pub fn increment_job_retries(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs 
+             SET retries = retries + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Cancel a job
+    pub fn cancel_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs 
+             SET status = 'cancelled', is_active = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a job
+    pub fn delete_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute("DELETE FROM background_jobs WHERE id = ?1", params![id])?;
+
+        Ok(())
+    }
+
+    /// Get all jobs
+    pub fn get_all_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
+                    status, last_run, next_run, retries, max_retries, payload, 
+                    result, error_message, is_active
+             FROM background_jobs
+             ORDER BY created_at DESC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Get a single job by ID
+    pub fn get_job_by_id(&self, id: i64) -> SqliteResult<Option<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
+                    status, last_run, next_run, retries, max_retries, payload, 
+                    result, error_message, is_active
+             FROM background_jobs
+             WHERE id = ?1",
+        )?;
+
+        let job = stmt.query_row(params![id], |row| {
+            Ok(BackgroundJob {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                schedule_type: row.get(2)?,
+                cron_expression: row.get(3)?,
+                priority: row.get(4)?,
+                max_cpu_percent: row.get(5)?,
+                status: row.get(6)?,
+                last_run: row.get(7)?,
+                next_run: row.get(8)?,
+                retries: row.get(9)?,
+                max_retries: row.get(10)?,
+                payload: row.get(11)?,
+                result: row.get(12)?,
+                error_message: row.get(13)?,
+                is_active: row.get(14)?,
+            })
+        });
+
+        match job {
+            Ok(j) => Ok(Some(j)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Update job's next_run timestamp
+    pub fn update_job_next_run(&self, id: i64, next_run: Option<&str>) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs 
+             SET next_run = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?2",
+            params![next_run, id],
+        )?;
+
+        Ok(())
     }
 }

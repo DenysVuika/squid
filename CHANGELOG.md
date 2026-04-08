@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Agent Viewer**: View agent prompt files in the web UI via new "Agents" sidebar section
+- **Background Jobs**: Schedule recurring AI tasks with cron expressions and resource control
+  - Cron scheduling for recurring jobs (e.g., daily code reviews)
+  - One-off task queue for immediate background execution
+  - CPU monitoring and concurrency limits to prevent resource exhaustion
+  - Job priority system (0-10 scale) for execution ordering
+  - Automatic retry with configurable attempts on failure
+  - Real-time status updates via SSE streaming
+  - Persistent storage in SQLite - jobs survive server restarts
+  - New REST API endpoints: `GET/POST /api/jobs`, `GET/DELETE /api/jobs/{id}`
+  - Configurable via `jobs` section in `squid.config.json` or environment variables
+  - See `docs/JOBS.md` for complete documentation
 
 ## [0.13.0] - 2026-04-07
 

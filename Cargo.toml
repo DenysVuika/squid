@@ -55,6 +55,8 @@ sysinfo = "0.38.1"
 tera = "1.20"
 thiserror = "2.0"
 tokio = { version = "1.51", features = ["full"] }
+tokio-cron-scheduler = "0.13"
+chrono-tz = "0.10"
 uuid = { version = "1.23", features = ["v4", "serde"] }
 walkdir = "2.5"
 rusqlite = { version = "0.39.0", features = ["bundled", "load_extension"] }

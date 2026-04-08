@@ -11,6 +11,8 @@ mod db;
 mod doctor;
 mod envinfo;
 mod init;
+mod jobs;
+mod jobs_api;
 mod llm;
 mod logger;
 mod plugins;

@@ -114,6 +114,15 @@ pub enum StreamEvent {
         result: Option<String>,
         error: Option<String>,
     },
+    #[serde(rename = "job_status")]
+    JobStatus {
+        job_id: i64,
+        job_name: String,
+        status: String,
+        result: Option<String>,
+        error: Option<String>,
+        timestamp: i64,
+    },
     #[serde(rename = "error")]
     Error { message: String },
     #[serde(rename = "done")]
