@@ -18,7 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic retry with configurable attempts on failure
   - Real-time status updates via SSE streaming
   - Persistent storage in SQLite - jobs survive server restarts
-  - New REST API endpoints: `GET/POST /api/jobs`, `GET/DELETE /api/jobs/{id}`
+  - Job timeout protection (configurable per job or via default)
+  - Automatic cleanup of old completed/failed jobs (configurable retention period)
+  - Pause/resume functionality for cron jobs
+  - Manual trigger for running cron jobs on-demand
+  - Cron expression validation at job creation
+  - Agent validation before job creation
+  - File path security validation to prevent directory traversal
+  - New REST API endpoints: `GET/POST /api/jobs`, `GET/DELETE /api/jobs/{id}`, `POST /api/jobs/{id}/pause`, `POST /api/jobs/{id}/resume`, `POST /api/jobs/{id}/trigger`
   - Configurable via `jobs` section in `squid.config.json` or environment variables
   - See `docs/JOBS.md` for complete documentation
 

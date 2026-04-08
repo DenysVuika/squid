@@ -7,6 +7,37 @@ use tokio::sync::{Semaphore, broadcast, mpsc};
 
 use crate::{config, db, llm, session, template};
 
+/// Validate file path to prevent directory traversal attacks
+/// Returns the canonicalized path if it's within the current directory
+fn validate_file_path(file_path: &str) -> Result<std::path::PathBuf, String> {
+    let current_dir = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let requested_path = std::path::Path::new(file_path);
+
+    // Convert to absolute path
+    let absolute_path = if requested_path.is_absolute() {
+        requested_path.to_path_buf()
+    } else {
+        current_dir.join(requested_path)
+    };
+
+    // Canonicalize to resolve .. and symlinks
+    let canonical_path = absolute_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+
+    // Check if the canonical path is within the current directory
+    if !canonical_path.starts_with(&current_dir) {
+        return Err(format!(
+            "Access denied: path '{}' is outside workspace",
+            file_path
+        ));
+    }
+
+    Ok(canonical_path)
+}
+
 /// Event broadcasted via SSE when a job status changes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobStatusEvent {
@@ -27,6 +58,7 @@ pub struct JobExecutionRequest {
     pub max_cpu_percent: i32,
     pub max_retries: i32,
     pub schedule_type: String, // "cron" or "once"
+    pub timeout_seconds: i64,  // Job timeout (0 = no timeout)
 }
 
 /// Job scheduler wrapper
@@ -83,7 +115,7 @@ async fn execute_job_from_request(
     app_config: Arc<config::Config>,
     sse_tx: broadcast::Sender<JobStatusEvent>,
     retry_tx: mpsc::Sender<JobExecutionRequest>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, String> {
     let job_id = req.job_id;
     let job_name = req.job_name.clone();
 
@@ -98,7 +130,8 @@ async fn execute_job_from_request(
         None => {
             let error_msg = format!("Agent '{}' not found", job_payload.agent_id);
             error!("{}", error_msg);
-            db.update_job_result(job_id, "failed", None, Some(&error_msg))?;
+            db.update_job_result(job_id, "failed", None, Some(&error_msg))
+                .map_err(|e| e.to_string())?;
 
             let _ = sse_tx.send(JobStatusEvent {
                 job_id,
@@ -109,7 +142,7 @@ async fn execute_job_from_request(
                 timestamp: Utc::now().timestamp(),
             });
 
-            return Err(error_msg.into());
+            return Err(error_msg);
         }
     };
 
@@ -142,13 +175,33 @@ async fn execute_job_from_request(
     chat_session.id = session_id.clone();
     chat_session.agent_id = Some(job_payload.agent_id.clone());
 
-    // Read file content if specified
+    // Read file content if specified (with security validation)
     let file_content = if let Some(file_path) = &job_payload.file_path {
-        match std::fs::read_to_string(file_path) {
-            Ok(content) => Some(content),
+        // Validate file path is within workspace
+        match validate_file_path(file_path) {
+            Ok(safe_path) => match std::fs::read_to_string(&safe_path) {
+                Ok(content) => Some(content),
+                Err(e) => {
+                    warn!("Failed to read file {}: {}", safe_path.display(), e);
+                    None
+                }
+            },
             Err(e) => {
-                warn!("Failed to read file {}: {}", file_path, e);
-                None
+                error!("File path validation failed for {}: {}", file_path, e);
+                let error_msg = format!("Invalid file path: {}", e);
+                db.update_job_result(job_id, "failed", None, Some(&error_msg))
+                    .map_err(|e| e.to_string())?;
+
+                let _ = sse_tx.send(JobStatusEvent {
+                    job_id,
+                    job_name: job_name.clone(),
+                    status: "failed".to_string(),
+                    result: None,
+                    error: Some(error_msg.clone()),
+                    timestamp: Utc::now().timestamp(),
+                });
+
+                return Err(error_msg);
             }
         }
     } else {
@@ -167,8 +220,29 @@ async fn execute_job_from_request(
         db: Some(&*db),
     };
 
-    // Execute the LLM call (non-streaming for background jobs)
-    match llm::ask_llm(query_params).await {
+    // Execute the LLM call with timeout (if specified)
+    let llm_result = if req.timeout_seconds > 0 {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(req.timeout_seconds as u64),
+            llm::ask_llm(query_params),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => {
+                let timeout_msg = format!("Job timed out after {} seconds", req.timeout_seconds);
+                error!("{}", timeout_msg);
+                Err(timeout_msg.into())
+            }
+        }
+    } else {
+        llm::ask_llm(query_params).await
+    };
+
+    // Convert error to String immediately to avoid Send issues
+    let llm_result_str = llm_result.map_err(|e| e.to_string());
+
+    match llm_result_str {
         Ok(response) => {
             info!("Job {} completed successfully", job_id);
 
@@ -179,7 +253,8 @@ async fn execute_job_from_request(
             }))
             .unwrap_or_default();
 
-            db.complete_job(job_id, &req.schedule_type, Some(&result_json), None)?;
+            db.complete_job(job_id, &req.schedule_type, Some(&result_json), None)
+                .map_err(|e| e.to_string())?;
 
             // Broadcast SSE event
             let _ = sse_tx.send(JobStatusEvent {
@@ -193,22 +268,24 @@ async fn execute_job_from_request(
 
             Ok(response)
         }
-        Err(e) => {
-            let error_msg = e.to_string();
+        Err(error_msg) => {
             error!("Job {} failed: {}", job_id, error_msg);
 
             // Increment retries
-            db.increment_job_retries(job_id)?;
+            db.increment_job_retries(job_id)
+                .map_err(|e| e.to_string())?;
 
             // Check if we should retry
-            let job_after = db.get_job_by_id(job_id)?;
+            let job_after = db.get_job_by_id(job_id)
+                .map_err(|e| e.to_string())?;
             if let Some(job_after) = job_after {
                 if job_after.retries < req.max_retries {
                     info!(
                         "Retrying job {} (attempt {}/{})",
                         job_id, job_after.retries, req.max_retries
                     );
-                    db.update_job_status(job_id, "pending")?;
+                    db.update_job_status(job_id, "pending")
+                        .map_err(|e| e.to_string())?;
 
                     let _ = sse_tx.send(JobStatusEvent {
                         job_id,
@@ -223,19 +300,21 @@ async fn execute_job_from_request(
                     });
 
                     // Re-queue for retry
-                    match retry_tx.try_send(JobExecutionRequest {
+                    match retry_tx.send(JobExecutionRequest {
                         job_id,
                         job_name: job_name.clone(),
                         payload: req.payload.clone(),
                         max_cpu_percent: req.max_cpu_percent,
                         max_retries: req.max_retries,
                         schedule_type: req.schedule_type.clone(),
-                    }) {
+                        timeout_seconds: req.timeout_seconds,
+                    }).await {
                         Ok(_) => info!("Re-queued job {} for retry", job_id),
                         Err(e) => error!("Failed to re-queue job {} for retry: {}", job_id, e),
                     }
                 } else {
-                    db.update_job_result(job_id, "failed", None, Some(&error_msg))?;
+                    db.update_job_result(job_id, "failed", None, Some(&error_msg))
+                        .map_err(|e| e.to_string())?;
 
                     let _ = sse_tx.send(JobStatusEvent {
                         job_id,
@@ -248,7 +327,7 @@ async fn execute_job_from_request(
                 }
             }
 
-            Err(error_msg.into())
+            Err(error_msg)
         }
     }
 }
@@ -381,6 +460,7 @@ pub async fn restore_jobs(
                 max_cpu_percent: job.max_cpu_percent,
                 max_retries: job.max_retries,
                 schedule_type: job.schedule_type.clone(),
+                timeout_seconds: job.timeout_seconds,
             })
             .await?;
         }
@@ -397,7 +477,7 @@ pub async fn restore_jobs(
             let tx_clone = tx.clone();
             let db_clone = db.clone();
 
-            let cron_job = tokio_cron_scheduler::Job::new_async_tz(
+            let cron_job_result = tokio_cron_scheduler::Job::new_async_tz(
                 &cron_expr,
                 chrono_tz::UTC,
                 move |_uuid, _job_scheduler| {
@@ -432,6 +512,7 @@ pub async fn restore_jobs(
                                         max_cpu_percent: job.max_cpu_percent,
                                         max_retries: job.max_retries,
                                         schedule_type: job.schedule_type.clone(),
+                                        timeout_seconds: job.timeout_seconds,
                                     })
                                     .await
                                 {
@@ -447,9 +528,24 @@ pub async fn restore_jobs(
                         }
                     })
                 },
-            )?;
+            );
 
-            scheduler.inner().add(cron_job).await?;
+            match cron_job_result {
+                Ok(cron_job) => {
+                    if let Err(e) = scheduler.inner().add(cron_job).await {
+                        error!(
+                            "Failed to add cron job '{}' to scheduler: {}",
+                            job.name, e
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to parse cron expression '{}' for job '{}': {}. Expected format: 'sec min hour day month dayofweek'",
+                        cron_expr, job.name, e
+                    );
+                }
+            }
         }
     }
 
@@ -483,6 +579,38 @@ pub async fn start_job_scheduler(
 
     // Restore jobs from database
     restore_jobs(db.clone(), &scheduler, &tx).await?;
+
+    // Schedule periodic cleanup of old jobs (runs daily at 2 AM)
+    if app_config.jobs.retention_days > 0 {
+        let db_cleanup = db.clone();
+        let retention_days = app_config.jobs.retention_days;
+
+        let cleanup_job = tokio_cron_scheduler::Job::new_async_tz(
+            "0 0 2 * * *", // Daily at 2 AM (sec min hour day month dayofweek)
+            chrono_tz::UTC,
+            move |_uuid, _scheduler| {
+                let db = db_cleanup.clone();
+                let days = retention_days;
+                Box::pin(async move {
+                    info!("Running job cleanup task (retention: {} days)", days);
+                    match db.cleanup_old_jobs(days) {
+                        Ok(deleted) => {
+                            if deleted > 0 {
+                                info!("Cleaned up {} old jobs", deleted);
+                            }
+                        }
+                        Err(e) => error!("Failed to cleanup old jobs: {}", e),
+                    }
+                })
+            },
+        )?;
+
+        scheduler.inner().add(cleanup_job).await?;
+        info!(
+            "Scheduled daily cleanup task (retention: {} days)",
+            app_config.jobs.retention_days
+        );
+    }
 
     // Start the scheduler
     scheduler.start().await?;
@@ -523,6 +651,7 @@ mod tests {
             max_cpu_percent: 70,
             max_retries: 3,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         let cloned = req.clone();
@@ -532,6 +661,7 @@ mod tests {
         assert_eq!(cloned.max_cpu_percent, req.max_cpu_percent);
         assert_eq!(cloned.max_retries, req.max_retries);
         assert_eq!(cloned.schedule_type, req.schedule_type);
+        assert_eq!(cloned.timeout_seconds, req.timeout_seconds);
     }
 
     #[test]
@@ -607,6 +737,7 @@ mod tests {
             max_cpu_percent: 50,
             max_retries: 5,
             schedule_type: "cron".to_string(),
+            timeout_seconds: 7200,
         };
 
         assert_eq!(req.job_id, 10);
@@ -615,6 +746,7 @@ mod tests {
         assert_eq!(req.payload.session_id, Some("test-123".to_string()));
         assert_eq!(req.max_retries, 5);
         assert_eq!(req.schedule_type, "cron");
+        assert_eq!(req.timeout_seconds, 7200);
     }
 
     #[test]
@@ -649,6 +781,7 @@ mod tests {
             max_cpu_percent: 50,
             max_retries: 3,
             schedule_type: "cron".to_string(),
+            timeout_seconds: 3600,
         };
 
         let cloned = req.clone();
@@ -670,6 +803,7 @@ mod tests {
             max_cpu_percent: 50,
             max_retries: 0,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         assert_eq!(req.payload.message, "");
@@ -692,6 +826,7 @@ mod tests {
             max_cpu_percent: 50,
             max_retries: 0,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         assert_eq!(zero_retries.max_retries, 0);
@@ -709,6 +844,7 @@ mod tests {
             max_cpu_percent: 50,
             max_retries: 100,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         assert_eq!(high_retries.max_retries, 100);
@@ -729,6 +865,7 @@ mod tests {
             max_cpu_percent: 1,
             max_retries: 3,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         let req_max = JobExecutionRequest {
@@ -744,6 +881,7 @@ mod tests {
             max_cpu_percent: 100,
             max_retries: 3,
             schedule_type: "once".to_string(),
+            timeout_seconds: 3600,
         };
 
         assert_eq!(req_min.max_cpu_percent, 1);

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::db;
+use crate::{config, db};
 use crate::jobs::JobExecutionRequest;
 
 /// Global sender channel for one-off jobs
@@ -55,6 +55,7 @@ pub struct CreateJobRequest {
     pub priority: Option<i32>,
     pub max_cpu_percent: Option<i32>,
     pub max_retries: Option<i32>,
+    pub timeout_seconds: Option<i64>,
     pub payload: db::JobPayload,
 }
 
@@ -75,6 +76,7 @@ pub struct JobResponse {
     pub result: Option<String>,
     pub error_message: Option<String>,
     pub is_active: bool,
+    pub timeout_seconds: i64,
 }
 
 impl From<&db::BackgroundJob> for JobResponse {
@@ -98,6 +100,7 @@ impl From<&db::BackgroundJob> for JobResponse {
             result: job.result.clone(),
             error_message: job.error_message.clone(),
             is_active: job.is_active,
+            timeout_seconds: job.timeout_seconds,
         }
     }
 }
@@ -119,8 +122,22 @@ pub async fn list_jobs() -> HttpResponse {
     }
 }
 
+/// Validate cron expression syntax
+fn validate_cron_expression(expr: &str) -> Result<(), String> {
+    // tokio-cron-scheduler expects 6 or 7 fields (with seconds)
+    // Standard format: "sec min hour day month dayofweek"
+    // Try to parse it as a tokio-cron-scheduler expression
+    match tokio_cron_scheduler::Job::new(expr, |_uuid, _l| {}) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Invalid cron expression: {}. Expected format: 'sec min hour day month dayofweek' (e.g., '0 0 9 * * Mon-Fri' for weekdays at 9 AM)", e)),
+    }
+}
+
 /// Create a new background job
-pub async fn create_job(req: web::Json<CreateJobRequest>) -> HttpResponse {
+pub async fn create_job(
+    req: web::Json<CreateJobRequest>,
+    app_config: web::Data<Arc<config::Config>>,
+) -> HttpResponse {
     let db = get_db();
     let req = req.into_inner();
 
@@ -132,9 +149,26 @@ pub async fn create_job(req: web::Json<CreateJobRequest>) -> HttpResponse {
     }
 
     // Validate cron expression for cron jobs
-    if req.schedule_type == "cron" && req.cron_expression.is_none() {
+    if req.schedule_type == "cron" {
+        if req.cron_expression.is_none() {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "error": "cron_expression is required for cron jobs"
+            }));
+        }
+
+        if let Some(ref expr) = req.cron_expression {
+            if let Err(e) = validate_cron_expression(expr) {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": e
+                }));
+            }
+        }
+    }
+
+    // Validate agent exists
+    if app_config.get_agent(&req.payload.agent_id).is_none() {
         return HttpResponse::BadRequest().json(serde_json::json!({
-            "error": "cron_expression is required for cron jobs"
+            "error": format!("Agent '{}' not found", req.payload.agent_id)
         }));
     }
 
@@ -167,6 +201,9 @@ pub async fn create_job(req: web::Json<CreateJobRequest>) -> HttpResponse {
         result: None,
         error_message: None,
         is_active: true,
+        timeout_seconds: req
+            .timeout_seconds
+            .unwrap_or(app_config.jobs.default_timeout_seconds),
     };
 
     match db.create_job(&job) {
@@ -183,9 +220,12 @@ pub async fn create_job(req: web::Json<CreateJobRequest>) -> HttpResponse {
                         max_cpu_percent: req.max_cpu_percent.unwrap_or(50),
                         max_retries: req.max_retries.unwrap_or(3),
                         schedule_type: "once".to_string(),
+                        timeout_seconds: req
+                            .timeout_seconds
+                            .unwrap_or(app_config.jobs.default_timeout_seconds),
                     };
 
-                    match tx.try_send(exec_req) {
+                    match tx.send(exec_req).await {
                         Ok(_) => info!("Dispatched one-off job {} to worker", job_id),
                         Err(e) => {
                             error!("Failed to dispatch job {} to worker: {}", job_id, e);
@@ -287,6 +327,121 @@ pub async fn delete_job(path: web::Path<i64>) -> HttpResponse {
     }
 }
 
+/// Pause a cron job
+pub async fn pause_job(path: web::Path<i64>) -> HttpResponse {
+    let db = get_db();
+    let job_id = path.into_inner();
+
+    match db.pause_job(job_id) {
+        Ok(()) => {
+            info!("Paused job: {}", job_id);
+            HttpResponse::Ok().json(serde_json::json!({
+                "message": format!("Job {} paused successfully", job_id)
+            }))
+        }
+        Err(e) => {
+            error!("Failed to pause job {}: {}", job_id, e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to pause job: {}", e)
+            }))
+        }
+    }
+}
+
+/// Resume a cron job
+pub async fn resume_job(path: web::Path<i64>) -> HttpResponse {
+    let db = get_db();
+    let job_id = path.into_inner();
+
+    match db.resume_job(job_id) {
+        Ok(()) => {
+            info!("Resumed job: {}", job_id);
+            HttpResponse::Ok().json(serde_json::json!({
+                "message": format!("Job {} resumed successfully", job_id)
+            }))
+        }
+        Err(e) => {
+            error!("Failed to resume job {}: {}", job_id, e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to resume job: {}", e)
+            }))
+        }
+    }
+}
+
+/// Manually trigger a cron job (run it immediately)
+pub async fn trigger_job(path: web::Path<i64>) -> HttpResponse {
+    let db = get_db();
+    let job_id = path.into_inner();
+
+    // Fetch the job
+    let job = match db.get_job_by_id(job_id) {
+        Ok(Some(job)) => job,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("Job {} not found", job_id)
+            }));
+        }
+        Err(e) => {
+            error!("Failed to fetch job {}: {}", job_id, e);
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch job: {}", e)
+            }));
+        }
+    };
+
+    // Verify it's a cron job
+    if job.schedule_type != "cron" {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Only cron jobs can be manually triggered"
+        }));
+    }
+
+    // Parse the payload
+    let job_payload: db::JobPayload = match serde_json::from_str(&job.payload) {
+        Ok(p) => p,
+        Err(e) => {
+            error!("Failed to parse payload for job {}: {}", job_id, e);
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Invalid job payload: {}", e)
+            }));
+        }
+    };
+
+    // Send to worker
+    if let Some(tx) = get_job_sender() {
+        let exec_req = JobExecutionRequest {
+            job_id,
+            job_name: job.name.clone(),
+            payload: job_payload,
+            max_cpu_percent: job.max_cpu_percent,
+            max_retries: job.max_retries,
+            schedule_type: job.schedule_type.clone(),
+            timeout_seconds: job.timeout_seconds,
+        };
+
+        match tx.send(exec_req).await {
+            Ok(_) => {
+                info!("Manually triggered job: {}", job_id);
+                HttpResponse::Ok().json(serde_json::json!({
+                    "message": format!("Job {} triggered successfully", job_id)
+                }))
+            }
+            Err(e) => {
+                error!("Failed to send job {} to worker: {}", job_id, e);
+                HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Failed to trigger job: {}", e)
+                }))
+            }
+        }
+    } else {
+        warn!("Job scheduler not initialized");
+        HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "Job scheduler is not available"
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +525,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let response = JobResponse::from(&job);

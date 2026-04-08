@@ -212,6 +212,13 @@ impl Database {
             include_str!("../migrations/014_background_jobs.sql"),
         )?;
 
+        // Migration 015: Add job timeout
+        run_migration(
+            15,
+            "Job timeout support",
+            include_str!("../migrations/015_job_timeout.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -1286,6 +1293,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         // Create
@@ -1337,6 +1345,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1370,6 +1379,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1403,6 +1413,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1443,6 +1454,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1475,6 +1487,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1519,6 +1532,7 @@ mod tests {
             result: None,
             error_message: None,
             is_active: true,
+            timeout_seconds: 3600,
         };
 
         let job_id = db.create_job(&job).unwrap();
@@ -1553,6 +1567,7 @@ mod tests {
                 result: None,
                 error_message: None,
                 is_active: true,
+                timeout_seconds: 3600,
             };
             db.create_job(&job).unwrap();
         }
@@ -1590,6 +1605,7 @@ pub struct BackgroundJob {
     pub result: Option<String>,
     pub error_message: Option<String>,
     pub is_active: bool,
+    pub timeout_seconds: i64, // Job timeout in seconds (0 = no timeout)
 }
 
 /// Payload for a background job
@@ -1608,9 +1624,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
-            "INSERT INTO background_jobs 
-             (name, schedule_type, cron_expression, priority, max_cpu_percent, payload, max_retries, is_active)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO background_jobs
+             (name, schedule_type, cron_expression, priority, max_cpu_percent, payload, max_retries, is_active, timeout_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 job.name,
                 job.schedule_type,
@@ -1620,6 +1636,7 @@ impl Database {
                 job.payload,
                 job.max_retries,
                 job.is_active,
+                job.timeout_seconds,
             ],
         )?;
 
@@ -1631,9 +1648,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
-                    status, last_run, next_run, retries, max_retries, payload, 
-                    result, error_message, is_active
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
              FROM background_jobs
              WHERE is_active = 1 AND status = 'pending'
              ORDER BY priority DESC, created_at ASC",
@@ -1657,6 +1674,7 @@ impl Database {
                     result: row.get(12)?,
                     error_message: row.get(13)?,
                     is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
                 })
             })?
             .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
@@ -1669,9 +1687,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
-                    status, last_run, next_run, retries, max_retries, payload, 
-                    result, error_message, is_active
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
              FROM background_jobs
              WHERE is_active = 1 AND schedule_type = 'cron' AND status != 'cancelled'
              ORDER BY priority DESC",
@@ -1695,6 +1713,7 @@ impl Database {
                     result: row.get(12)?,
                     error_message: row.get(13)?,
                     is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
                 })
             })?
             .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
@@ -1787,9 +1806,37 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
-            "UPDATE background_jobs 
+            "UPDATE background_jobs
              SET status = 'cancelled', is_active = 0, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Pause a background job (sets is_active = false)
+    pub fn pause_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND schedule_type = 'cron'",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Resume a background job (sets is_active = true)
+    pub fn resume_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET is_active = 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND schedule_type = 'cron'",
             params![id],
         )?;
 
@@ -1810,9 +1857,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
-                    status, last_run, next_run, retries, max_retries, payload, 
-                    result, error_message, is_active
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
              FROM background_jobs
              ORDER BY created_at DESC",
         )?;
@@ -1835,6 +1882,7 @@ impl Database {
                     result: row.get(12)?,
                     error_message: row.get(13)?,
                     is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
                 })
             })?
             .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
@@ -1847,9 +1895,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent, 
-                    status, last_run, next_run, retries, max_retries, payload, 
-                    result, error_message, is_active
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
              FROM background_jobs
              WHERE id = ?1",
         )?;
@@ -1871,6 +1919,7 @@ impl Database {
                 result: row.get(12)?,
                 error_message: row.get(13)?,
                 is_active: row.get(14)?,
+                timeout_seconds: row.get(15)?,
             })
         });
 
@@ -1879,6 +1928,21 @@ impl Database {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    /// Delete old completed/failed jobs (retention policy)
+    /// Deletes jobs that are completed or failed and older than the specified days
+    pub fn cleanup_old_jobs(&self, retention_days: i64) -> SqliteResult<usize> {
+        let conn = self.conn.lock().unwrap();
+
+        let deleted = conn.execute(
+            "DELETE FROM background_jobs
+             WHERE status IN ('completed', 'failed')
+             AND updated_at < datetime('now', '-' || ?1 || ' days')",
+            params![retention_days],
+        )?;
+
+        Ok(deleted)
     }
 
     /// Update job's next_run timestamp

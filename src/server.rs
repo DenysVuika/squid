@@ -341,6 +341,9 @@ pub async fn start_server(
                     .route("/jobs", web::post().to(jobs_api::create_job))
                     .route("/jobs/{id}", web::get().to(jobs_api::get_job))
                     .route("/jobs/{id}", web::delete().to(jobs_api::delete_job))
+                    .route("/jobs/{id}/pause", web::post().to(jobs_api::pause_job))
+                    .route("/jobs/{id}/resume", web::post().to(jobs_api::resume_job))
+                    .route("/jobs/{id}/trigger", web::post().to(jobs_api::trigger_job))
                     .route(
                         "/workspace/files",
                         web::get().to(workspace::get_workspace_files),

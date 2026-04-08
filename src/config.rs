@@ -191,6 +191,12 @@ pub struct JobsConfig {
     /// Default number of retries for failed jobs
     #[serde(default = "default_job_retries")]
     pub default_retries: i32,
+    /// Default timeout for jobs in seconds (0 = no timeout)
+    #[serde(default = "default_job_timeout_seconds")]
+    pub default_timeout_seconds: i64,
+    /// Job retention period in days (0 = keep forever)
+    #[serde(default = "default_job_retention_days")]
+    pub retention_days: i64,
 }
 
 fn default_jobs_enabled() -> bool {
@@ -209,6 +215,14 @@ fn default_job_retries() -> i32 {
     3
 }
 
+fn default_job_timeout_seconds() -> i64 {
+    3600 // 1 hour default timeout
+}
+
+fn default_job_retention_days() -> i64 {
+    30 // Keep completed/failed jobs for 30 days
+}
+
 impl Default for JobsConfig {
     fn default() -> Self {
         Self {
@@ -216,6 +230,8 @@ impl Default for JobsConfig {
             max_concurrent_jobs: default_max_concurrent_jobs(),
             max_cpu_percent: default_max_cpu_percent(),
             default_retries: default_job_retries(),
+            default_timeout_seconds: default_job_timeout_seconds(),
+            retention_days: default_job_retention_days(),
         }
     }
 }
