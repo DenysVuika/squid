@@ -9,25 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Agent Viewer**: View agent prompt files in the web UI via new "Agents" sidebar section
-- **Background Jobs**: Schedule recurring AI tasks with cron expressions and resource control
-  - Cron scheduling for recurring jobs (e.g., daily code reviews)
-  - One-off task queue for immediate background execution
-  - CPU monitoring and concurrency limits to prevent resource exhaustion
-  - Job priority system (0-10 scale) for execution ordering
-  - Automatic retry with configurable attempts on failure
-  - Real-time status updates via SSE streaming
-  - Persistent storage in SQLite - jobs survive server restarts
-  - Job timeout protection (configurable per job or via default)
-  - Automatic cleanup of old completed/failed jobs (configurable retention period)
-  - Pause/resume functionality for cron jobs
-  - Manual trigger for running cron jobs on-demand
-  - Cron expression validation at job creation
-  - Agent validation before job creation
-  - File path security validation to prevent directory traversal
-  - New REST API endpoints: `GET/POST /api/jobs`, `GET/DELETE /api/jobs/{id}`, `POST /api/jobs/{id}/pause`, `POST /api/jobs/{id}/resume`, `POST /api/jobs/{id}/trigger`
-  - Configurable via `jobs` section in `squid.config.json` or environment variables
-  - See `docs/JOBS.md` for complete documentation
+- **Agent Viewer**: View agent prompts and metadata in the web UI via new "Agents" sidebar section
+- **Background Jobs**: Schedule recurring AI tasks and manage one-off background jobs
+  - Cron scheduling with 6-field expressions (e.g., `0 0 9 * * Mon-Fri` for weekdays at 9 AM)
+  - Resource control: CPU monitoring, concurrency limits, configurable timeouts
+  - Job management: pause/resume, manual triggers, priority queue (0-10), retry logic
+  - Security: agent validation, file path validation, directory traversal protection
+  - Persistence: SQLite storage, automatic cleanup with configurable retention
+  - REST API: `/api/jobs` endpoints for create, list, get, delete, pause, resume, trigger
+  - Real-time updates via SSE streaming
+  - Agent statistics tracking for job executions (visible in `/agent-stats`)
+  - Comprehensive unit tests (178 passing) covering security, validation, retry, and cleanup logic
+  - Documentation: `docs/JOBS.md`
+
+### Fixed
+
+- **Empty Reasoning Steps**: Fixed Chain of Thought UI appearing when job sessions had no actual reasoning content
+  - Empty or whitespace-only reasoning steps are now filtered when loading sessions from database
+  - Prevents unnecessary Chain of Thought blocks in the web UI
 
 ## [0.13.0] - 2026-04-07
 

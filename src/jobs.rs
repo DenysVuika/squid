@@ -246,6 +246,22 @@ async fn execute_job_from_request(
         Ok(response) => {
             info!("Job {} completed successfully", job_id);
 
+            // Update agent token stats for this job execution
+            // This ensures jobs are reflected in the /agent-stats endpoint
+            if let Some(agent_id) = &chat_session.agent_id {
+                if let Err(e) = db.update_agent_token_stats(
+                    agent_id,
+                    chat_session.token_usage.input_tokens,
+                    chat_session.token_usage.output_tokens,
+                    chat_session.token_usage.reasoning_tokens,
+                    chat_session.token_usage.cache_tokens,
+                    chat_session.cost_usd,
+                ) {
+                    error!("Failed to update agent token stats for job {}: {}", job_id, e);
+                    // Don't fail the job if stats update fails - it's non-critical
+                }
+            }
+
             // Save the result with full response and session info
             let result_json = serde_json::to_string(&json!({
                 "session_id": session_id,
