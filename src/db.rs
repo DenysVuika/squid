@@ -385,6 +385,21 @@ impl Database {
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
 
+            // Filter out thinking steps with no meaningful content
+            // (empty reasoning steps, tool steps without tool_name, etc.)
+            let thinking_steps: Vec<_> = thinking_steps.into_iter().filter(|step| {
+                // Reasoning steps must have non-empty content
+                if step.step_type == "reasoning" {
+                    step.content.as_ref().map_or(false, |c| !c.trim().is_empty())
+                } else if step.step_type == "tool" {
+                    // Tool steps must have a tool_name
+                    step.tool_name.is_some()
+                } else {
+                    // Keep other step types
+                    true
+                }
+            }).collect();
+
             let thinking_steps = if thinking_steps.is_empty() {
                 None
             } else {
@@ -1269,6 +1284,136 @@ mod tests {
         assert_eq!(
             loaded_steps[1].tool_error.as_ref().unwrap(),
             "File not found"
+        );
+    }
+
+    #[test]
+    fn test_empty_reasoning_steps_filtered() {
+        // Test that empty reasoning steps are filtered out when loading sessions
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        // Add user message
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with empty reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("".to_string()), // Empty content
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - empty reasoning should be filtered out
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 2);
+
+        // Verify assistant message has NO thinking steps (empty one was filtered)
+        assert_eq!(loaded.messages[1].role, "assistant");
+        assert!(loaded.messages[1].thinking_steps.is_none());
+    }
+
+    #[test]
+    fn test_whitespace_reasoning_steps_filtered() {
+        // Test that reasoning steps with only whitespace are filtered out
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with whitespace-only reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("   \n\t  ".to_string()), // Only whitespace
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - whitespace-only reasoning should be filtered out
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+
+        // Verify assistant message has NO thinking steps (whitespace was filtered)
+        assert!(loaded.messages[1].thinking_steps.is_none());
+    }
+
+    #[test]
+    fn test_valid_reasoning_preserved() {
+        // Test that valid reasoning steps are preserved
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with valid reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("This is valid reasoning content".to_string()),
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - valid reasoning should be preserved
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+
+        // Verify assistant message has thinking steps with valid content
+        assert!(loaded.messages[1].thinking_steps.is_some());
+        let steps = loaded.messages[1].thinking_steps.as_ref().unwrap();
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].step_type, "reasoning");
+        assert_eq!(
+            steps[0].content.as_ref().unwrap(),
+            "This is valid reasoning content"
         );
     }
 
