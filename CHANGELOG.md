@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Security: agent validation, file path validation, directory traversal protection
   - Persistence: SQLite storage, automatic cleanup with configurable retention
   - REST API: `/api/jobs` endpoints for create, list, get, delete, pause, resume, trigger
+  - CLI commands: `squid jobs list/show/create/delete/pause/resume/trigger` for local job management
+    - `squid jobs list` displays jobs in a clean table format with filtering options
+    - Fully interactive job creation: run `squid jobs create` without any flags to be guided through all options
+    - Interactive prompts for job name, agent selection, message, schedule type, and cron expression
+    - All parameters can be provided via flags for non-interactive/scripting use
+    - Agent validation ensures specified agent exists before job creation
   - Real-time updates via SSE streaming
   - Agent statistics tracking for job executions (visible in `/agent-stats`)
   - Comprehensive unit tests (178 passing) covering security, validation, retry, and cleanup logic
