@@ -610,7 +610,11 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         "{}/chat/completions",
         params.app_config.api_url.trim_end_matches('/')
     );
-    let raw_body = serde_json::to_value(&request).unwrap_or_default();
+    let mut raw_body = serde_json::to_value(&request).unwrap_or_default();
+
+    // Add reasoning effort control (low = faster, less tokens; high = more thorough)
+    // Default to "low" for better performance in background jobs
+    raw_body["reasoning"] = serde_json::json!({ "effort": "low" });
 
     let raw_resp = reqwest::Client::new()
         .post(&raw_url)
