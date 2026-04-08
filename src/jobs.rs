@@ -246,10 +246,11 @@ async fn execute_job_from_request(
         Ok(response) => {
             info!("Job {} completed successfully", job_id);
 
-            // Save the result
+            // Save the result with full response and session info
             let result_json = serde_json::to_string(&json!({
                 "session_id": session_id,
-                "response_preview": &response[..response.len().min(500)],
+                "response": response,
+                "completed_at": Utc::now().to_rfc3339(),
             }))
             .unwrap_or_default();
 

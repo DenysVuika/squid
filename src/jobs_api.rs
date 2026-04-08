@@ -73,7 +73,7 @@ pub struct JobResponse {
     pub retries: i32,
     pub max_retries: i32,
     pub payload: serde_json::Value,
-    pub result: Option<String>,
+    pub result: Option<serde_json::Value>, // Changed to Value for structured data
     pub error_message: Option<String>,
     pub is_active: bool,
     pub timeout_seconds: i64,
@@ -83,6 +83,11 @@ impl From<&db::BackgroundJob> for JobResponse {
     fn from(job: &db::BackgroundJob) -> Self {
         let payload: serde_json::Value =
             serde_json::from_str(&job.payload).unwrap_or(serde_json::json!({}));
+
+        // Parse result JSON string into a structured Value
+        let result = job.result.as_ref().and_then(|r| {
+            serde_json::from_str::<serde_json::Value>(r).ok()
+        });
 
         Self {
             id: job.id.unwrap_or(0),
@@ -97,7 +102,7 @@ impl From<&db::BackgroundJob> for JobResponse {
             retries: job.retries,
             max_retries: job.max_retries,
             payload,
-            result: job.result.clone(),
+            result,
             error_message: job.error_message.clone(),
             is_active: job.is_active,
             timeout_seconds: job.timeout_seconds,

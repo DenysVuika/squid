@@ -127,7 +127,7 @@ curl -X POST http://localhost:8080/api/jobs \
   "cron_expression": "0 0 9 * * Mon-Fri",
   "priority": 8,
   "max_cpu_percent": 60,
-  "status": "pending",
+  "status": "completed",
   "last_run": "2026-04-08T09:00:00Z",
   "next_run": "2026-04-09T09:00:00Z",
   "retries": 0,
@@ -136,9 +136,14 @@ curl -X POST http://localhost:8080/api/jobs \
     "agent_id": "code-reviewer",
     "message": "Review all changed files"
   },
-  "result": null,
+  "result": {
+    "session_id": "job-code-reviewer-1234567890",
+    "response": "The code review has been completed...",
+    "completed_at": "2026-04-08T09:05:23Z"
+  },
   "error_message": null,
-  "is_active": true
+  "is_active": true,
+  "timeout_seconds": 3600
 }
 ```
 
