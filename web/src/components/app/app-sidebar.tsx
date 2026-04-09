@@ -56,9 +56,10 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onAgentSelect?: (agentId: string) => void;
   selectedAgentId?: string;
   onJobSelect?: (jobId: number) => void;
+  selectedJobId?: number;
 }
 
-export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, ...props }: AppSidebarProps) {
+export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: AppSidebarProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
@@ -68,6 +69,30 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
   const { deleteSession, updateSessionTitle } = useSessionStore();
   const { agents, loadAgents } = useAgentStore();
   const { jobs, loadJobs, startSSE, stopSSE } = useJobStore();
+
+  // Determine which sections should be open based on what's selected
+  const [sessionsOpen, setSessionsOpen] = React.useState(() => !!activeSessionId);
+  const [agentsOpen, setAgentsOpen] = React.useState(() => !!selectedAgentId);
+  const [jobsOpen, setJobsOpen] = React.useState(() => !!selectedJobId);
+
+  // Update open state when selections change (e.g., on page reload or navigation)
+  React.useEffect(() => {
+    if (activeSessionId) {
+      setSessionsOpen(true);
+    }
+  }, [activeSessionId]);
+
+  React.useEffect(() => {
+    if (selectedAgentId) {
+      setAgentsOpen(true);
+    }
+  }, [selectedAgentId]);
+
+  React.useEffect(() => {
+    if (selectedJobId) {
+      setJobsOpen(true);
+    }
+  }, [selectedJobId]);
 
   // Load agents on mount
   React.useEffect(() => {
@@ -134,7 +159,7 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            <Collapsible defaultOpen className="group/collapsible">
+            <Collapsible open={sessionsOpen} onOpenChange={setSessionsOpen} className="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton>
@@ -196,7 +221,7 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
                 </CollapsibleContent>
               </SidebarMenuItem>
             </Collapsible>
-            <Collapsible defaultOpen={false} className="group/collapsible">
+            <Collapsible open={agentsOpen} onOpenChange={setAgentsOpen} className="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton>
@@ -245,7 +270,7 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
                 </CollapsibleContent>
               </SidebarMenuItem>
             </Collapsible>
-            <Collapsible defaultOpen={false} className="group/collapsible">
+            <Collapsible open={jobsOpen} onOpenChange={setJobsOpen} className="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton>
@@ -275,7 +300,7 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
                           <SidebarMenuSubItem key={job.id} className="group/item relative">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <SidebarMenuSubButton asChild>
+                                <SidebarMenuSubButton asChild isActive={job.id === selectedJobId}>
                                   <button
                                     className="w-full flex items-center gap-2 pr-7"
                                     onClick={() => onJobSelect?.(job.id)}

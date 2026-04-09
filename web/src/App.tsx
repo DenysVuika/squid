@@ -28,14 +28,28 @@ function AppContent() {
   const { clearMessages } = useChatStore();
   const { resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
-  const { setSelectedJob } = useJobStore();
+  const { selectedJob, setSelectedJob } = useJobStore();
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
   const [showRagPanel, setShowRagPanel] = useState(false);
 
-  // State for selected agent in sidebar
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  // Derive selected agent from URL instead of storing in state
+  const selectedAgentId = location.pathname.startsWith('/agents/')
+    ? location.pathname.split('/')[2]
+    : null;
+
+  // Derive selected job from URL and sync with store
+  const urlJobId = location.pathname.startsWith('/jobs/')
+    ? parseInt(location.pathname.split('/')[2], 10)
+    : null;
+
+  // Sync job store with URL
+  useEffect(() => {
+    if (urlJobId && !isNaN(urlJobId) && urlJobId !== selectedJob) {
+      setSelectedJob(urlJobId);
+    }
+  }, [urlJobId, selectedJob, setSelectedJob]);
 
   useEffect(() => {
     void loadSessions();
@@ -65,7 +79,6 @@ function AppContent() {
   };
 
   const handleAgentSelect = (agentId: string) => {
-    setSelectedAgentId(agentId);
     navigate(`/agents/${agentId}`);
   };
 
@@ -90,6 +103,7 @@ function AppContent() {
           onAgentSelect={handleAgentSelect}
           selectedAgentId={selectedAgentId || undefined}
           onJobSelect={handleJobSelect}
+          selectedJobId={selectedJob || undefined}
         />
       ) : null}
       <SidebarInset className="flex flex-col overflow-hidden">
