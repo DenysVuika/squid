@@ -241,6 +241,11 @@ const Chatbot = () => {
       return;
     }
 
+    // Clear old messages before loading new session to prevent flash
+    if (prevId && prevId !== activeSessionId) {
+      clearMessages();
+    }
+
     // Load session history
     void loadSessionHistory(activeSessionId);
   }, [activeSessionId, status, loadSessionHistory, clearMessages]);
@@ -446,7 +451,7 @@ const Chatbot = () => {
         </Context>
       </div>
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <Conversation>
+        <Conversation key={activeSessionId || 'new'} initial="instant" resize="smooth">
           <ConversationContent>
             {messages.map(({ versions, ...message }) => (
               <MessageBranch defaultBranch={0} key={message.key}>

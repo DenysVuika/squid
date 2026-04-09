@@ -51,7 +51,6 @@ interface ChatSession {
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   sessions?: ChatSession[];
   onSessionSelect?: (sessionId: string) => void;
-  onNewChat?: () => void;
   activeSessionId?: string;
   onAgentSelect?: (agentId: string) => void;
   selectedAgentId?: string;
@@ -59,7 +58,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   selectedJobId?: number;
 }
 
-export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: AppSidebarProps) {
+export function AppSidebar({ sessions = [], onSessionSelect, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: AppSidebarProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
@@ -147,14 +146,10 @@ export function AppSidebar({ sessions = [], onSessionSelect, onNewChat, activeSe
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader className="border-b p-4">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2">
           <span className="text-2xl">🦑</span>
           <span className="font-bold text-xl">Squid</span>
         </div>
-        <Button onClick={onNewChat} className="w-full justify-start gap-2" variant="outline">
-          <Plus className="h-4 w-4" />
-          New Chat
-        </Button>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

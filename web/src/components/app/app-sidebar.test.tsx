@@ -110,12 +110,6 @@ describe('AppSidebar', () => {
       expect(screen.getByText('Squid')).toBeInTheDocument();
     });
 
-    it('renders New Chat button', () => {
-      renderAppSidebar();
-
-      expect(screen.getByRole('button', { name: /new chat/i })).toBeInTheDocument();
-    });
-
     it('renders collapsible sections', () => {
       renderAppSidebar();
 
