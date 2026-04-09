@@ -147,12 +147,21 @@ export function JobCreateDialog({
             <Label htmlFor="agent">Agent *</Label>
             <Select value={selectedAgent} onValueChange={setSelectedAgent}>
               <SelectTrigger id="agent">
-                <SelectValue placeholder="Select an agent" />
+                <SelectValue placeholder="Select an agent">
+                  {selectedAgent && agents.find((a) => a.id === selectedAgent)?.name}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {agents.map((agent) => (
                   <SelectItem key={agent.id} value={agent.id}>
-                    {agent.name} {agent.description && `- ${agent.description}`}
+                    <div className="flex flex-col gap-0.5 py-1">
+                      <div className="font-medium">{agent.name}</div>
+                      {agent.description && (
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {agent.description}
+                        </div>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
