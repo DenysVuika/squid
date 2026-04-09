@@ -24,11 +24,16 @@ function AppContent() {
   const navigate = useNavigate();
 
   // Zustand stores
-  const { sessions, activeSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
+  const { sessions, loadSessions, selectSession, startNewChat } = useSessionStore();
   const { clearMessages } = useChatStore();
   const { resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
   const { selectedJob, setSelectedJob } = useJobStore();
+
+  // Derive active session from URL
+  const activeSessionId = location.pathname.startsWith('/chat/')
+    ? location.pathname.split('/')[2]
+    : null;
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
@@ -43,6 +48,13 @@ function AppContent() {
   const urlJobId = location.pathname.startsWith('/jobs/')
     ? parseInt(location.pathname.split('/')[2], 10)
     : null;
+
+  // Sync session store when URL session changes
+  useEffect(() => {
+    if (activeSessionId) {
+      selectSession(activeSessionId);
+    }
+  }, [activeSessionId, selectSession]);
 
   // Sync job store with URL
   useEffect(() => {
@@ -60,22 +72,15 @@ function AppContent() {
   }, [loadConfig]);
 
   const handleSessionSelect = (sessionId: string) => {
-    // Only load history if switching to a different session
-    if (sessionId !== activeSessionId) {
-      selectSession(sessionId);
-      if (location.pathname !== '/') {
-        navigate('/');
-      }
-    }
+    // Navigate to the session URL
+    navigate(`/chat/${sessionId}`);
   };
 
   const handleNewChat = () => {
     startNewChat();
     clearMessages();
     resetTokenUsage();
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
+    navigate('/');
   };
 
   const handleAgentSelect = (agentId: string) => {
@@ -190,6 +195,7 @@ function AppContent() {
           <div className="flex flex-1 flex-col overflow-hidden p-4">
             <Routes>
               <Route path="/" element={<ChatBot />} />
+              <Route path="/chat/:id" element={<ChatBot />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/agent-stats" element={<AgentStatsCard apiUrl="" />} />
               <Route path="/agents/:id" element={<AgentViewer />} />

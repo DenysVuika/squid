@@ -449,10 +449,15 @@ describe("SessionList", () => {
   });
 
   it("shows error toast when loading fails", async () => {
+    // Suppress expected error logs during this test
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     mockListSessions.mockRejectedValue(new Error("Network error"));
     renderComponent();
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Failed to load sessions");
     });
+
+    consoleSpy.mockRestore();
   });
 });
