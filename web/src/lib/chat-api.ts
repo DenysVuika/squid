@@ -949,6 +949,20 @@ export interface JobInfo {
   timeout_seconds: number;
 }
 
+export interface JobExecution {
+  id: number;
+  job_id: number;
+  session_id: string | null;
+  status: string;
+  result: Record<string, unknown> | null;
+  error_message: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  tokens_used: number | null;
+  cost_usd: number | null;
+}
+
 export interface CreateJobRequest {
   name: string;
   schedule_type: string;
@@ -1174,6 +1188,53 @@ export async function triggerJob(apiUrl: string, jobId: number): Promise<boolean
   } catch (error) {
     console.error('Failed to trigger job:', error);
     return false;
+  }
+}
+
+/**
+ * Fetch execution history for a job
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param jobId - The job ID to get executions for
+ * @param limit - Maximum number of executions to return (default: 50)
+ * @returns Promise with list of job executions
+ */
+export async function fetchJobExecutions(apiUrl: string, jobId: number, limit = 50): Promise<JobExecution[]> {
+  const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/executions?limit=${limit}` : `/api/jobs/${jobId}/executions?limit=${limit}`;
+  const response = await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch job executions: HTTP ${response.status}`);
+  }
+
+  const data: JobExecution[] = await response.json();
+  return data;
+}
+
+/**
+ * Fetch a single job execution by ID
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param executionId - The execution ID to fetch
+ * @returns Promise with execution details or null if not found
+ */
+export async function fetchJobExecution(apiUrl: string, executionId: number): Promise<JobExecution | null> {
+  try {
+    const endpoint = apiUrl ? `${apiUrl}/api/executions/${executionId}` : `/api/executions/${executionId}`;
+    const response = await fetch(endpoint);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch job execution: HTTP ${response.status}`);
+    }
+
+    const data: JobExecution = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch job execution:', error);
+    return null;
   }
 }
 

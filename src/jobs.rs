@@ -165,11 +165,12 @@ async fn execute_job_from_request(
         system_prompt.clone()
     });
 
-    // Create session
+    // Create session (unique per execution)
+    let started_at = Utc::now();
     let session_id = job_payload
         .session_id
         .clone()
-        .unwrap_or_else(|| format!("job-{}-{}", job_payload.agent_id, Utc::now().timestamp()));
+        .unwrap_or_else(|| format!("job-{}-{}", job_payload.agent_id, started_at.timestamp()));
 
     let mut chat_session = session::ChatSession::new();
     chat_session.id = session_id.clone();
@@ -244,7 +245,10 @@ async fn execute_job_from_request(
 
     match llm_result_str {
         Ok(response) => {
-            info!("Job {} completed successfully", job_id);
+            let completed_at = Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds();
+
+            info!("Job {} completed successfully ({}ms)", job_id, duration_ms);
 
             // Update agent token stats for this job execution
             // This ensures jobs are reflected in the /agent-stats endpoint
@@ -262,14 +266,39 @@ async fn execute_job_from_request(
                 }
             }
 
+            // Calculate total tokens
+            let total_tokens = chat_session.token_usage.input_tokens
+                + chat_session.token_usage.output_tokens
+                + chat_session.token_usage.reasoning_tokens;
+
             // Save the result with full response and session info
             let result_json = serde_json::to_string(&json!({
                 "session_id": session_id,
                 "response": response,
-                "completed_at": Utc::now().to_rfc3339(),
+                "completed_at": completed_at.to_rfc3339(),
+                "tokens": total_tokens,
+                "cost_usd": chat_session.cost_usd,
             }))
             .unwrap_or_default();
 
+            // Record this execution in job_executions table
+            if let Err(e) = db.create_job_execution(
+                job_id,
+                Some(&session_id),
+                "completed",
+                Some(&result_json),
+                None,
+                &started_at.to_rfc3339(),
+                Some(&completed_at.to_rfc3339()),
+                Some(duration_ms),
+                Some(total_tokens),
+                Some(chat_session.cost_usd),
+            ) {
+                error!("Failed to record job execution: {}", e);
+                // Don't fail the job if execution recording fails
+            }
+
+            // Update the job's last result (for quick status check)
             db.complete_job(job_id, &req.schedule_type, Some(&result_json), None)
                 .map_err(|e| e.to_string())?;
 
@@ -286,7 +315,10 @@ async fn execute_job_from_request(
             Ok(response)
         }
         Err(error_msg) => {
-            error!("Job {} failed: {}", job_id, error_msg);
+            let completed_at = Utc::now();
+            let duration_ms = (completed_at - started_at).num_milliseconds();
+
+            error!("Job {} failed after {}ms: {}", job_id, duration_ms, error_msg);
 
             // Increment retries
             db.increment_job_retries(job_id)
@@ -330,6 +362,27 @@ async fn execute_job_from_request(
                         Err(e) => error!("Failed to re-queue job {} for retry: {}", job_id, e),
                     }
                 } else {
+                    // Exhausted all retries - record the failed execution
+                    let total_tokens = chat_session.token_usage.input_tokens
+                        + chat_session.token_usage.output_tokens
+                        + chat_session.token_usage.reasoning_tokens;
+
+                    // Record failed execution in job_executions table
+                    if let Err(e) = db.create_job_execution(
+                        job_id,
+                        Some(&session_id),
+                        "failed",
+                        None,
+                        Some(&error_msg),
+                        &started_at.to_rfc3339(),
+                        Some(&completed_at.to_rfc3339()),
+                        Some(duration_ms),
+                        Some(total_tokens),
+                        Some(chat_session.cost_usd),
+                    ) {
+                        error!("Failed to record job execution: {}", e);
+                    }
+
                     db.update_job_result(job_id, "failed", None, Some(&error_msg))
                         .map_err(|e| e.to_string())?;
 

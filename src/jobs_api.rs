@@ -93,6 +93,43 @@ pub struct CreateJobRequest {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct JobExecutionResponse {
+    pub id: i64,
+    pub job_id: i64,
+    pub session_id: Option<String>,
+    pub status: String,
+    pub result: Option<serde_json::Value>,
+    pub error_message: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub tokens_used: Option<i64>,
+    pub cost_usd: Option<f64>,
+}
+
+impl From<&db::JobExecution> for JobExecutionResponse {
+    fn from(exec: &db::JobExecution) -> Self {
+        let result = exec.result.as_ref().and_then(|r| {
+            serde_json::from_str::<serde_json::Value>(r).ok()
+        });
+
+        Self {
+            id: exec.id.unwrap_or(0),
+            job_id: exec.job_id,
+            session_id: exec.session_id.clone(),
+            status: exec.status.clone(),
+            result,
+            error_message: exec.error_message.clone(),
+            started_at: exec.started_at.clone(),
+            completed_at: exec.completed_at.clone(),
+            duration_ms: exec.duration_ms,
+            tokens_used: exec.tokens_used,
+            cost_usd: exec.cost_usd,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct JobResponse {
     pub id: i64,
     pub name: String,
@@ -776,6 +813,70 @@ mod tests {
 
         assert_eq!(job.schedule_type, "once");
         // trigger_job endpoint should reject "once" jobs
+    }
+}
+
+/// Get execution history for a specific job
+pub async fn get_job_executions(path: web::Path<i64>, query: web::Query<std::collections::HashMap<String, String>>) -> HttpResponse {
+    let db = get_db();
+    let job_id = path.into_inner();
+
+    // Get limit from query parameter (default to 50)
+    let limit = query
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(50);
+
+    match db.get_job_executions(job_id, Some(limit)) {
+        Ok(executions) => {
+            let response: Vec<JobExecutionResponse> = executions.iter().map(JobExecutionResponse::from).collect();
+            HttpResponse::Ok().json(response)
+        }
+        Err(e) => {
+            // If table doesn't exist yet, return empty array instead of error
+            let error_msg = e.to_string();
+            if error_msg.contains("no such table: job_executions") {
+                warn!("job_executions table not yet created - returning empty array");
+                HttpResponse::Ok().json(Vec::<JobExecutionResponse>::new())
+            } else {
+                error!("Failed to get job executions for job {}: {}", job_id, e);
+                HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Failed to get job executions: {}", e)
+                }))
+            }
+        }
+    }
+}
+
+/// Get a single execution by ID
+pub async fn get_job_execution(path: web::Path<i64>) -> HttpResponse {
+    let db = get_db();
+    let execution_id = path.into_inner();
+
+    match db.get_job_execution(execution_id) {
+        Ok(Some(execution)) => {
+            HttpResponse::Ok().json(JobExecutionResponse::from(&execution))
+        }
+        Ok(None) => {
+            HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("Execution {} not found", execution_id)
+            }))
+        }
+        Err(e) => {
+            // If table doesn't exist yet, return 404
+            let error_msg = e.to_string();
+            if error_msg.contains("no such table: job_executions") {
+                warn!("job_executions table not yet created");
+                HttpResponse::NotFound().json(serde_json::json!({
+                    "error": format!("Execution {} not found", execution_id)
+                }))
+            } else {
+                error!("Failed to get job execution {}: {}", execution_id, e);
+                HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Failed to get job execution: {}", e)
+                }))
+            }
+        }
     }
 }
 

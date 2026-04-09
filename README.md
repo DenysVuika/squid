@@ -464,7 +464,27 @@ curl -X POST http://localhost:8080/api/jobs \
 - 💾 **Persistent storage** - Jobs survive server restarts
 - 🔄 **Automatic retries** - Failed jobs retry with backoff
 
-For complete documentation, see [docs/JOBS.md](docs/JOBS.md).
+**Web UI Management:**
+
+- View all jobs in the sidebar with live status updates
+- Click any job to see detailed execution history
+- Interactive controls: pause, resume, trigger, delete
+- Per-execution metrics: duration, tokens used, cost
+- Direct links to conversation sessions
+
+**CLI Commands:**
+
+```bash
+squid jobs list                    # List all jobs
+squid jobs show <id>              # View job details
+squid jobs create                 # Interactive job creation
+squid jobs delete <id>            # Delete a job
+squid jobs pause <id>             # Pause a cron job
+squid jobs resume <id>            # Resume a paused job
+squid jobs trigger <id>           # Manually trigger a cron job
+```
+
+For complete documentation, see [docs/JOBS.md](docs/JOBS.md) and [docs/CLI.md](docs/CLI.md#jobs-commands).
 
 
 

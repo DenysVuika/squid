@@ -219,6 +219,13 @@ impl Database {
             include_str!("../migrations/015_job_timeout.sql"),
         )?;
 
+        // Migration 016: Job execution history
+        run_migration(
+            16,
+            "Job execution history",
+            include_str!("../migrations/016_job_executions.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -2130,6 +2137,22 @@ pub struct BackgroundJob {
     pub timeout_seconds: i64, // Job timeout in seconds (0 = no timeout)
 }
 
+/// Job Execution Record (tracks individual runs of a job)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobExecution {
+    pub id: Option<i64>,
+    pub job_id: i64,
+    pub session_id: Option<String>,
+    pub status: String, // "completed", "failed", "cancelled"
+    pub result: Option<String>, // JSON
+    pub error_message: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub tokens_used: Option<i64>,
+    pub cost_usd: Option<f64>,
+}
+
 /// Payload for a background job
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct JobPayload {
@@ -2476,12 +2499,142 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
-            "UPDATE background_jobs 
+            "UPDATE background_jobs
              SET next_run = ?1, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?2",
             params![next_run, id],
         )?;
 
         Ok(())
+    }
+
+    // ===== Job Executions (Execution History) =====
+
+    /// Create a new job execution record
+    pub fn create_job_execution(
+        &self,
+        job_id: i64,
+        session_id: Option<&str>,
+        status: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+        started_at: &str,
+        completed_at: Option<&str>,
+        duration_ms: Option<i64>,
+        tokens_used: Option<i64>,
+        cost_usd: Option<f64>,
+    ) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "INSERT INTO job_executions (job_id, session_id, status, result, error_message,
+                                         started_at, completed_at, duration_ms, tokens_used, cost_usd)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                job_id,
+                session_id,
+                status,
+                result,
+                error_message,
+                started_at,
+                completed_at,
+                duration_ms,
+                tokens_used,
+                cost_usd
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all executions for a specific job
+    pub fn get_job_executions(&self, job_id: i64, limit: Option<i64>) -> SqliteResult<Vec<JobExecution>> {
+        let conn = self.conn.lock().unwrap();
+
+        let query = if let Some(lim) = limit {
+            format!(
+                "SELECT id, job_id, session_id, status, result, error_message,
+                        started_at, completed_at, duration_ms, tokens_used, cost_usd
+                 FROM job_executions
+                 WHERE job_id = ?1
+                 ORDER BY started_at DESC
+                 LIMIT {}",
+                lim
+            )
+        } else {
+            "SELECT id, job_id, session_id, status, result, error_message,
+                    started_at, completed_at, duration_ms, tokens_used, cost_usd
+             FROM job_executions
+             WHERE job_id = ?1
+             ORDER BY started_at DESC"
+                .to_string()
+        };
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let executions = stmt
+            .query_map([job_id], |row| {
+                Ok(JobExecution {
+                    id: row.get(0)?,
+                    job_id: row.get(1)?,
+                    session_id: row.get(2)?,
+                    status: row.get(3)?,
+                    result: row.get(4)?,
+                    error_message: row.get(5)?,
+                    started_at: row.get(6)?,
+                    completed_at: row.get(7)?,
+                    duration_ms: row.get(8)?,
+                    tokens_used: row.get(9)?,
+                    cost_usd: row.get(10)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<JobExecution>>>()?;
+
+        Ok(executions)
+    }
+
+    /// Get a single job execution by ID
+    pub fn get_job_execution(&self, id: i64) -> SqliteResult<Option<JobExecution>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, job_id, session_id, status, result, error_message,
+                    started_at, completed_at, duration_ms, tokens_used, cost_usd
+             FROM job_executions
+             WHERE id = ?1",
+        )?;
+
+        let mut rows = stmt.query([id])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(JobExecution {
+                id: row.get(0)?,
+                job_id: row.get(1)?,
+                session_id: row.get(2)?,
+                status: row.get(3)?,
+                result: row.get(4)?,
+                error_message: row.get(5)?,
+                started_at: row.get(6)?,
+                completed_at: row.get(7)?,
+                duration_ms: row.get(8)?,
+                tokens_used: row.get(9)?,
+                cost_usd: row.get(10)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Delete old job executions (retention policy)
+    pub fn delete_old_job_executions(&self, max_age_days: i64) -> SqliteResult<usize> {
+        let conn = self.conn.lock().unwrap();
+
+        let rows_deleted = conn.execute(
+            "DELETE FROM job_executions
+             WHERE started_at < datetime('now', '-' || ?1 || ' days')",
+            params![max_age_days],
+        )?;
+
+        Ok(rows_deleted)
     }
 }

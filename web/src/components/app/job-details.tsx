@@ -1,35 +1,63 @@
 import React, { useEffect, useMemo } from 'react';
 import { useJobStore } from '@/stores/job-store';
-import { fetchJob, pauseJob, resumeJob, triggerJob, deleteJob, cancelJob, type JobInfo } from '@/lib/chat-api';
+import { fetchJob, fetchJobExecutions, pauseJob, resumeJob, triggerJob, deleteJob, cancelJob, type JobInfo, type JobExecution } from '@/lib/chat-api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, Pause, Trash, Clock, AlertCircle, CheckCircle, XCircle, Loader2, Ban } from 'lucide-react';
+import { Play, Pause, Trash, Clock, AlertCircle, CheckCircle, XCircle, Loader2, Ban, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const JobDetails = () => {
-  const { selectedJob, loadJobs } = useJobStore();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const { selectedJob, setSelectedJob, loadJobs } = useJobStore();
   const [job, setJob] = React.useState<JobInfo | null>(null);
+  const [executions, setExecutions] = React.useState<JobExecution[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+
+  // Sync URL param with store on mount
+  useEffect(() => {
+    if (id) {
+      const jobId = parseInt(id, 10);
+      if (!isNaN(jobId) && jobId !== selectedJob) {
+        setSelectedJob(jobId);
+      }
+    }
+  }, [id, selectedJob, setSelectedJob]);
 
   // Load job details when selectedJob changes
   useEffect(() => {
     if (selectedJob) {
       setIsLoading(true);
+
+      // Load job details first
       fetchJob('', selectedJob)
-        .then((data) => {
-          setJob(data);
+        .then((jobData) => {
+          setJob(jobData);
+
+          // Try to load executions history (optional - may not exist yet)
+          return fetchJobExecutions('', selectedJob, 10);
+        })
+        .then((executionsData) => {
+          setExecutions(executionsData);
         })
         .catch((error) => {
-          console.error('Failed to load job:', error);
-          toast.error('Failed to load job details');
+          // If just executions fail, log but don't show error
+          if (error.message?.includes('executions')) {
+            console.log('Execution history not available yet (table may not exist)');
+          } else {
+            console.error('Failed to load job:', error);
+            toast.error('Failed to load job details');
+          }
         })
         .finally(() => {
           setIsLoading(false);
         });
     } else {
       setJob(null);
+      setExecutions([]);
     }
   }, [selectedJob]);
 
@@ -400,6 +428,91 @@ const JobDetails = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Execution History (Detailed) */}
+          {executions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Execution History</CardTitle>
+                <CardDescription>Detailed history of all job executions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {executions.map((execution) => {
+                    const statusColor =
+                      execution.status === 'completed'
+                        ? 'text-green-600 dark:text-green-400'
+                        : execution.status === 'failed'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-gray-600 dark:text-gray-400';
+
+                    return (
+                      <div
+                        key={execution.id}
+                        className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {execution.status === 'completed' ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : execution.status === 'failed' ? (
+                              <XCircle className="h-5 w-5 text-red-500" />
+                            ) : (
+                              <AlertCircle className="h-5 w-5 text-gray-500" />
+                            )}
+                            <span className={`font-medium ${statusColor}`}>
+                              {execution.status.charAt(0).toUpperCase() + execution.status.slice(1)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(execution.started_at).toLocaleString()}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          {execution.duration_ms && (
+                            <div>
+                              <span className="text-muted-foreground">Duration:</span>{' '}
+                              <span className="font-medium">{execution.duration_ms}ms</span>
+                            </div>
+                          )}
+                          {execution.tokens_used && (
+                            <div>
+                              <span className="text-muted-foreground">Tokens:</span>{' '}
+                              <span className="font-medium">{execution.tokens_used.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {execution.cost_usd !== null && execution.cost_usd !== undefined && (
+                            <div>
+                              <span className="text-muted-foreground">Cost:</span>{' '}
+                              <span className="font-medium">${execution.cost_usd.toFixed(4)}</span>
+                            </div>
+                          )}
+                          {execution.session_id && (
+                            <div className="col-span-full md:col-span-1">
+                              <button
+                                onClick={() => navigate(`/?session=${execution.session_id}`)}
+                                className="flex items-center gap-1 text-primary hover:underline"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                View Session
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {execution.error_message && (
+                          <div className="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 p-2 rounded">
+                            {execution.error_message}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

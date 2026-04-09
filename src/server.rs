@@ -35,7 +35,20 @@ async fn serve_static(path: web::Path<String>) -> HttpResponse {
                 .content_type(mime_type.as_ref())
                 .body(content.data.into_owned())
         }
-        None => HttpResponse::NotFound().body("404 - Not Found"),
+        None => {
+            // For SPA routing: if the file doesn't exist and doesn't have an extension,
+            // serve index.html so React Router can handle client-side routing
+            if !path.contains('.') && path != "index.html" {
+                // This is likely a frontend route like /jobs/6, /agents/foo, etc.
+                // Serve index.html to let React Router handle it
+                if let Some(index) = Assets::get("index.html") {
+                    return HttpResponse::Ok()
+                        .content_type("text/html")
+                        .body(index.data.into_owned());
+                }
+            }
+            HttpResponse::NotFound().body("404 - Not Found")
+        }
     }
 }
 
@@ -348,6 +361,8 @@ pub async fn start_server(
                     .route("/jobs/{id}/pause", web::post().to(jobs_api::pause_job))
                     .route("/jobs/{id}/resume", web::post().to(jobs_api::resume_job))
                     .route("/jobs/{id}/trigger", web::post().to(jobs_api::trigger_job))
+                    .route("/jobs/{id}/executions", web::get().to(jobs_api::get_job_executions))
+                    .route("/executions/{id}", web::get().to(jobs_api::get_job_execution))
                     .route(
                         "/workspace/files",
                         web::get().to(workspace::get_workspace_files),
