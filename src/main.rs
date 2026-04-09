@@ -684,9 +684,9 @@ async fn main() {
                                     let status_match = status
                                         .as_ref()
                                         .is_none_or(|s| job.status.eq_ignore_ascii_case(s));
-                                    let type_match = schedule_type.as_ref().is_none_or(|t| {
-                                        job.schedule_type.eq_ignore_ascii_case(t)
-                                    });
+                                    let type_match = schedule_type
+                                        .as_ref()
+                                        .is_none_or(|t| job.schedule_type.eq_ignore_ascii_case(t));
                                     status_match && type_match
                                 })
                                 .collect();
