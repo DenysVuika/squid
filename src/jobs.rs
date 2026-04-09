@@ -151,8 +151,7 @@ async fn execute_job_from_request(
         custom_prompt.clone()
     } else if let Some(prompt) = &agent.prompt {
         // Use agent's prompt if available
-        let combined = llm::combine_prompts(&prompt);
-        combined
+        llm::combine_prompts(prompt)
     } else {
         // Fall back to default ask prompt
         llm::get_ask_prompt().to_string()
@@ -252,21 +251,21 @@ async fn execute_job_from_request(
 
             // Update agent token stats for this job execution
             // This ensures jobs are reflected in the /agent-stats endpoint
-            if let Some(agent_id) = &chat_session.agent_id {
-                if let Err(e) = db.update_agent_token_stats(
+            if let Some(agent_id) = &chat_session.agent_id
+                && let Err(e) = db.update_agent_token_stats(
                     agent_id,
                     chat_session.token_usage.input_tokens,
                     chat_session.token_usage.output_tokens,
                     chat_session.token_usage.reasoning_tokens,
                     chat_session.token_usage.cache_tokens,
                     chat_session.cost_usd,
-                ) {
-                    error!(
-                        "Failed to update agent token stats for job {}: {}",
-                        job_id, e
-                    );
-                    // Don't fail the job if stats update fails - it's non-critical
-                }
+                )
+            {
+                error!(
+                    "Failed to update agent token stats for job {}: {}",
+                    job_id, e
+                );
+                // Don't fail the job if stats update fails - it's non-critical
             }
 
             // Calculate total tokens
@@ -556,7 +555,7 @@ pub async fn restore_jobs(
             let db_clone = db.clone();
 
             let cron_job_result = tokio_cron_scheduler::Job::new_async_tz(
-                &cron_expr,
+                cron_expr,
                 chrono_tz::UTC,
                 move |_uuid, _job_scheduler| {
                     let job_id = job_id;

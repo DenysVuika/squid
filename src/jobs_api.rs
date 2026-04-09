@@ -236,12 +236,12 @@ pub async fn create_job(
             }));
         }
 
-        if let Some(ref expr) = req.cron_expression {
-            if let Err(e) = validate_cron_expression(expr) {
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "error": e
-                }));
-            }
+        if let Some(ref expr) = req.cron_expression
+            && let Err(e) = validate_cron_expression(expr)
+        {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "error": e
+            }));
         }
     }
 

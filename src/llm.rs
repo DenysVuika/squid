@@ -627,15 +627,14 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
     let raw_json: serde_json::Value = raw_resp.json().await?;
 
     // Log raw JSON structure for debugging
-    if let Some(choices) = raw_json.get("choices") {
-        if let Some(first) = choices.get(0) {
-            if let Some(message) = first.get("message") {
-                info!(
-                    "Response message keys: {:?}",
-                    message.as_object().map(|m| m.keys().collect::<Vec<_>>())
-                );
-            }
-        }
+    if let Some(choices) = raw_json.get("choices")
+        && let Some(first) = choices.get(0)
+        && let Some(message) = first.get("message")
+    {
+        info!(
+            "Response message keys: {:?}",
+            message.as_object().map(|m| m.keys().collect::<Vec<_>>())
+        );
     }
 
     // Extract reasoning_content

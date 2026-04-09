@@ -50,11 +50,11 @@ impl PluginManager {
         }
 
         // 3. Bundled plugins (shipped with executable)
-        if self.config.plugins.load_bundled {
-            if let Some(bundled_dir) = get_bundled_plugins_dir() {
-                debug!("Adding bundled plugin directory: {}", bundled_dir.display());
-                registry.add_directory(bundled_dir);
-            }
+        if self.config.plugins.load_bundled
+            && let Some(bundled_dir) = get_bundled_plugins_dir()
+        {
+            debug!("Adding bundled plugin directory: {}", bundled_dir.display());
+            registry.add_directory(bundled_dir);
         }
 
         // Discover all plugins
