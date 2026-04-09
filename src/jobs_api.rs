@@ -32,7 +32,7 @@ static JOB_UPDATE_BROADCASTER: std::sync::OnceLock<tokio::sync::broadcast::Sende
 #[serde(tag = "type")]
 pub enum JobUpdateEvent {
     #[serde(rename = "update")]
-    Update { job: JobResponse },
+    Update { job: Box<JobResponse> },
     #[serde(rename = "deleted")]
     Deleted { job_id: i64 },
 }
@@ -326,7 +326,7 @@ pub async fn create_job(
                     let response = JobResponse::from(&created_job);
                     // Broadcast the new job to SSE listeners
                     broadcast_job_update(JobUpdateEvent::Update {
-                        job: response.clone(),
+                        job: Box::new(response.clone()),
                     });
                     HttpResponse::Created().json(response)
                 }
@@ -381,7 +381,7 @@ pub async fn cancel_job(path: web::Path<i64>) -> HttpResponse {
             // Broadcast updated job state
             if let Ok(Some(job)) = db.get_job_by_id(job_id) {
                 broadcast_job_update(JobUpdateEvent::Update {
-                    job: JobResponse::from(&job),
+                    job: Box::new(JobResponse::from(&job)),
                 });
             }
             HttpResponse::Ok().json(serde_json::json!({
@@ -431,7 +431,7 @@ pub async fn pause_job(path: web::Path<i64>) -> HttpResponse {
             // Broadcast updated job state
             if let Ok(Some(job)) = db.get_job_by_id(job_id) {
                 broadcast_job_update(JobUpdateEvent::Update {
-                    job: JobResponse::from(&job),
+                    job: Box::new(JobResponse::from(&job)),
                 });
             }
             HttpResponse::Ok().json(serde_json::json!({
@@ -458,7 +458,7 @@ pub async fn resume_job(path: web::Path<i64>) -> HttpResponse {
             // Broadcast updated job state
             if let Ok(Some(job)) = db.get_job_by_id(job_id) {
                 broadcast_job_update(JobUpdateEvent::Update {
-                    job: JobResponse::from(&job),
+                    job: Box::new(JobResponse::from(&job)),
                 });
             }
             HttpResponse::Ok().json(serde_json::json!({
