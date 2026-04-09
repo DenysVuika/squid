@@ -723,7 +723,8 @@ async fn main() {
                                 .map(|job| {
                                     let id = job.id.unwrap_or(0);
                                     let active = if job.is_active { "●" } else { "○" }.to_string();
-                                    let schedule = job.cron_expression
+                                    let schedule = job
+                                        .cron_expression
                                         .as_ref()
                                         .map(|s| {
                                             // Truncate long cron expressions
@@ -763,62 +764,74 @@ async fn main() {
                         }
                     }
                 }
-                JobCommands::Show { id } => {
-                    match db.get_job_by_id(*id) {
-                        Ok(Some(job)) => {
-                            println!("🦑: Job Details\n");
-                            println!("  ID: {}", job.id.unwrap_or(0));
-                            println!("  Name: {}", job.name);
-                            println!("  Status: {}", job.status);
-                            println!("  Type: {}", job.schedule_type);
-                            println!("  Active: {}", if job.is_active { "Yes" } else { "No (Paused)" });
+                JobCommands::Show { id } => match db.get_job_by_id(*id) {
+                    Ok(Some(job)) => {
+                        println!("🦑: Job Details\n");
+                        println!("  ID: {}", job.id.unwrap_or(0));
+                        println!("  Name: {}", job.name);
+                        println!("  Status: {}", job.status);
+                        println!("  Type: {}", job.schedule_type);
+                        println!(
+                            "  Active: {}",
+                            if job.is_active { "Yes" } else { "No (Paused)" }
+                        );
 
-                            if let Some(cron) = &job.cron_expression {
-                                println!("  Cron expression: {}", cron);
-                            }
+                        if let Some(cron) = &job.cron_expression {
+                            println!("  Cron expression: {}", cron);
+                        }
 
-                            println!("  Priority: {}", job.priority);
-                            println!("  Max CPU: {}%", job.max_cpu_percent);
-                            println!("  Timeout: {}s", job.timeout_seconds);
-                            println!("  Retries: {}/{}", job.retries, job.max_retries);
+                        println!("  Priority: {}", job.priority);
+                        println!("  Max CPU: {}%", job.max_cpu_percent);
+                        println!("  Timeout: {}s", job.timeout_seconds);
+                        println!("  Retries: {}/{}", job.retries, job.max_retries);
 
-                            if let Some(last_run) = &job.last_run {
-                                println!("  Last run: {}", last_run);
-                            }
+                        if let Some(last_run) = &job.last_run {
+                            println!("  Last run: {}", last_run);
+                        }
 
-                            if let Some(next_run) = &job.next_run {
-                                println!("  Next run: {}", next_run);
-                            }
+                        if let Some(next_run) = &job.next_run {
+                            println!("  Next run: {}", next_run);
+                        }
 
-                            println!("\n  Payload:");
-                            if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&job.payload) {
-                                println!("{}", serde_json::to_string_pretty(&payload).unwrap_or(job.payload.clone()));
+                        println!("\n  Payload:");
+                        if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&job.payload)
+                        {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&payload)
+                                    .unwrap_or(job.payload.clone())
+                            );
+                        } else {
+                            println!("{}", job.payload);
+                        }
+
+                        if let Some(result) = &job.result {
+                            println!("\n  Result:");
+                            if let Ok(result_json) =
+                                serde_json::from_str::<serde_json::Value>(result)
+                            {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&result_json)
+                                        .unwrap_or(result.clone())
+                                );
                             } else {
-                                println!("{}", job.payload);
-                            }
-
-                            if let Some(result) = &job.result {
-                                println!("\n  Result:");
-                                if let Ok(result_json) = serde_json::from_str::<serde_json::Value>(result) {
-                                    println!("{}", serde_json::to_string_pretty(&result_json).unwrap_or(result.clone()));
-                                } else {
-                                    println!("{}", result);
-                                }
-                            }
-
-                            if let Some(error) = &job.error_message {
-                                println!("\n  Error: {}", error);
+                                println!("{}", result);
                             }
                         }
-                        Ok(None) => {
-                            println!("🦑: Job {} not found", id);
-                        }
-                        Err(e) => {
-                            error!("Failed to get job: {}", e);
-                            println!("🦑: Failed to get job - {}", e);
+
+                        if let Some(error) = &job.error_message {
+                            println!("\n  Error: {}", error);
                         }
                     }
-                }
+                    Ok(None) => {
+                        println!("🦑: Job {} not found", id);
+                    }
+                    Err(e) => {
+                        error!("Failed to get job: {}", e);
+                        println!("🦑: Failed to get job - {}", e);
+                    }
+                },
                 JobCommands::Create {
                     name,
                     agent,
@@ -831,7 +844,8 @@ async fn main() {
                     timeout,
                 } => {
                     // Get available agents
-                    let available_agents: Vec<String> = app_config.agents.agents.keys().cloned().collect();
+                    let available_agents: Vec<String> =
+                        app_config.agents.agents.keys().cloned().collect();
 
                     if available_agents.is_empty() {
                         println!("🦑: No agents found in configuration");
@@ -884,18 +898,20 @@ async fn main() {
                             })
                             .collect();
 
-                        let selected_idx = match inquire::Select::new("Select agent:", agent_options.clone())
-                            .with_help_message("Choose which agent will execute this job")
-                            .prompt()
-                        {
-                            Ok(selection) => {
-                                agent_options.iter().position(|opt| opt == &selection).unwrap()
-                            }
-                            Err(_) => {
-                                println!("Job creation cancelled.");
-                                return;
-                            }
-                        };
+                        let selected_idx =
+                            match inquire::Select::new("Select agent:", agent_options.clone())
+                                .with_help_message("Choose which agent will execute this job")
+                                .prompt()
+                            {
+                                Ok(selection) => agent_options
+                                    .iter()
+                                    .position(|opt| opt == &selection)
+                                    .unwrap(),
+                                Err(_) => {
+                                    println!("Job creation cancelled.");
+                                    return;
+                                }
+                            };
 
                         available_agents[selected_idx].clone()
                     };
@@ -1001,7 +1017,9 @@ async fn main() {
                             println!("\nView details: squid jobs show {}", job_id);
 
                             if job_schedule_type == "cron" {
-                                println!("\nNote: The job scheduler must be running for cron jobs to execute.");
+                                println!(
+                                    "\nNote: The job scheduler must be running for cron jobs to execute."
+                                );
                                 println!("      Start the server with: squid serve");
                             }
                         }
@@ -1054,46 +1072,47 @@ async fn main() {
                         }
                     }
                 }
-                JobCommands::Pause { id } => {
-                    match db.pause_job(*id) {
-                        Ok(_) => {
-                            println!("✓ Job {} paused", id);
-                            println!("  The job will not run on its schedule until resumed.");
-                            println!("  Resume with: squid jobs resume {}", id);
-                        }
-                        Err(e) => {
-                            error!("Failed to pause job: {}", e);
-                            println!("🦑: Failed to pause job - {}", e);
-                            println!("    Note: Only cron jobs can be paused");
-                        }
+                JobCommands::Pause { id } => match db.pause_job(*id) {
+                    Ok(_) => {
+                        println!("✓ Job {} paused", id);
+                        println!("  The job will not run on its schedule until resumed.");
+                        println!("  Resume with: squid jobs resume {}", id);
                     }
-                }
-                JobCommands::Resume { id } => {
-                    match db.resume_job(*id) {
-                        Ok(_) => {
-                            println!("✓ Job {} resumed", id);
-                            println!("  The job will run according to its schedule.");
-                        }
-                        Err(e) => {
-                            error!("Failed to resume job: {}", e);
-                            println!("🦑: Failed to resume job - {}", e);
-                            println!("    Note: Only cron jobs can be resumed");
-                        }
+                    Err(e) => {
+                        error!("Failed to pause job: {}", e);
+                        println!("🦑: Failed to pause job - {}", e);
+                        println!("    Note: Only cron jobs can be paused");
                     }
-                }
+                },
+                JobCommands::Resume { id } => match db.resume_job(*id) {
+                    Ok(_) => {
+                        println!("✓ Job {} resumed", id);
+                        println!("  The job will run according to its schedule.");
+                    }
+                    Err(e) => {
+                        error!("Failed to resume job: {}", e);
+                        println!("🦑: Failed to resume job - {}", e);
+                        println!("    Note: Only cron jobs can be resumed");
+                    }
+                },
                 JobCommands::Trigger { id } => {
                     // First check if job exists and is a cron job
                     match db.get_job_by_id(*id) {
                         Ok(Some(job)) => {
                             if job.schedule_type != "cron" {
-                                println!("🦑: Job {} is not a cron job (type: {})", id, job.schedule_type);
+                                println!(
+                                    "🦑: Job {} is not a cron job (type: {})",
+                                    id, job.schedule_type
+                                );
                                 println!("    Only cron jobs can be manually triggered");
                                 return;
                             }
 
                             println!("🦑: Triggering job {} manually...", id);
                             println!("    Name: {}", job.name);
-                            println!("\n    Note: The job scheduler must be running to execute this job.");
+                            println!(
+                                "\n    Note: The job scheduler must be running to execute this job."
+                            );
                             println!("          Start the server with: squid serve");
                             println!("\n    The job will be queued and executed by the scheduler.");
                             println!("    Check status with: squid jobs show {}", id);

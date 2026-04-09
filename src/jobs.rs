@@ -10,8 +10,8 @@ use crate::{config, db, llm, session, template};
 /// Validate file path to prevent directory traversal attacks
 /// Returns the canonicalized path if it's within the current directory
 fn validate_file_path(file_path: &str) -> Result<std::path::PathBuf, String> {
-    let current_dir = std::env::current_dir()
-        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+    let current_dir =
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
 
     let requested_path = std::path::Path::new(file_path);
 
@@ -261,7 +261,10 @@ async fn execute_job_from_request(
                     chat_session.token_usage.cache_tokens,
                     chat_session.cost_usd,
                 ) {
-                    error!("Failed to update agent token stats for job {}: {}", job_id, e);
+                    error!(
+                        "Failed to update agent token stats for job {}: {}",
+                        job_id, e
+                    );
                     // Don't fail the job if stats update fails - it's non-critical
                 }
             }
@@ -318,15 +321,17 @@ async fn execute_job_from_request(
             let completed_at = Utc::now();
             let duration_ms = (completed_at - started_at).num_milliseconds();
 
-            error!("Job {} failed after {}ms: {}", job_id, duration_ms, error_msg);
+            error!(
+                "Job {} failed after {}ms: {}",
+                job_id, duration_ms, error_msg
+            );
 
             // Increment retries
             db.increment_job_retries(job_id)
                 .map_err(|e| e.to_string())?;
 
             // Check if we should retry
-            let job_after = db.get_job_by_id(job_id)
-                .map_err(|e| e.to_string())?;
+            let job_after = db.get_job_by_id(job_id).map_err(|e| e.to_string())?;
             if let Some(job_after) = job_after {
                 if job_after.retries < req.max_retries {
                     info!(
@@ -349,15 +354,18 @@ async fn execute_job_from_request(
                     });
 
                     // Re-queue for retry
-                    match retry_tx.send(JobExecutionRequest {
-                        job_id,
-                        job_name: job_name.clone(),
-                        payload: req.payload.clone(),
-                        max_cpu_percent: req.max_cpu_percent,
-                        max_retries: req.max_retries,
-                        schedule_type: req.schedule_type.clone(),
-                        timeout_seconds: req.timeout_seconds,
-                    }).await {
+                    match retry_tx
+                        .send(JobExecutionRequest {
+                            job_id,
+                            job_name: job_name.clone(),
+                            payload: req.payload.clone(),
+                            max_cpu_percent: req.max_cpu_percent,
+                            max_retries: req.max_retries,
+                            schedule_type: req.schedule_type.clone(),
+                            timeout_seconds: req.timeout_seconds,
+                        })
+                        .await
+                    {
                         Ok(_) => info!("Re-queued job {} for retry", job_id),
                         Err(e) => error!("Failed to re-queue job {} for retry: {}", job_id, e),
                     }
@@ -603,10 +611,7 @@ pub async fn restore_jobs(
             match cron_job_result {
                 Ok(cron_job) => {
                     if let Err(e) = scheduler.inner().add(cron_job).await {
-                        error!(
-                            "Failed to add cron job '{}' to scheduler: {}",
-                            job.name, e
-                        );
+                        error!("Failed to add cron job '{}' to scheduler: {}", job.name, e);
                     }
                 }
                 Err(e) => {
@@ -1081,7 +1086,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_actually_fires() {
         // Integration test: verify tokio::time::timeout actually fires after duration
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
 
         let start = std::time::Instant::now();
         let result = timeout(Duration::from_millis(100), async {
@@ -1102,7 +1107,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_does_not_fire_for_quick_operations() {
         // Integration test: verify timeout doesn't fire if operation completes quickly
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
 
         let result = timeout(Duration::from_millis(500), async {
             // Complete quickly

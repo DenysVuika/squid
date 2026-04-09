@@ -1907,8 +1907,8 @@ mod tests {
 
         // Create old jobs with different statuses
         let statuses = vec![
-            ("pending", true),   // Should NOT be deleted
-            ("running", true),   // Should NOT be deleted
+            ("pending", true),    // Should NOT be deleted
+            ("running", true),    // Should NOT be deleted
             ("completed", false), // Should be deleted
             ("failed", false),    // Should be deleted
         ];
@@ -2143,7 +2143,7 @@ pub struct JobExecution {
     pub id: Option<i64>,
     pub job_id: i64,
     pub session_id: Option<String>,
-    pub status: String, // "completed", "failed", "cancelled"
+    pub status: String,         // "completed", "failed", "cancelled"
     pub result: Option<String>, // JSON
     pub error_message: Option<String>,
     pub started_at: String,
@@ -2548,7 +2548,11 @@ impl Database {
     }
 
     /// Get all executions for a specific job
-    pub fn get_job_executions(&self, job_id: i64, limit: Option<i64>) -> SqliteResult<Vec<JobExecution>> {
+    pub fn get_job_executions(
+        &self,
+        job_id: i64,
+        limit: Option<i64>,
+    ) -> SqliteResult<Vec<JobExecution>> {
         let conn = self.conn.lock().unwrap();
 
         let query = if let Some(lim) = limit {

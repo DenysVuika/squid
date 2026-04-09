@@ -1,5 +1,5 @@
-use actix_web::{HttpResponse, web};
 use actix_web::http::header;
+use actix_web::{HttpResponse, web};
 use futures::stream::Stream;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -7,11 +7,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::{config, db};
 use crate::jobs::JobExecutionRequest;
+use crate::{config, db};
 
 /// Global sender channel for one-off jobs
 /// Populated by the job scheduler at startup
@@ -109,9 +109,10 @@ pub struct JobExecutionResponse {
 
 impl From<&db::JobExecution> for JobExecutionResponse {
     fn from(exec: &db::JobExecution) -> Self {
-        let result = exec.result.as_ref().and_then(|r| {
-            serde_json::from_str::<serde_json::Value>(r).ok()
-        });
+        let result = exec
+            .result
+            .as_ref()
+            .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok());
 
         Self {
             id: exec.id.unwrap_or(0),
@@ -155,9 +156,10 @@ impl From<&db::BackgroundJob> for JobResponse {
             serde_json::from_str(&job.payload).unwrap_or(serde_json::json!({}));
 
         // Parse result JSON string into a structured Value
-        let result = job.result.as_ref().and_then(|r| {
-            serde_json::from_str::<serde_json::Value>(r).ok()
-        });
+        let result = job
+            .result
+            .as_ref()
+            .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok());
 
         Self {
             id: job.id.unwrap_or(0),
@@ -204,7 +206,10 @@ fn validate_cron_expression(expr: &str) -> Result<(), String> {
     // Try to parse it as a tokio-cron-scheduler expression
     match tokio_cron_scheduler::Job::new(expr, |_uuid, _l| {}) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("Invalid cron expression: {}. Expected format: 'sec min hour day month dayofweek' (e.g., '0 0 9 * * Mon-Fri' for weekdays at 9 AM)", e)),
+        Err(e) => Err(format!(
+            "Invalid cron expression: {}. Expected format: 'sec min hour day month dayofweek' (e.g., '0 0 9 * * Mon-Fri' for weekdays at 9 AM)",
+            e
+        )),
     }
 }
 
@@ -817,7 +822,10 @@ mod tests {
 }
 
 /// Get execution history for a specific job
-pub async fn get_job_executions(path: web::Path<i64>, query: web::Query<std::collections::HashMap<String, String>>) -> HttpResponse {
+pub async fn get_job_executions(
+    path: web::Path<i64>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let db = get_db();
     let job_id = path.into_inner();
 
@@ -829,7 +837,8 @@ pub async fn get_job_executions(path: web::Path<i64>, query: web::Query<std::col
 
     match db.get_job_executions(job_id, Some(limit)) {
         Ok(executions) => {
-            let response: Vec<JobExecutionResponse> = executions.iter().map(JobExecutionResponse::from).collect();
+            let response: Vec<JobExecutionResponse> =
+                executions.iter().map(JobExecutionResponse::from).collect();
             HttpResponse::Ok().json(response)
         }
         Err(e) => {
@@ -854,14 +863,10 @@ pub async fn get_job_execution(path: web::Path<i64>) -> HttpResponse {
     let execution_id = path.into_inner();
 
     match db.get_job_execution(execution_id) {
-        Ok(Some(execution)) => {
-            HttpResponse::Ok().json(JobExecutionResponse::from(&execution))
-        }
-        Ok(None) => {
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": format!("Execution {} not found", execution_id)
-            }))
-        }
+        Ok(Some(execution)) => HttpResponse::Ok().json(JobExecutionResponse::from(&execution)),
+        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": format!("Execution {} not found", execution_id)
+        })),
         Err(e) => {
             // If table doesn't exist yet, return 404
             let error_msg = e.to_string();
@@ -897,9 +902,10 @@ pub async fn job_events() -> HttpResponse {
                     error!("Failed to serialize job event: {}", e);
                     String::from("{}")
                 });
-                Ok::<_, actix_web::Error>(
-                    web::Bytes::from(format!("event: job_update\ndata: {}\n\n", data)),
-                )
+                Ok::<_, actix_web::Error>(web::Bytes::from(format!(
+                    "event: job_update\ndata: {}\n\n",
+                    data
+                )))
             })
             .throttle(Duration::from_millis(100)); // Limit to 10 updates/sec
 
@@ -907,7 +913,10 @@ pub async fn job_events() -> HttpResponse {
             .insert_header((header::CONTENT_TYPE, "text/event-stream"))
             .insert_header((header::CACHE_CONTROL, "no-cache"))
             .insert_header((header::CONNECTION, "keep-alive"))
-            .streaming(Box::pin(stream) as Pin<Box<dyn Stream<Item = Result<web::Bytes, actix_web::Error>>>>)
+            .streaming(Box::pin(stream)
+                as Pin<
+                    Box<dyn Stream<Item = Result<web::Bytes, actix_web::Error>>>,
+                >)
     } else {
         warn!("Job update broadcaster not initialized");
         HttpResponse::ServiceUnavailable().json(serde_json::json!({
