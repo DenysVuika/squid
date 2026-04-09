@@ -512,7 +512,7 @@ pub async fn ask_llm_streaming(
         };
 
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
-            debug!("Failed to save user message to session: {}", e);
+            debug!("Failed to save user message: {}", e);
         } else {
             debug!("User message saved successfully to session");
         }
@@ -532,12 +532,9 @@ pub async fn ask_llm_streaming(
         };
 
         if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-            debug!("Failed to save assistant message to session: {}", e);
+            debug!("Failed to save assistant message: {}", e);
         } else {
-            debug!(
-                "Assistant message saved successfully to session {}",
-                sess.id
-            );
+            debug!("Assistant message saved successfully");
         }
 
         // Update session token usage
@@ -816,7 +813,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
             };
 
             if let Err(e) = database.save_message(&sess.id, &user_msg) {
-                debug!("Failed to save user message to session: {}", e);
+                debug!("Failed to save user message: {}", e);
             } else {
                 debug!("User message saved successfully to session");
             }
@@ -845,12 +842,9 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
             };
 
             if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-                debug!("Failed to save assistant message to session: {}", e);
+                debug!("Failed to save assistant message: {}", e);
             } else {
-                debug!(
-                    "Assistant message saved successfully to session {}",
-                    sess.id
-                );
+                debug!("Assistant message saved successfully");
             }
 
             // Update session token usage
@@ -912,7 +906,7 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         };
 
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
-            debug!("Failed to save user message to session: {}", e);
+            debug!("Failed to save user message: {}", e);
         } else {
             debug!("User message saved successfully to session");
         }
@@ -942,12 +936,9 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         };
 
         if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-            debug!("Failed to save assistant message to session: {}", e);
+            debug!("Failed to save assistant message: {}", e);
         } else {
-            debug!(
-                "Assistant message saved successfully to session {}",
-                sess.id
-            );
+            debug!("Assistant message saved successfully");
         }
 
         // Update session token usage
