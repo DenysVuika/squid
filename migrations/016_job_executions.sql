@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS job_executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL,
-    session_id TEXT,  -- Links to chat_sessions for full conversation history
+    session_id TEXT,  -- Links to sessions for full conversation history
     status TEXT NOT NULL CHECK(status IN ('completed', 'failed', 'cancelled')),
     result TEXT,  -- JSON: execution result/output
     error_message TEXT,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS job_executions (
     tokens_used INTEGER,  -- Total tokens consumed
     cost_usd REAL,  -- Cost of this execution
     FOREIGN KEY (job_id) REFERENCES background_jobs(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE SET NULL
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
 );
 
 -- Indexes for efficient queries
