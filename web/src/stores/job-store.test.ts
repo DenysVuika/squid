@@ -24,16 +24,19 @@ const makeJob = (overrides: Partial<JobInfo> = {}): JobInfo => ({
   cron_expression: '0 9 * * *',
   status: 'pending',
   priority: 0,
+  max_cpu_percent: 70,
   is_active: true,
-  created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z',
   last_run: null,
   next_run: '2024-01-02T09:00:00Z',
-  run_count: 0,
+  retries: 0,
+  max_retries: 3,
+  timeout_seconds: 3600,
   payload: {
     agent_id: 'test-agent',
     message: 'Test message',
   },
+  result: null,
+  error_message: null,
   ...overrides,
 });
 

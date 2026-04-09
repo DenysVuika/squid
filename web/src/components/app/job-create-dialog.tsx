@@ -94,16 +94,16 @@ export function JobCreateDialog({
       await createJob('', {
         name: jobName.trim(),
         schedule_type: scheduleType,
-        cron_expression: scheduleType === 'cron' ? cronExpression.trim() : null,
+        cron_expression: scheduleType === 'cron' ? cronExpression.trim() : undefined,
         priority: parseInt(priority, 10),
         max_cpu_percent: parseInt(maxCpu, 10),
         timeout_seconds: parseInt(timeout, 10),
         payload: {
           agent_id: selectedAgent,
           message: message.trim(),
-          system_prompt: null,
-          file_path: filePath.trim() || null,
-          session_id: null,
+          system_prompt: undefined,
+          file_path: filePath.trim() || undefined,
+          session_id: undefined,
         },
       });
 
