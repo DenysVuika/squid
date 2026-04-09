@@ -64,17 +64,14 @@ pub struct JobExecutionRequest {
 /// Job scheduler wrapper
 pub struct JobScheduler {
     scheduler: tokio_cron_scheduler::JobScheduler,
-    tx: mpsc::Sender<JobExecutionRequest>,
 }
 
 impl JobScheduler {
     /// Create a new job scheduler
-    pub async fn new(
-        tx: mpsc::Sender<JobExecutionRequest>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let scheduler = tokio_cron_scheduler::JobScheduler::new().await?;
 
-        Ok(Self { scheduler, tx })
+        Ok(Self { scheduler })
     }
 
     /// Start the scheduler
@@ -83,20 +80,9 @@ impl JobScheduler {
         Ok(())
     }
 
-    /// Stop the scheduler
-    pub async fn shutdown(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.scheduler.shutdown().await?;
-        Ok(())
-    }
-
     /// Get the inner scheduler
     pub fn inner(&self) -> &tokio_cron_scheduler::JobScheduler {
         &self.scheduler
-    }
-
-    /// Get the job sender channel
-    pub fn sender(&self) -> &mpsc::Sender<JobExecutionRequest> {
-        &self.tx
     }
 }
 
@@ -649,7 +635,7 @@ pub async fn start_job_scheduler(
     let semaphore = Arc::new(Semaphore::new(max_concurrent_jobs));
 
     // Create the scheduler
-    let scheduler = JobScheduler::new(tx.clone()).await?;
+    let scheduler = JobScheduler::new().await?;
 
     // Restore jobs from database
     restore_jobs(db.clone(), &scheduler, &tx).await?;

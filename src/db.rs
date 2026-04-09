@@ -397,7 +397,7 @@ impl Database {
             let thinking_steps: Vec<_> = thinking_steps.into_iter().filter(|step| {
                 // Reasoning steps must have non-empty content
                 if step.step_type == "reasoning" {
-                    step.content.as_ref().map_or(false, |c| !c.trim().is_empty())
+                    step.content.as_ref().is_some_and(|c| !c.trim().is_empty())
                 } else if step.step_type == "tool" {
                     // Tool steps must have a tool_name
                     step.tool_name.is_some()
