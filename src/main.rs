@@ -10,7 +10,6 @@ mod api;
 mod config;
 mod db;
 mod doctor;
-mod envinfo;
 mod init;
 mod jobs;
 mod jobs_api;
