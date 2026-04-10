@@ -46,6 +46,7 @@ const makeApiSession = (overrides: Partial<SessionListItem> = {}): SessionListIt
   agent_id: null,
   token_usage: TOKEN_USAGE,
   cost_usd: 0,
+  is_readonly: false,
   ...overrides,
 });
 
@@ -57,6 +58,7 @@ const SESSION_A: ChatSession = {
   created_at: new Date(CREATED_AT_MS).toISOString(),
   updated_at: new Date(UPDATED_AT_MS).toISOString(),
   message_count: 2,
+  is_readonly: false,
 };
 
 const SESSION_B: ChatSession = {
@@ -66,6 +68,7 @@ const SESSION_B: ChatSession = {
   created_at: new Date(CREATED_AT_MS).toISOString(),
   updated_at: new Date(UPDATED_AT_MS).toISOString(),
   message_count: 5,
+  is_readonly: false,
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

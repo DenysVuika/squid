@@ -52,6 +52,7 @@ const makeSession = (overrides: Partial<SessionListItem> = {}): SessionListItem 
     context_utilization: 0.24,
   },
   cost_usd: 0.01,
+  is_readonly: false,
   ...overrides,
 });
 
