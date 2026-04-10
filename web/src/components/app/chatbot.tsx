@@ -138,6 +138,7 @@ const Chatbot = () => {
     loadAgents,
     loadAgentStats,
     getAgentModelForPricing,
+    resetTokenUsage,
   } = useAgentStore();
   const {
     messages,
@@ -216,6 +217,13 @@ const Chatbot = () => {
       void loadAgentStats(selectedAgent);
     }
   }, [selectedAgent, loadAgentStats]);
+
+  // Reset token usage when on new chat page (no activeSessionId)
+  useEffect(() => {
+    if (!activeSessionId) {
+      resetTokenUsage();
+    }
+  }, [activeSessionId, resetTokenUsage]);
 
   // Track previous activeSessionId to detect actual changes
   const prevActiveSessionIdRef = useRef<string | null>(activeSessionId);
@@ -433,7 +441,7 @@ const Chatbot = () => {
               reasoningTokens: agentStats?.reasoning_tokens ?? tokenUsage.reasoning_tokens,
             },
           }}
-          usedTokens={agentStats?.total_tokens ?? tokenUsage.total_tokens}
+          usedTokens={tokenUsage.total_tokens}
         >
           <ContextTrigger />
           <ContextContent>

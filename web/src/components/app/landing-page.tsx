@@ -2,26 +2,12 @@ import { Button } from '@/components/ui/button';
 import { Plus, MessageSquare, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSessionStore } from '@/stores/session-store';
-import { useEffect } from 'react';
 
 export function LandingPage() {
   const navigate = useNavigate();
   const { sessions } = useSessionStore();
 
   const recentSessions = sessions.slice(0, 5);
-
-  // Keyboard shortcut: Ctrl+N to start new chat
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        navigate('/new');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
@@ -80,7 +66,7 @@ export function LandingPage() {
           <p>
             Press{' '}
             <kbd className="px-2 py-1 bg-muted rounded">
-              {navigator.platform.indexOf('Mac') > -1 ? '⌘' : 'Ctrl'}+N
+              {navigator.platform.indexOf('Mac') > -1 ? '⌘' : 'Ctrl'}+K
             </kbd>{' '}
             to start a new chat
           </p>

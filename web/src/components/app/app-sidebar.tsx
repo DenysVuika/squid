@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { MessageSquare, Plus, Pencil, Trash2, MoreHorizontal, Minus, Bot, Clock, Play, Pause, Trash, Ban } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
@@ -59,6 +60,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({ onSessionSelect, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: Omit<AppSidebarProps, 'sessions'>) {
+  const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
@@ -119,7 +121,14 @@ export function AppSidebar({ onSessionSelect, activeSessionId, onAgentSelect, se
   const handleDeleteConfirm = async () => {
     if (!sessionToDelete) return;
 
+    const wasActive = sessionToDelete === activeSessionId;
     await deleteSession(sessionToDelete);
+
+    // Navigate to landing page if we deleted the active session
+    if (wasActive) {
+      navigate('/');
+    }
+
     setDeleteDialogOpen(false);
     setSessionToDelete(null);
   };
@@ -144,10 +153,13 @@ export function AppSidebar({ onSessionSelect, activeSessionId, onAgentSelect, se
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader className="border-b p-4">
-        <div className="flex items-center gap-2">
+        <button
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          onClick={() => navigate('/')}
+        >
           <span className="text-2xl">🦑</span>
           <span className="font-bold text-xl">Squid</span>
-        </div>
+        </button>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

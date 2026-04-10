@@ -14,7 +14,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
 import { Files, Database, Plus, Briefcase } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentStore } from '@/stores/agent-store';
@@ -122,12 +122,25 @@ function AppContent() {
     navigate(`/chat/${sessionId}`);
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     startNewChat();
     clearMessages();
     resetTokenUsage();
     navigate('/new');
-  };
+  }, [startNewChat, clearMessages, resetTokenUsage, navigate]);
+
+  // Global keyboard shortcut: Cmd+K / Ctrl+K to start new chat (works everywhere)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        handleNewChat();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleNewChat]);
 
   const handleAgentSelect = (agentId: string) => {
     navigate(`/agents/${agentId}`);
