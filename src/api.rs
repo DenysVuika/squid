@@ -1,4 +1,4 @@
-use actix_web::{Error, HttpResponse, web, http::header};
+use actix_web::{Error, HttpResponse, http::header, web};
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, oneshot, broadcast};
+use tokio::sync::{Mutex, broadcast, oneshot};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{config, llm, logger, session, template, tokens, tools};
@@ -37,7 +37,8 @@ pub struct ApprovalState {
 pub type ApprovalStateMap = Arc<Mutex<HashMap<String, ApprovalState>>>;
 
 // Session update SSE broadcaster
-static SESSION_UPDATE_BROADCASTER: OnceLock<broadcast::Sender<SessionUpdateEvent>> = OnceLock::new();
+static SESSION_UPDATE_BROADCASTER: OnceLock<broadcast::Sender<SessionUpdateEvent>> =
+    OnceLock::new();
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type")]
