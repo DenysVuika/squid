@@ -21,4 +21,10 @@ export default defineConfig([
     },
     ignores: ['src/components/ui/*', 'src/components/ai-elements/*'],
   },
+  {
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
 ]);

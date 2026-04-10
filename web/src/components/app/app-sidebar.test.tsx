@@ -15,7 +15,6 @@ beforeAll(() => {
   window.HTMLElement.prototype.setPointerCapture = vi.fn();
 
   // Mock IntersectionObserver for Radix Portal
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).IntersectionObserver = class IntersectionObserver {
     constructor() {}
     disconnect() {}
@@ -25,7 +24,6 @@ beforeAll(() => {
   };
 
   // Mock ResizeObserver for Radix components
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).ResizeObserver = class ResizeObserver {
     constructor() {}
     disconnect() {}
@@ -78,28 +76,28 @@ describe('AppSidebar', () => {
 
     // Default store implementations with selector support
     vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
-      const state = {
+      const sessionState = {
         sessions: [],
         deleteSession: mockDeleteSession,
         updateSessionTitle: mockUpdateSessionTitle,
       };
-      return selector ? selector(state) : state;
+      return selector ? selector(sessionState) : sessionState;
     });
 
     vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
-      const state = {
+      const agentState = {
         agents: [],
         loadAgents: mockLoadAgents,
       };
-      return selector ? selector(state) : state;
+      return selector ? selector(agentState) : agentState;
     });
 
     vi.mocked(useJobStore).mockImplementation((selector?: any) => {
-      const state = {
+      const jobState = {
         jobs: [],
         loadJobs: mockLoadJobs,
       };
-      return selector ? selector(state) : state;
+      return selector ? selector(jobState) : jobState;
     });
   });
 
@@ -127,7 +125,7 @@ describe('AppSidebar', () => {
   describe('sessions section', () => {
     it('expands Sessions section automatically when a session is active', async () => {
       // Mock store with sessions data
-      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+    vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
         const state = {
           sessions: [{ id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 }],
           deleteSession: mockDeleteSession,
@@ -146,7 +144,7 @@ describe('AppSidebar', () => {
 
     it('highlights active session', async () => {
       // Mock store with multiple sessions
-      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+    vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
         const state = {
           sessions: [
             { id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 },
@@ -168,7 +166,7 @@ describe('AppSidebar', () => {
 
     it('does not auto-expand Sessions section when no session is active', () => {
       // Mock store with sessions
-      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+    vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
         const state = {
           sessions: [{ id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 }],
           deleteSession: mockDeleteSession,
@@ -197,7 +195,7 @@ describe('AppSidebar', () => {
     });
 
     it('expands Agents section automatically when an agent is selected', async () => {
-      vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
+    vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
         const state = {
           agents: [
             { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
@@ -215,7 +213,7 @@ describe('AppSidebar', () => {
     });
 
     it('highlights selected agent', async () => {
-      vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
+    vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
         const state = {
           agents: [
             { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
@@ -238,7 +236,7 @@ describe('AppSidebar', () => {
 
   describe('jobs section', () => {
     it('expands Jobs section automatically when a job is selected', async () => {
-      vi.mocked(useJobStore).mockImplementation((selector?: any) => {
+    vi.mocked(useJobStore).mockImplementation((selector?: any) => {
         const state = {
           jobs: [
             {
@@ -262,7 +260,7 @@ describe('AppSidebar', () => {
     });
 
     it('highlights selected job', async () => {
-      vi.mocked(useJobStore).mockImplementation((selector?: any) => {
+    vi.mocked(useJobStore).mockImplementation((selector?: any) => {
         const state = {
           jobs: [
             {
