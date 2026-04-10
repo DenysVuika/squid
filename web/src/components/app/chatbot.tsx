@@ -218,7 +218,7 @@ const Chatbot = () => {
   }, [selectedAgent, loadAgentStats]);
 
   // Track previous activeSessionId to detect actual changes
-  const prevActiveSessionIdRef = useRef<string | null>(null);
+  const prevActiveSessionIdRef = useRef<string | null>(activeSessionId);
 
   // Load session when activeSessionId changes to a different value
   useEffect(() => {

@@ -4,6 +4,7 @@ import Logs from './components/app/logs';
 import { FileViewer } from './components/app/file-viewer';
 import { AgentViewer } from './components/app/agent-viewer';
 import JobDetails from './components/app/job-details';
+import { LandingPage } from './components/app/landing-page';
 import { AppSidebar } from './components/app/app-sidebar';
 import { FilesSidebar } from './components/app/files-sidebar';
 import { DocumentManager } from './components/app/document-manager';
@@ -13,7 +14,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { Separator } from '@/components/ui/separator';
 import { Button } from './components/ui/button';
 import { Files, Database, Plus, Briefcase } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentStore } from '@/stores/agent-store';
@@ -31,10 +32,15 @@ function AppContent() {
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
   const { selectedJob, setSelectedJob, loadJobs, startSSE: startJobSSE, stopSSE: stopJobSSE } = useJobStore();
 
-  // Derive active session from URL
+  // Derive active session from URL (null for /new route)
   const activeSessionId = location.pathname.startsWith('/chat/')
     ? location.pathname.split('/')[2]
     : null;
+
+  const isNewChatRoute = location.pathname === '/new';
+
+  // Track previous session to detect new session creation vs navigation
+  const prevSessionRef = useRef<string | null>(storeActiveSessionId);
 
   // State for right sidebar (files panel)
   const [showFilesPanel, setShowFilesPanel] = useState(false);
@@ -53,13 +59,32 @@ function AppContent() {
     ? parseInt(location.pathname.split('/')[2], 10)
     : null;
 
-  // Sync session store when URL session changes (only if different from store)
+  // Sync session store when URL session changes
   useEffect(() => {
     if (activeSessionId && activeSessionId !== storeActiveSessionId) {
+      // URL has a session, sync it to store
       selectSession(activeSessionId);
+      prevSessionRef.current = activeSessionId;
+    } else if (isNewChatRoute) {
+      // On /new route - always ensure store is cleared
+      if (storeActiveSessionId) {
+        startNewChat();
+      }
+      prevSessionRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId, storeActiveSessionId]);
+  }, [activeSessionId, isNewChatRoute]);
+
+  // Navigate to session URL when a new session is created on /new route
+  useEffect(() => {
+    const prevSession = prevSessionRef.current;
+
+    if (isNewChatRoute && storeActiveSessionId && prevSession === null) {
+      // A new session was just created while on /new route (prev was null, now has value)
+      navigate(`/chat/${storeActiveSessionId}`, { replace: true });
+      prevSessionRef.current = storeActiveSessionId;
+    }
+  }, [isNewChatRoute, storeActiveSessionId, navigate]);
 
   // Sync job store with URL
   useEffect(() => {
@@ -101,7 +126,7 @@ function AppContent() {
     startNewChat();
     clearMessages();
     resetTokenUsage();
-    navigate('/');
+    navigate('/new');
   };
 
   const handleAgentSelect = (agentId: string) => {
@@ -187,8 +212,9 @@ function AppContent() {
         <div className="flex flex-1 overflow-hidden min-h-0">
           <div className="flex flex-1 flex-col overflow-hidden p-4">
             <Routes>
-              <Route path="/" element={<ChatBot />} />
-              <Route path="/chat/:id" element={<ChatBot />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/new" element={<ChatBot key="new-chat" />} />
+              <Route path="/chat/:id" element={<ChatBot key={activeSessionId || 'loading'} />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/agent-stats" element={<AgentStatsCard apiUrl="" />} />
               <Route path="/agents/:id" element={<AgentViewer />} />
