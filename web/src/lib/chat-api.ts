@@ -139,6 +139,7 @@ export interface SessionListItem {
   agent_id: string | null;
   token_usage: TokenUsage;
   cost_usd: number;
+  is_readonly: boolean;
 }
 
 export interface SessionListResponse {

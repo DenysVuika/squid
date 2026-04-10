@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { MessageSquare, Plus, Pencil, Trash2, MoreHorizontal, Minus, Bot, Clock, Play, Pause, Trash, Ban } from 'lucide-react';
+import { MessageSquare, Plus, Pencil, Trash2, MoreHorizontal, Minus, Bot, Clock, Play, Pause, Trash, Ban, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -192,13 +192,22 @@ export function AppSidebar({ onSessionSelect, activeSessionId, onAgentSelect, se
                                   className="w-full flex items-center gap-2 pr-7"
                                   onClick={() => onSessionSelect?.(session.id)}
                                 >
-                                  <MessageSquare className="h-4 w-4 shrink-0" />
+                                  {session.is_readonly ? (
+                                    <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  ) : (
+                                    <MessageSquare className="h-4 w-4 shrink-0" />
+                                  )}
                                   <span className="truncate">{session.title}</span>
                                 </button>
                               </SidebarMenuSubButton>
                             </TooltipTrigger>
                             <TooltipContent side="right" align="start">
-                              {session.title}
+                              <div>
+                                {session.title}
+                                {session.is_readonly && (
+                                  <div className="text-xs text-muted-foreground mt-1">Read-only (created by job)</div>
+                                )}
+                              </div>
                             </TooltipContent>
                           </Tooltip>
                           <DropdownMenu>

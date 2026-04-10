@@ -9,6 +9,7 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   message_count: number;
+  is_readonly: boolean;
 }
 
 interface SessionStore {
@@ -52,6 +53,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         created_at: new Date(session.created_at).toISOString(),
         updated_at: new Date(session.updated_at).toISOString(),
         message_count: session.message_count,
+        is_readonly: session.is_readonly,
       }));
 
       set({ sessions: chatSessions, isLoading: false });
@@ -153,6 +155,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         created_at: new Date(updatedSession.created_at).toISOString(),
         updated_at: new Date(updatedSession.updated_at).toISOString(),
         message_count: updatedSession.message_count,
+        is_readonly: updatedSession.is_readonly,
       };
 
       if (existingIndex >= 0) {

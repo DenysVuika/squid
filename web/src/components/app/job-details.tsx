@@ -491,7 +491,7 @@ const JobDetails = () => {
                           {execution.session_id && (
                             <div className="col-span-full md:col-span-1">
                               <button
-                                onClick={() => navigate(`/?session=${execution.session_id}`)}
+                                onClick={() => navigate(`/chat/${execution.session_id}`)}
                                 className="flex items-center gap-1 text-primary hover:underline"
                               >
                                 <ExternalLink className="h-3 w-3" />

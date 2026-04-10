@@ -53,3 +53,10 @@ CREATE INDEX IF NOT EXISTS idx_job_executions_job_id ON job_executions(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_executions_status ON job_executions(status);
 CREATE INDEX IF NOT EXISTS idx_job_executions_started_at ON job_executions(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_executions_session_id ON job_executions(session_id);
+
+-- Add readonly flag to sessions
+-- Sessions created by jobs are readonly (cannot be continued by user)
+ALTER TABLE sessions ADD COLUMN is_readonly INTEGER DEFAULT 0 NOT NULL;
+
+-- Add index for filtering readonly sessions
+CREATE INDEX idx_sessions_readonly ON sessions(is_readonly);

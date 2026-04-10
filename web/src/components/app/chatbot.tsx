@@ -125,7 +125,7 @@ const PromptInputAttachmentsDisplay = () => {
 
 const Chatbot = () => {
   // Zustand stores
-  const { activeSessionId } = useSessionStore();
+  const { activeSessionId, sessions } = useSessionStore();
   const {
     agents,
     agentGroups,
@@ -170,6 +170,13 @@ const Chatbot = () => {
 
   // Whether the currently selected agent supports tools (defaults to true if not specified)
   const agentSupportsTools = useMemo(() => selectedAgentData?.use_tools !== false, [selectedAgentData]);
+
+  // Check if current session is readonly (created by a job)
+  const isSessionReadonly = useMemo(() => {
+    if (!activeSessionId) return false;
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+    return currentSession?.is_readonly ?? false;
+  }, [activeSessionId, sessions]);
 
   // Deduplicate sources by filename and combine chunks
   const deduplicateSources = useCallback((sources: Array<{ href: string; title: string; content: string }>) => {
@@ -857,7 +864,7 @@ const Chatbot = () => {
         </Conversation>
       </div>
       <div className="grid shrink-0 gap-4 border-t pt-4">
-        {suggestions.length > 0 && (
+        {suggestions.length > 0 && !isSessionReadonly && (
           <Suggestions className="px-4">
             {suggestions.map((suggestion) => (
               <SuggestionItem key={suggestion} onClick={handleSuggestionClick} suggestion={suggestion} />
@@ -865,13 +872,18 @@ const Chatbot = () => {
           </Suggestions>
         )}
         <div className="w-full px-4 pb-4">
-          <PromptInput
-            globalDrop
-            multiple
-            maxFileSize={10 * 1024 * 1024}
-            onError={handleFileUploadError}
-            onSubmit={handleSubmit}
-          >
+          {isSessionReadonly ? (
+            <div className="rounded-lg border bg-muted/50 p-4 text-center text-sm text-muted-foreground">
+              This chat session is read-only (created by a scheduled job)
+            </div>
+          ) : (
+            <PromptInput
+              globalDrop
+              multiple
+              maxFileSize={10 * 1024 * 1024}
+              onError={handleFileUploadError}
+              onSubmit={handleSubmit}
+            >
             <PromptInputHeader>
               <PromptInputAttachmentsDisplay />
             </PromptInputHeader>
@@ -953,6 +965,7 @@ const Chatbot = () => {
               <PromptInputSubmit disabled={isSubmitDisabled} onStop={handleStop} status={status} />
             </PromptInputFooter>
           </PromptInput>
+          )}
         </div>
       </div>
 

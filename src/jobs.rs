@@ -160,6 +160,7 @@ async fn execute_job_from_request(
     let mut chat_session = session::ChatSession::new();
     chat_session.id = session_id.clone();
     chat_session.agent_id = Some(job_payload.agent_id.clone());
+    chat_session.is_readonly = true;
 
     // Read file content if specified (with security validation)
     let file_content = if let Some(file_path) = &job_payload.file_path {
@@ -333,6 +334,7 @@ async fn execute_job_from_request(
                     context_utilization: chat_session.token_usage.context_utilization,
                 },
                 cost_usd: chat_session.cost_usd,
+                is_readonly: chat_session.is_readonly,
             };
 
             api::broadcast_session_update(api::SessionUpdateEvent::Update {

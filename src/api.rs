@@ -202,6 +202,7 @@ pub struct SessionListItem {
     pub agent_id: Option<String>,
     pub token_usage: TokenUsageResponse,
     pub cost_usd: f64,
+    pub is_readonly: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -343,6 +344,7 @@ pub async fn list_sessions(
                     context_utilization: session.token_usage.context_utilization,
                 },
                 cost_usd: session.cost_usd,
+                is_readonly: session.is_readonly,
             });
         }
     }
@@ -427,6 +429,7 @@ pub async fn update_session(
                         context_utilization: session.token_usage.context_utilization,
                     },
                     cost_usd: session.cost_usd,
+                    is_readonly: session.is_readonly,
                 };
 
                 broadcast_session_update(SessionUpdateEvent::Update {
@@ -952,6 +955,7 @@ pub async fn chat_stream(
                             context_utilization: session.token_usage.context_utilization,
                         },
                         cost_usd: session.cost_usd,
+                        is_readonly: session.is_readonly,
                     };
 
                     broadcast_session_update(SessionUpdateEvent::Update {
