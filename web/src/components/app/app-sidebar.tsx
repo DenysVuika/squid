@@ -58,18 +58,23 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   selectedJobId?: number;
 }
 
-export function AppSidebar({ sessions = [], onSessionSelect, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: AppSidebarProps) {
+export function AppSidebar({ onSessionSelect, activeSessionId, onAgentSelect, selectedAgentId, onJobSelect, selectedJobId, ...props }: Omit<AppSidebarProps, 'sessions'>) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [sessionToDelete, setSessionToDelete] = React.useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [sessionToEdit, setSessionToEdit] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
 
-  const { deleteSession, updateSessionTitle } = useSessionStore();
-  const { agents, loadAgents } = useAgentStore();
-  // Subscribe to jobs reactively - this ensures the component re-renders when jobs change
+  // Subscribe to stores reactively - this ensures the component re-renders when data changes
+  const sessions = useSessionStore((state) => state.sessions);
+  const deleteSession = useSessionStore((state) => state.deleteSession);
+  const updateSessionTitle = useSessionStore((state) => state.updateSessionTitle);
+
+  const agents = useAgentStore((state) => state.agents);
+  const loadAgents = useAgentStore((state) => state.loadAgents);
+
   const jobs = useJobStore((state) => state.jobs);
-  const { loadJobs } = useJobStore();
+  const loadJobs = useJobStore((state) => state.loadJobs);
 
   // Determine which sections should be open based on what's selected
   const [sessionsOpen, setSessionsOpen] = React.useState(() => !!activeSessionId);

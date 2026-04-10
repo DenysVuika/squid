@@ -5,7 +5,7 @@ use std::sync::Arc;
 use sysinfo::System;
 use tokio::sync::{Semaphore, broadcast, mpsc};
 
-use crate::{config, db, llm, session, template};
+use crate::{api, config, db, llm, session, template};
 
 /// Validate file path to prevent directory traversal attacks
 /// Returns the canonicalized path if it's within the current directory
@@ -290,7 +290,7 @@ async fn execute_job_from_request(
             db.complete_job(job_id, &req.schedule_type, Some(&result_json), None)
                 .map_err(|e| e.to_string())?;
 
-            // Broadcast SSE event
+            // Broadcast job status SSE event
             let _ = sse_tx.send(JobStatusEvent {
                 job_id,
                 job_name: job_name.clone(),
@@ -298,6 +298,45 @@ async fn execute_job_from_request(
                 result: Some(response.clone()),
                 error: None,
                 timestamp: Utc::now().timestamp(),
+            });
+
+            // Broadcast session update SSE event (for frontend session list)
+            // Get preview from first user message
+            let preview = chat_session
+                .messages
+                .iter()
+                .find(|msg| msg.role == "user")
+                .map(|msg| {
+                    let content = &msg.content;
+                    if content.len() > 100 {
+                        format!("{}...", &content[..100])
+                    } else {
+                        content.clone()
+                    }
+                });
+
+            let session_item = api::SessionListItem {
+                session_id: chat_session.id.clone(),
+                message_count: chat_session.messages.len(),
+                created_at: chat_session.created_at,
+                updated_at: chat_session.updated_at,
+                preview,
+                title: chat_session.title.clone(),
+                agent_id: chat_session.agent_id.clone(),
+                token_usage: api::TokenUsageResponse {
+                    total_tokens: chat_session.token_usage.total_tokens,
+                    input_tokens: chat_session.token_usage.input_tokens,
+                    output_tokens: chat_session.token_usage.output_tokens,
+                    reasoning_tokens: chat_session.token_usage.reasoning_tokens,
+                    cache_tokens: chat_session.token_usage.cache_tokens,
+                    context_window: chat_session.token_usage.context_window,
+                    context_utilization: chat_session.token_usage.context_utilization,
+                },
+                cost_usd: chat_session.cost_usd,
+            };
+
+            api::broadcast_session_update(api::SessionUpdateEvent::Update {
+                session: session_item,
             });
 
             Ok(response)

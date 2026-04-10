@@ -258,6 +258,8 @@ pub async fn start_server(
         jobs_api::init_db_path(db_path);
         // Initialize job update broadcaster for SSE
         jobs_api::init_job_broadcaster();
+        // Initialize session update broadcaster for SSE
+        api::init_session_broadcaster();
 
         info!("Initializing background job scheduler...");
         info!("Job Configuration:");
@@ -329,6 +331,7 @@ pub async fn start_server(
                 web::scope("/api")
                     .route("/chat", web::post().to(api::chat_stream))
                     .route("/sessions", web::get().to(api::list_sessions))
+                    .route("/sessions/events", web::get().to(api::session_events))
                     .route("/sessions/{session_id}", web::get().to(api::get_session))
                     .route(
                         "/sessions/{session_id}",

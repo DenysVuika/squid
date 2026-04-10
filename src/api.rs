@@ -1,4 +1,4 @@
-use actix_web::{Error, HttpResponse, web};
+use actix_web::{Error, HttpResponse, web, http::header};
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -10,14 +10,16 @@ use async_openai::{
         CreateChatCompletionRequestArgs, FinishReason,
     },
 };
-use futures::stream::StreamExt;
+use futures::stream::{Stream, StreamExt};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Instant;
-use tokio::sync::{Mutex, oneshot};
+use std::pin::Pin;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+use tokio::sync::{Mutex, oneshot, broadcast};
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{config, llm, logger, session, template, tokens, tools};
 
@@ -33,6 +35,32 @@ pub struct ApprovalState {
 }
 
 pub type ApprovalStateMap = Arc<Mutex<HashMap<String, ApprovalState>>>;
+
+// Session update SSE broadcaster
+static SESSION_UPDATE_BROADCASTER: OnceLock<broadcast::Sender<SessionUpdateEvent>> = OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type")]
+pub enum SessionUpdateEvent {
+    #[serde(rename = "update")]
+    Update { session: SessionListItem },
+    #[serde(rename = "deleted")]
+    Deleted { session_id: String },
+}
+
+/// Initialize the session update broadcaster (called at server startup)
+pub fn init_session_broadcaster() {
+    let (tx, _rx) = broadcast::channel(100);
+    let _ = SESSION_UPDATE_BROADCASTER.set(tx);
+}
+
+/// Broadcast a session update event to all SSE listeners
+pub fn broadcast_session_update(event: SessionUpdateEvent) {
+    if let Some(tx) = SESSION_UPDATE_BROADCASTER.get() {
+        // Ignore send errors (no active listeners)
+        let _ = tx.send(event);
+    }
+}
 
 /// Get a human-readable description for a tool
 fn get_tool_description(tool_name: &str) -> String {
@@ -139,7 +167,7 @@ pub struct SessionMessage {
     pub thinking_steps: Option<Vec<session::ThinkingStep>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TokenUsageResponse {
     pub total_tokens: i64,
     pub input_tokens: i64,
@@ -162,7 +190,7 @@ pub struct SessionResponse {
     pub cost_usd: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SessionListItem {
     pub session_id: String,
     pub message_count: usize,
@@ -333,6 +361,11 @@ pub async fn delete_session(
     let deleted = session_manager.delete_session(&session_id);
 
     if deleted {
+        // Broadcast session deletion
+        broadcast_session_update(SessionUpdateEvent::Deleted {
+            session_id: session_id.to_string(),
+        });
+
         Ok(HttpResponse::Ok().json(serde_json::json!({
             "success": true,
             "message": "Session deleted successfully"
@@ -359,13 +392,98 @@ pub async fn update_session(
     }
 
     match session_manager.update_session_title(&session_id, title.to_string()) {
-        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
-            "success": true,
-            "message": "Session updated successfully"
-        }))),
+        Ok(_) => {
+            // Broadcast session update
+            if let Some(session) = session_manager.get_session(&session_id) {
+                let preview = session
+                    .messages
+                    .iter()
+                    .find(|msg| msg.role == "user")
+                    .map(|msg| {
+                        let content = &msg.content;
+                        if content.len() > 100 {
+                            format!("{}...", &content[..100])
+                        } else {
+                            content.clone()
+                        }
+                    });
+
+                let session_item = SessionListItem {
+                    session_id: session.id.clone(),
+                    message_count: session.messages.len(),
+                    created_at: session.created_at,
+                    updated_at: session.updated_at,
+                    preview,
+                    title: session.title.clone(),
+                    agent_id: session.agent_id.clone(),
+                    token_usage: TokenUsageResponse {
+                        total_tokens: session.token_usage.total_tokens,
+                        input_tokens: session.token_usage.input_tokens,
+                        output_tokens: session.token_usage.output_tokens,
+                        reasoning_tokens: session.token_usage.reasoning_tokens,
+                        cache_tokens: session.token_usage.cache_tokens,
+                        context_window: session.token_usage.context_window,
+                        context_utilization: session.token_usage.context_utilization,
+                    },
+                    cost_usd: session.cost_usd,
+                };
+
+                broadcast_session_update(SessionUpdateEvent::Update {
+                    session: session_item,
+                });
+            }
+
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "success": true,
+                "message": "Session updated successfully"
+            })))
+        }
         Err(e) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
             "error": format!("Failed to update session: {}", e)
         }))),
+    }
+}
+
+/// Server-Sent Events endpoint for session updates
+pub async fn session_events() -> HttpResponse {
+    use tokio_stream::StreamExt as TokioSE;
+
+    if let Some(tx) = SESSION_UPDATE_BROADCASTER.get() {
+        let rx = tx.subscribe();
+        let filtered = TokioSE::filter_map(BroadcastStream::new(rx), |result| match result {
+            Ok(event) => Some(event),
+            Err(e) => {
+                warn!("Session SSE broadcast receive error: {}", e);
+                None
+            }
+        });
+
+        let mapped = TokioSE::map(filtered, |event| {
+            let data = serde_json::to_string(&event).unwrap_or_else(|e| {
+                log::error!("Failed to serialize session event: {}", e);
+                String::from("{}")
+            });
+            Ok::<_, actix_web::Error>(web::Bytes::from(format!(
+                "event: session_update\ndata: {}\n\n",
+                data
+            )))
+        });
+
+        let stream = TokioSE::throttle(mapped, Duration::from_millis(100)); // Limit to 10 updates/sec
+
+        HttpResponse::Ok()
+            .insert_header((header::CONTENT_TYPE, "text/event-stream"))
+            .insert_header((header::CACHE_CONTROL, "no-cache"))
+            .insert_header((header::CONNECTION, "keep-alive"))
+            .streaming(Box::pin(stream)
+                as Pin<
+                    Box<dyn Stream<Item = Result<web::Bytes, actix_web::Error>>>,
+                >)
+    } else {
+        warn!("Session update broadcaster not initialized");
+        HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "Session update broadcaster not available"
+        }))
     }
 }
 
@@ -799,6 +917,46 @@ pub async fn chat_stream(
                 yield Ok::<_, actix_web::Error>(
                     web::Bytes::from(format!("data: {}\n\n", json))
                 );
+
+                // Broadcast session update via SSE
+                if let Some(session) = session_manager_clone.get_session(&session_id) {
+                    let preview = session
+                        .messages
+                        .iter()
+                        .find(|msg| msg.role == "user")
+                        .map(|msg| {
+                            let content = &msg.content;
+                            if content.len() > 100 {
+                                format!("{}...", &content[..100])
+                            } else {
+                                content.clone()
+                            }
+                        });
+
+                    let session_item = SessionListItem {
+                        session_id: session.id.clone(),
+                        message_count: session.messages.len(),
+                        created_at: session.created_at,
+                        updated_at: session.updated_at,
+                        preview,
+                        title: session.title.clone(),
+                        agent_id: session.agent_id.clone(),
+                        token_usage: TokenUsageResponse {
+                            total_tokens: session.token_usage.total_tokens,
+                            input_tokens: session.token_usage.input_tokens,
+                            output_tokens: session.token_usage.output_tokens,
+                            reasoning_tokens: session.token_usage.reasoning_tokens,
+                            cache_tokens: session.token_usage.cache_tokens,
+                            context_window: session.token_usage.context_window,
+                            context_utilization: session.token_usage.context_utilization,
+                        },
+                        cost_usd: session.cost_usd,
+                    };
+
+                    broadcast_session_update(SessionUpdateEvent::Update {
+                        session: session_item,
+                    });
+                }
             }
             Err(e) => {
                 let error_event = StreamEvent::Error {

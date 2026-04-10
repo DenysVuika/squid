@@ -1289,5 +1289,66 @@ export function subscribeToJobUpdates(apiUrl: string, handlers: JobUpdateHandler
   return eventSource;
 }
 
+/**
+ * Session update event types from backend SSE
+ */
+export type SessionUpdateEvent =
+  | { type: 'update'; session: SessionListItem }
+  | { type: 'deleted'; session_id: string };
+
+/**
+ * Handlers for session update events
+ */
+export interface SessionUpdateHandlers {
+  onSessionUpdate: (session: SessionListItem) => void;
+  onSessionDeleted: (sessionId: string) => void;
+  onError?: (error: string) => void;
+}
+
+/**
+ * Subscribe to session updates via Server-Sent Events
+ *
+ * @param apiUrl - The base URL of the Squid API. Use empty string '' for relative path (same origin)
+ * @param handlers - Handlers for session update events
+ * @returns EventSource instance for managing the connection
+ *
+ * @example
+ * ```typescript
+ * const eventSource = subscribeToSessionUpdates('', {
+ *   onSessionUpdate: (session) => console.log('Session updated:', session),
+ *   onSessionDeleted: (sessionId) => console.log('Session deleted:', sessionId),
+ *   onError: (error) => console.error('SSE error:', error),
+ * });
+ *
+ * // Later, close the connection
+ * eventSource.close();
+ * ```
+ */
+export function subscribeToSessionUpdates(apiUrl: string, handlers: SessionUpdateHandlers): EventSource {
+  const endpoint = apiUrl ? `${apiUrl}/api/sessions/events` : '/api/sessions/events';
+  const eventSource = new EventSource(endpoint);
+
+  eventSource.addEventListener('session_update', (event) => {
+    try {
+      const data: SessionUpdateEvent = JSON.parse(event.data);
+      if (data.type === 'update' && data.session) {
+        handlers.onSessionUpdate(data.session);
+      } else if (data.type === 'deleted' && data.session_id) {
+        handlers.onSessionDeleted(data.session_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse session update event:', error);
+      handlers.onError?.('Failed to parse session update');
+    }
+  });
+
+  eventSource.onerror = (error) => {
+    console.error('Session SSE connection error:', error);
+    handlers.onError?.('SSE connection error');
+  };
+
+  return eventSource;
+}
+
 // Re-export React for the hook
 import React from 'react';

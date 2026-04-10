@@ -25,11 +25,11 @@ function AppContent() {
   const navigate = useNavigate();
 
   // Zustand stores
-  const { sessions, activeSessionId: storeActiveSessionId, loadSessions, selectSession, startNewChat } = useSessionStore();
+  const { activeSessionId: storeActiveSessionId, loadSessions, selectSession, startNewChat, startSSE: startSessionSSE, stopSSE: stopSessionSSE } = useSessionStore();
   const { clearMessages } = useChatStore();
   const { agents, resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
-  const { selectedJob, setSelectedJob, loadJobs, startSSE, stopSSE } = useJobStore();
+  const { selectedJob, setSelectedJob, loadJobs, startSSE: startJobSSE, stopSSE: stopJobSSE } = useJobStore();
 
   // Derive active session from URL
   const activeSessionId = location.pathname.startsWith('/chat/')
@@ -76,15 +76,21 @@ function AppContent() {
     void loadConfig();
   }, [loadConfig]);
 
-  // Start SSE connection for job updates at app level
-  // This ensures the connection stays alive regardless of navigation/sidebar visibility
+  // Start SSE connections for real-time updates at app level
+  // This ensures connections stay alive regardless of navigation/sidebar visibility
   useEffect(() => {
+    // Start job updates SSE
     void loadJobs();
-    startSSE();
+    startJobSSE();
+
+    // Start session updates SSE
+    startSessionSSE();
+
     return () => {
-      stopSSE();
+      stopJobSSE();
+      stopSessionSSE();
     };
-  }, [loadJobs, startSSE, stopSSE]);
+  }, [loadJobs, startJobSSE, stopJobSSE, startSessionSSE, stopSessionSSE]);
 
   const handleSessionSelect = (sessionId: string) => {
     // Navigate to the session URL
@@ -113,7 +119,6 @@ function AppContent() {
     <SidebarProvider className="h-full">
       {/* Sidebar is always visible - unified layout across all pages */}
       <AppSidebar
-        sessions={sessions}
         onSessionSelect={handleSessionSelect}
         activeSessionId={activeSessionId || undefined}
         onAgentSelect={handleAgentSelect}

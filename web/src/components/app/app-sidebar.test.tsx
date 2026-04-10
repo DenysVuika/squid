@@ -61,8 +61,6 @@ describe('AppSidebar', () => {
   const mockUpdateSessionTitle = vi.fn();
   const mockLoadAgents = vi.fn();
   const mockLoadJobs = vi.fn();
-  const mockStartSSE = vi.fn();
-  const mockStopSSE = vi.fn();
 
   // Helper to render AppSidebar with required SidebarProvider and BrowserRouter
   const renderAppSidebar = (props = {}) => {
@@ -78,26 +76,31 @@ describe('AppSidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default store implementations
-    vi.mocked(useSessionStore).mockReturnValue({
-      deleteSession: mockDeleteSession,
-      updateSessionTitle: mockUpdateSessionTitle,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    // Default store implementations with selector support
+    vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+      const state = {
+        sessions: [],
+        deleteSession: mockDeleteSession,
+        updateSessionTitle: mockUpdateSessionTitle,
+      };
+      return selector ? selector(state) : state;
+    });
 
-    vi.mocked(useAgentStore).mockReturnValue({
-      agents: [],
-      loadAgents: mockLoadAgents,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
+      const state = {
+        agents: [],
+        loadAgents: mockLoadAgents,
+      };
+      return selector ? selector(state) : state;
+    });
 
-    vi.mocked(useJobStore).mockReturnValue({
-      jobs: [],
-      loadJobs: mockLoadJobs,
-      startSSE: mockStartSSE,
-      stopSSE: mockStopSSE,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    vi.mocked(useJobStore).mockImplementation((selector?: any) => {
+      const state = {
+        jobs: [],
+        loadJobs: mockLoadJobs,
+      };
+      return selector ? selector(state) : state;
+    });
   });
 
   // ── Basic rendering ────────────────────────────────────────────────────────
@@ -123,9 +126,17 @@ describe('AppSidebar', () => {
 
   describe('sessions section', () => {
     it('expands Sessions section automatically when a session is active', async () => {
-      const sessions = [{ id: 'session-1', title: 'Chat 1' }];
+      // Mock store with sessions data
+      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+        const state = {
+          sessions: [{ id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 }],
+          deleteSession: mockDeleteSession,
+          updateSessionTitle: mockUpdateSessionTitle,
+        };
+        return selector ? selector(state) : state;
+      });
 
-      renderAppSidebar({ sessions, activeSessionId: 'session-1' });
+      renderAppSidebar({ activeSessionId: 'session-1' });
 
       // The Sessions section should be open automatically (showing the chat title)
       await waitFor(() => {
@@ -134,12 +145,20 @@ describe('AppSidebar', () => {
     });
 
     it('highlights active session', async () => {
-      const sessions = [
-        { id: 'session-1', title: 'Chat 1' },
-        { id: 'session-2', title: 'Chat 2' },
-      ];
+      // Mock store with multiple sessions
+      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+        const state = {
+          sessions: [
+            { id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 },
+            { id: 'session-2', title: 'Chat 2', created_at: '2024-01-02', updated_at: '2024-01-02', message_count: 2 },
+          ],
+          deleteSession: mockDeleteSession,
+          updateSessionTitle: mockUpdateSessionTitle,
+        };
+        return selector ? selector(state) : state;
+      });
 
-      renderAppSidebar({ sessions, activeSessionId: 'session-1' });
+      renderAppSidebar({ activeSessionId: 'session-1' });
 
       await waitFor(() => {
         const activeButton = screen.getByText('Chat 1').closest('button');
@@ -148,9 +167,17 @@ describe('AppSidebar', () => {
     });
 
     it('does not auto-expand Sessions section when no session is active', () => {
-      const sessions = [{ id: 'session-1', title: 'Chat 1' }];
+      // Mock store with sessions
+      vi.mocked(useSessionStore).mockImplementation((selector?: any) => {
+        const state = {
+          sessions: [{ id: 'session-1', title: 'Chat 1', created_at: '2024-01-01', updated_at: '2024-01-01', message_count: 1 }],
+          deleteSession: mockDeleteSession,
+          updateSessionTitle: mockUpdateSessionTitle,
+        };
+        return selector ? selector(state) : state;
+      });
 
-      renderAppSidebar({ sessions });
+      renderAppSidebar({});
 
       // Without activeSessionId, section should be closed
       // Use queryByText since it won't throw if not found
@@ -170,13 +197,15 @@ describe('AppSidebar', () => {
     });
 
     it('expands Agents section automatically when an agent is selected', async () => {
-      vi.mocked(useAgentStore).mockReturnValue({
-        agents: [
-          { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
-        ],
-        loadAgents: mockLoadAgents,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
+        const state = {
+          agents: [
+            { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
+          ],
+          loadAgents: mockLoadAgents,
+        };
+        return selector ? selector(state) : state;
+      });
 
       renderAppSidebar({ selectedAgentId: 'agent-1' });
 
@@ -186,13 +215,15 @@ describe('AppSidebar', () => {
     });
 
     it('highlights selected agent', async () => {
-      vi.mocked(useAgentStore).mockReturnValue({
-        agents: [
-          { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
-        ],
-        loadAgents: mockLoadAgents,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      vi.mocked(useAgentStore).mockImplementation((selector?: any) => {
+        const state = {
+          agents: [
+            { id: 'agent-1', name: 'Code Reviewer', description: 'Reviews code' },
+          ],
+          loadAgents: mockLoadAgents,
+        };
+        return selector ? selector(state) : state;
+      });
 
       renderAppSidebar({ selectedAgentId: 'agent-1' });
 
@@ -206,42 +237,22 @@ describe('AppSidebar', () => {
   // ── Jobs section ───────────────────────────────────────────────────────────
 
   describe('jobs section', () => {
-    it('loads jobs on mount', () => {
-      renderAppSidebar();
-
-      expect(mockLoadJobs).toHaveBeenCalled();
-    });
-
-    it('starts SSE on mount', () => {
-      renderAppSidebar();
-
-      expect(mockStartSSE).toHaveBeenCalled();
-    });
-
-    it('stops SSE on unmount', () => {
-      const { unmount } = renderAppSidebar();
-
-      unmount();
-
-      expect(mockStopSSE).toHaveBeenCalled();
-    });
-
     it('expands Jobs section automatically when a job is selected', async () => {
-      vi.mocked(useJobStore).mockReturnValue({
-        jobs: [
-          {
-            id: 1,
-            name: 'Daily Review',
-            schedule_type: 'cron',
-            status: 'pending',
-            is_active: true,
-          },
-        ],
-        loadJobs: mockLoadJobs,
-        startSSE: mockStartSSE,
-        stopSSE: mockStopSSE,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      vi.mocked(useJobStore).mockImplementation((selector?: any) => {
+        const state = {
+          jobs: [
+            {
+              id: 1,
+              name: 'Daily Review',
+              schedule_type: 'cron',
+              status: 'pending',
+              is_active: true,
+            },
+          ],
+          loadJobs: mockLoadJobs,
+        };
+        return selector ? selector(state) : state;
+      });
 
       renderAppSidebar({ selectedJobId: 1 });
 
@@ -251,21 +262,21 @@ describe('AppSidebar', () => {
     });
 
     it('highlights selected job', async () => {
-      vi.mocked(useJobStore).mockReturnValue({
-        jobs: [
-          {
-            id: 1,
-            name: 'Daily Review',
-            schedule_type: 'cron',
-            status: 'pending',
-            is_active: true,
-          },
-        ],
-        loadJobs: mockLoadJobs,
-        startSSE: mockStartSSE,
-        stopSSE: mockStopSSE,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      vi.mocked(useJobStore).mockImplementation((selector?: any) => {
+        const state = {
+          jobs: [
+            {
+              id: 1,
+              name: 'Daily Review',
+              schedule_type: 'cron',
+              status: 'pending',
+              is_active: true,
+            },
+          ],
+          loadJobs: mockLoadJobs,
+        };
+        return selector ? selector(state) : state;
+      });
 
       renderAppSidebar({ selectedJobId: 1 });
 
