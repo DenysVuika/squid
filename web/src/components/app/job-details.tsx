@@ -8,6 +8,34 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate, useParams } from 'react-router-dom';
 
+// Format duration in milliseconds to human-readable format
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  }
+
+  if (minutes > 0) {
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+
+  // For seconds, show one decimal place if less than 10 seconds
+  if (seconds < 10) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  return `${seconds}s`;
+};
+
 const JobDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -473,7 +501,7 @@ const JobDetails = () => {
                           {execution.duration_ms && (
                             <div>
                               <span className="text-muted-foreground">Duration:</span>{' '}
-                              <span className="font-medium">{execution.duration_ms}ms</span>
+                              <span className="font-medium">{formatDuration(execution.duration_ms)}</span>
                             </div>
                           )}
                           {execution.tokens_used && (
