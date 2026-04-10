@@ -205,25 +205,11 @@ impl Database {
             include_str!("../migrations/013_agent_token_stats.sql"),
         )?;
 
-        // Migration 014: Background jobs
+        // Migration 014: Background jobs system (jobs + execution history)
         run_migration(
             14,
-            "Background jobs",
+            "Background jobs system",
             include_str!("../migrations/014_background_jobs.sql"),
-        )?;
-
-        // Migration 015: Add job timeout
-        run_migration(
-            15,
-            "Job timeout support",
-            include_str!("../migrations/015_job_timeout.sql"),
-        )?;
-
-        // Migration 016: Job execution history
-        run_migration(
-            16,
-            "Job execution history",
-            include_str!("../migrations/016_job_executions.sql"),
         )?;
 
         info!("Database migrations completed successfully");

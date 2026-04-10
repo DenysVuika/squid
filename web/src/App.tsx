@@ -29,7 +29,7 @@ function AppContent() {
   const { clearMessages } = useChatStore();
   const { agents, resetTokenUsage } = useAgentStore();
   const { ragEnabled, isLoaded, loadConfig } = useConfigStore();
-  const { selectedJob, setSelectedJob, loadJobs } = useJobStore();
+  const { selectedJob, setSelectedJob, loadJobs, startSSE, stopSSE } = useJobStore();
 
   // Derive active session from URL
   const activeSessionId = location.pathname.startsWith('/chat/')
@@ -75,6 +75,16 @@ function AppContent() {
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  // Start SSE connection for job updates at app level
+  // This ensures the connection stays alive regardless of navigation/sidebar visibility
+  useEffect(() => {
+    void loadJobs();
+    startSSE();
+    return () => {
+      stopSSE();
+    };
+  }, [loadJobs, startSSE, stopSSE]);
 
   const handleSessionSelect = (sessionId: string) => {
     // Navigate to the session URL

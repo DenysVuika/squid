@@ -56,6 +56,14 @@ fn broadcast_job_update(event: JobUpdateEvent) {
     }
 }
 
+/// Public helper to broadcast a job status update (called from job worker)
+pub fn broadcast_job_status_update(job: db::BackgroundJob) {
+    let job_response = JobResponse::from(&job);
+    broadcast_job_update(JobUpdateEvent::Update {
+        job: Box::new(job_response),
+    });
+}
+
 /// Initialize the global database path and open the connection (called at server startup)
 pub fn init_db_path(path: &str) {
     let db_path = std::path::PathBuf::from(path);

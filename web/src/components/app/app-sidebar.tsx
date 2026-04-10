@@ -67,7 +67,9 @@ export function AppSidebar({ sessions = [], onSessionSelect, activeSessionId, on
 
   const { deleteSession, updateSessionTitle } = useSessionStore();
   const { agents, loadAgents } = useAgentStore();
-  const { jobs, loadJobs, startSSE, stopSSE } = useJobStore();
+  // Subscribe to jobs reactively - this ensures the component re-renders when jobs change
+  const jobs = useJobStore((state) => state.jobs);
+  const { loadJobs } = useJobStore();
 
   // Determine which sections should be open based on what's selected
   const [sessionsOpen, setSessionsOpen] = React.useState(() => !!activeSessionId);
@@ -97,15 +99,6 @@ export function AppSidebar({ sessions = [], onSessionSelect, activeSessionId, on
   React.useEffect(() => {
     void loadAgents();
   }, [loadAgents]);
-
-  // Load jobs and start SSE on mount
-  React.useEffect(() => {
-    void loadJobs();
-    startSSE();
-    return () => {
-      stopSSE();
-    };
-  }, [loadJobs, startSSE, stopSSE]);
 
   const handleDeleteClick = (sessionId: string) => {
     setSessionToDelete(sessionId);

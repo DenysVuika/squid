@@ -631,6 +631,20 @@ pub async fn start_job_scheduler(
     // Initialize the global job sender for API access
     crate::jobs_api::init_job_sender(tx.clone());
 
+    // Bridge JobStatusEvent to frontend SSE (JobUpdateEvent)
+    // This forwards job completion events from the worker to the frontend
+    let mut sse_rx = sse_tx.subscribe();
+    let db_clone_for_bridge = db.clone();
+    tokio::spawn(async move {
+        while let Ok(status_event) = sse_rx.recv().await {
+            // Fetch the updated job from the database
+            if let Ok(Some(job)) = db_clone_for_bridge.get_job_by_id(status_event.job_id) {
+                // Convert to JobInfo and broadcast via JOB_UPDATE_BROADCASTER
+                crate::jobs_api::broadcast_job_status_update(job);
+            }
+        }
+    });
+
     // Create semaphore for concurrency control
     let semaphore = Arc::new(Semaphore::new(max_concurrent_jobs));
 

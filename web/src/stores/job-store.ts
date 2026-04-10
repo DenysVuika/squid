@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { fetchJobs, subscribeToJobUpdates, type JobInfo } from '@/lib/chat-api';
 import { toast } from 'sonner';
+import { playNotificationSound } from '@/lib/notification-sound';
 
 interface JobStore {
   // State
@@ -85,7 +86,30 @@ export const useJobStore = create<JobStore>((set, get) => ({
     console.log('Starting SSE connection for jobs...');
     const eventSource = subscribeToJobUpdates('', {
       onJobUpdate: (job) => {
+        // Check if job just completed
+        const previousJob = get().jobs.find((j) => j.id === job.id);
+        const justCompleted =
+          job.status === 'completed' &&
+          previousJob &&
+          previousJob.status !== 'completed';
+
         updateJob(job);
+
+        // Show notification when job completes
+        if (justCompleted) {
+          playNotificationSound();
+          toast.success(`Job "${job.name}" completed`, {
+            description: 'Click to view details',
+            duration: 5000,
+            action: {
+              label: 'View',
+              onClick: () => {
+                // Navigate to job details
+                window.location.href = `/jobs/${job.id}`;
+              },
+            },
+          });
+        }
       },
       onJobDeleted: (jobId) => {
         removeJob(jobId);
