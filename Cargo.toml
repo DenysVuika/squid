@@ -55,6 +55,9 @@ sysinfo = "0.38.1"
 tera = "1.20"
 thiserror = "2.0"
 tokio = { version = "1.51", features = ["full"] }
+tokio-cron-scheduler = "0.13"
+tokio-stream = { version = "0.1", features = ["sync"] }
+chrono-tz = "0.10"
 uuid = { version = "1.23", features = ["v4", "serde"] }
 walkdir = "2.5"
 rusqlite = { version = "0.39.0", features = ["bundled", "load_extension"] }
@@ -71,6 +74,7 @@ rquickjs = { version = "0.11", features = ["full-async", "loader"] }
 jsonschema = "0.45"
 dirs = "6.0"
 serde_yaml = "0.9"
+tabled = "0.20.0"
 
 [dev-dependencies]
 tempfile = "3.0"

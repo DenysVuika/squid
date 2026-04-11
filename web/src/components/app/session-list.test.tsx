@@ -52,6 +52,7 @@ const makeSession = (overrides: Partial<SessionListItem> = {}): SessionListItem 
     context_utilization: 0.24,
   },
   cost_usd: 0.01,
+  is_readonly: false,
   ...overrides,
 });
 
@@ -449,10 +450,15 @@ describe("SessionList", () => {
   });
 
   it("shows error toast when loading fails", async () => {
+    // Suppress expected error logs during this test
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     mockListSessions.mockRejectedValue(new Error("Network error"));
     renderComponent();
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Failed to load sessions");
     });
+
+    consoleSpy.mockRestore();
   });
 });

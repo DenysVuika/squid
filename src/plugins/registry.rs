@@ -181,7 +181,7 @@ impl PluginRegistry {
     fn is_bundled_dir(&self, dir: &Path) -> bool {
         // Bundled plugins are in the executable directory's plugins subdirectory
         if let Some(bundled_dir) = get_bundled_plugins_dir() {
-            dir == &bundled_dir
+            dir == bundled_dir
         } else {
             false
         }

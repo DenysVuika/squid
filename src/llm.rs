@@ -512,7 +512,7 @@ pub async fn ask_llm_streaming(
         };
 
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
-            debug!("Failed to save user message to session: {}", e);
+            debug!("Failed to save user message: {}", e);
         } else {
             debug!("User message saved successfully to session");
         }
@@ -532,12 +532,9 @@ pub async fn ask_llm_streaming(
         };
 
         if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-            debug!("Failed to save assistant message to session: {}", e);
+            debug!("Failed to save assistant message: {}", e);
         } else {
-            debug!(
-                "Assistant message saved successfully to session {}",
-                sess.id
-            );
+            debug!("Assistant message saved successfully");
         }
 
         // Update session token usage
@@ -605,7 +602,59 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
 
     debug!("Sending request...");
 
-    let response = client.chat().create(request).await?;
+    // Use raw reqwest call to capture reasoning_content (async-openai drops it)
+    let raw_url = format!(
+        "{}/chat/completions",
+        params.app_config.api_url.trim_end_matches('/')
+    );
+    let mut raw_body = serde_json::to_value(&request).unwrap_or_default();
+
+    // Add reasoning effort control (low = faster, less tokens; high = more thorough)
+    // Default to "low" for better performance in background jobs
+    raw_body["reasoning"] = serde_json::json!({ "effort": "low" });
+
+    let raw_resp = reqwest::Client::new()
+        .post(&raw_url)
+        .header(
+            "Authorization",
+            format!("Bearer {}", params.app_config.get_api_key()),
+        )
+        .header("Content-Type", "application/json")
+        .json(&raw_body)
+        .send()
+        .await?;
+
+    let raw_json: serde_json::Value = raw_resp.json().await?;
+
+    // Log raw JSON structure for debugging
+    if let Some(choices) = raw_json.get("choices")
+        && let Some(first) = choices.get(0)
+        && let Some(message) = first.get("message")
+    {
+        info!(
+            "Response message keys: {:?}",
+            message.as_object().map(|m| m.keys().collect::<Vec<_>>())
+        );
+    }
+
+    // Extract reasoning_content
+    let reasoning_content: Option<String> = raw_json
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|m| m.get("message"))
+        .and_then(|m| m.get("reasoning_content"))
+        .and_then(|r| r.as_str())
+        .map(String::from);
+
+    if let Some(ref reasoning) = reasoning_content {
+        info!("Extracted reasoning_content ({} chars)", reasoning.len());
+    } else {
+        info!("No reasoning_content found in response");
+    }
+
+    // Parse the typed response from the same raw JSON
+    let response: async_openai::types::chat::CreateChatCompletionResponse =
+        serde_json::from_value(raw_json)?;
 
     // Log token usage statistics
     let mut total_input_tokens = 0i64;
@@ -763,27 +812,38 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
             };
 
             if let Err(e) = database.save_message(&sess.id, &user_msg) {
-                debug!("Failed to save user message to session: {}", e);
+                debug!("Failed to save user message: {}", e);
             } else {
                 debug!("User message saved successfully to session");
             }
 
-            // Save assistant message (no thinking steps for non-streaming)
+            // Build thinking steps from reasoning content
+            let thinking_steps = reasoning_content.as_ref().map(|reasoning| {
+                vec![crate::session::ThinkingStep {
+                    step_order: 0,
+                    step_type: "reasoning".to_string(),
+                    content: Some(reasoning.clone()),
+                    tool_name: None,
+                    tool_arguments: None,
+                    tool_result: None,
+                    tool_error: None,
+                    content_before_tool: None,
+                }]
+            });
+
+            // Save assistant message with thinking steps
             let assistant_msg = crate::session::ChatMessage {
                 role: "assistant".to_string(),
                 content: answer_str.clone(),
                 sources: vec![],
                 timestamp: chrono::Utc::now().timestamp(),
-                thinking_steps: None,
+                thinking_steps,
             };
 
             if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-                debug!("Failed to save assistant message to session: {}", e);
+                debug!("Failed to save assistant message: {}", e);
             } else {
-                debug!(
-                    "Assistant message saved successfully to session {}",
-                    sess.id
-                );
+                debug!("Assistant message saved successfully");
             }
 
             // Update session token usage
@@ -845,27 +905,39 @@ pub async fn ask_llm(params: LlmQueryParams<'_>) -> Result<String, Box<dyn std::
         };
 
         if let Err(e) = database.save_message(&sess.id, &user_msg) {
-            debug!("Failed to save user message to session: {}", e);
+            debug!("Failed to save user message: {}", e);
         } else {
             debug!("User message saved successfully to session");
         }
 
-        // Save assistant message
+        // Build thinking steps from reasoning content
+        let thinking_steps = reasoning_content.as_ref().map(|reasoning| {
+            info!("Saving {} thinking step(s) for message", 1);
+            vec![crate::session::ThinkingStep {
+                step_order: 0,
+                step_type: "reasoning".to_string(),
+                content: Some(reasoning.clone()),
+                tool_name: None,
+                tool_arguments: None,
+                tool_result: None,
+                tool_error: None,
+                content_before_tool: None,
+            }]
+        });
+
+        // Save assistant message with thinking steps
         let assistant_msg = crate::session::ChatMessage {
             role: "assistant".to_string(),
             content: answer_str.clone(),
             sources: vec![],
             timestamp: chrono::Utc::now().timestamp(),
-            thinking_steps: None,
+            thinking_steps,
         };
 
         if let Err(e) = database.save_message(&sess.id, &assistant_msg) {
-            debug!("Failed to save assistant message to session: {}", e);
+            debug!("Failed to save assistant message: {}", e);
         } else {
-            debug!(
-                "Assistant message saved successfully to session {}",
-                sess.id
-            );
+            debug!("Assistant message saved successfully");
         }
 
         // Update session token usage

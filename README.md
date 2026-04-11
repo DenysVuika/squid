@@ -13,6 +13,7 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 
 - 🌐 **Web UI** - Modern chat interface with persistent sessions and conversation management
 - 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
+- ⏰ **Background Jobs** - Schedule recurring AI tasks with cron expressions and resource control
 - 🔧 **Tool Calling** - File operations, code search, and bash commands with built-in security
 - 🔌 **Plugin System** - Extend capabilities with JavaScript plugins (NEW!)
 - 🔍 **AI Code Reviews** - Language-specific analysis and suggestions
@@ -166,6 +167,10 @@ See [CLI Reference - Init Command](docs/CLI.md#init-command) for full configurat
 | `SQUID_WORKING_DIR` | `./workspace` | Root directory for file operations and plugin access |
 | `server.allow_network` | `false` | Bind to `0.0.0.0` for LAN access (default: `127.0.0.1` only) |
 | `web.sounds` | `true` | Enable notification sounds in Web UI |
+| `jobs.enabled` | `false` | Enable background job scheduler |
+| `jobs.max_concurrent_jobs` | `2` | Maximum concurrent job executions |
+| `jobs.max_cpu_percent` | `70` | CPU threshold before jobs pause |
+| `jobs.default_retries` | `3` | Retry attempts for failed jobs |
 
 **Template Variables**: Agent prompts support Tera template syntax (`{{persona}}`, `{{os}}`, `{{arch}}`, `{{now}}`, etc.). See [docs/TEMPLATE-VARIABLES.md](docs/TEMPLATE-VARIABLES.md) for the full list and examples.
 
@@ -417,6 +422,70 @@ squid serve
 
 For complete RAG documentation, see [docs/RAG.md](docs/RAG.md).
 
+### Background Jobs
+
+Automate recurring AI tasks with cron scheduling and resource control.
+
+**Quick Start:**
+
+```json
+// squid.config.json
+{
+  "jobs": {
+    "enabled": true,
+    "max_concurrent_jobs": 2,
+    "max_cpu_percent": 70
+  }
+}
+```
+
+**Create a daily code review job:**
+
+```bash
+curl -X POST http://localhost:8080/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Daily Review",
+    "schedule_type": "cron",
+    "cron_expression": "0 9 * * 1-5",
+    "payload": {
+      "agent_id": "code-reviewer",
+      "message": "Review recent changes"
+    }
+  }'
+```
+
+**Features:**
+- ⏰ **Cron scheduling** - Recurring tasks on custom schedules
+- 🚀 **One-off tasks** - Immediate background jobs
+- 🎯 **Priority queue** - Higher priority jobs execute first
+- 🛡️ **Resource control** - CPU monitoring and concurrency limits
+- 📡 **Real-time updates** - SSE streaming for job status
+- 💾 **Persistent storage** - Jobs survive server restarts
+- 🔄 **Automatic retries** - Failed jobs retry with backoff
+
+**Web UI Management:**
+
+- View all jobs in the sidebar with live status updates
+- Click any job to see detailed execution history
+- Interactive controls: pause, resume, trigger, delete
+- Per-execution metrics: duration, tokens used, cost
+- Direct links to conversation sessions
+
+**CLI Commands:**
+
+```bash
+squid jobs list                    # List all jobs
+squid jobs show <id>              # View job details
+squid jobs create                 # Interactive job creation
+squid jobs delete <id>            # Delete a job
+squid jobs pause <id>             # Pause a cron job
+squid jobs resume <id>            # Resume a paused job
+squid jobs trigger <id>           # Manually trigger a cron job
+```
+
+For complete documentation, see [docs/JOBS.md](docs/JOBS.md) and [docs/CLI.md](docs/CLI.md#jobs-commands).
+
 
 
 **Database & Persistence:**
@@ -437,6 +506,10 @@ The web server exposes REST API endpoints for programmatic access. See [docs/API
 | `/api/sessions/{id}` | DELETE | Delete session |
 | `/api/logs` | GET | View application logs |
 | `/api/agents` | GET | List configured agents |
+| `/api/jobs` | GET | List all background jobs |
+| `/api/jobs` | POST | Create a background job |
+| `/api/jobs/{id}` | GET | Get job details |
+| `/api/jobs/{id}` | DELETE | Cancel a job |
 
 ### Tool Calling & Security
 
@@ -570,6 +643,7 @@ See [docs/PLUGINS.md](docs/PLUGINS.md) for complete plugin documentation.
 - **[CLI Reference](docs/CLI.md)** - Complete command-line interface documentation
 - **[Plugin Development Guide](docs/PLUGINS.md)** - Create custom JavaScript tools (NEW!)
 - **[RAG Guide](docs/RAG.md)** - Retrieval-Augmented Generation (semantic document search)
+- **[Background Jobs](docs/JOBS.md)** - Schedule recurring AI tasks with cron expressions (NEW!)
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows

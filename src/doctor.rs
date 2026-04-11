@@ -195,7 +195,7 @@ impl Check for AgentsDirectoryCheck {
             .map(|entries| {
                 entries
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
                     .count()
             })
             .unwrap_or(0);

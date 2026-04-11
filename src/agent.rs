@@ -188,7 +188,7 @@ pub fn load_agents_from_dir(dir_path: &Path) -> HashMap<String, AgentConfig> {
         let path = entry.path();
 
         // Only process .md files
-        if path.extension().map_or(true, |ext| ext != "md") {
+        if path.extension().is_none_or(|ext| ext != "md") {
             continue;
         }
 

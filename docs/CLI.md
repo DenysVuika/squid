@@ -378,6 +378,158 @@ The `squid.config.json` file created by `squid init`:
 
 See [Configuration](../README.md#configuration) in the main README for full details.
 
+## Jobs Commands
+
+Manage background jobs and scheduled tasks for automated AI agent sessions.
+
+### List Jobs
+
+View all jobs with their current status in a formatted table.
+
+```bash
+# List all jobs
+squid jobs list
+
+# Filter by status
+squid jobs list --status active
+squid jobs list --status paused
+
+# Filter by type
+squid jobs list --type cron
+squid jobs list --type oneoff
+```
+
+The output shows:
+
+- Active status indicator (● active, ○ paused)
+- Job ID, name, type
+- Current status (active/paused)
+- Schedule (for cron jobs)
+- Priority and retry count
+
+**Options:**
+
+- `--status <STATUS>` - Filter by status (active, paused)
+- `--type <TYPE>` - Filter by type (cron, oneoff)
+
+### Show Job Details
+
+Display detailed information about a specific job.
+
+```bash
+squid jobs show <job-id>
+```
+
+Shows complete job configuration including:
+
+- ID, name, type, status
+- Schedule (for cron jobs)
+- Agent and prompt information
+- Priority, timeout, and retry settings
+- Creation and execution timestamps
+
+### Create Job
+
+Create a new background job with either interactive prompts or command-line flags.
+
+```bash
+# Interactive mode (prompts for all settings)
+squid jobs create
+
+# Non-interactive with flags
+squid jobs create \
+  --name "Daily Code Review" \
+  --agent code-reviewer \
+  --schedule "0 9 * * *" \
+  --prompt "Review recent changes" \
+  --priority 5
+
+# One-off job (no schedule)
+squid jobs create \
+  --name "Security Scan" \
+  --agent security-auditor \
+  --prompt "Scan for vulnerabilities" \
+  --type oneoff
+```
+
+**Interactive mode features:**
+
+- Agent selection from available agents in `agents/` folder
+- Type selection (cron or one-off)
+- Schedule validation for cron expressions (6-field format)
+- Optional timeout and retry configuration
+
+**Options:**
+
+- `--name <NAME>` - Job name (required in non-interactive mode)
+- `--agent <AGENT>` - Agent ID from agents folder (required)
+- `--prompt <TEXT>` - Prompt text for the agent (required)
+- `--schedule <CRON>` - Cron expression (6-field format, required for cron jobs)
+- `--type <TYPE>` - Job type: `cron` or `oneoff` (default: cron)
+- `--priority <NUM>` - Priority 1-10 (default: 5)
+- `--timeout <SECS>` - Timeout in seconds (default: 300)
+- `--max-retries <NUM>` - Maximum retry attempts (default: 3)
+
+**Cron expression format (6 fields):**
+```
+sec min hour day month day_of_week
+*   *   *    *   *     *
+
+Examples:
+  0 0 9 * * *        - Daily at 9:00 AM
+  0 */15 * * * *     - Every 15 minutes
+  0 0 0 * * MON      - Every Monday at midnight
+  0 30 8 1 * *       - First day of month at 8:30 AM
+```
+
+### Delete Job
+
+Remove a job from the system.
+
+```bash
+squid jobs delete <job-id>
+```
+
+This permanently deletes the job. The job will no longer execute.
+
+### Pause Job
+
+Temporarily pause a job without deleting it.
+
+```bash
+squid jobs pause <job-id>
+```
+
+Paused jobs remain in the system but will not execute until resumed. The schedule is preserved.
+
+### Resume Job
+
+Resume a previously paused job.
+
+```bash
+squid jobs resume <job-id>
+```
+
+The job will continue executing according to its schedule.
+
+### Trigger Job
+
+Manually trigger a job to execute immediately.
+
+```bash
+squid jobs trigger <job-id>
+```
+
+This runs the job once immediately, regardless of its schedule. The regular schedule is not affected.
+
+**Use cases:**
+
+- Test a new job before waiting for its schedule
+- Run a periodic task on-demand
+- Re-run a failed job
+
+For detailed information about the jobs system architecture and database schema, see [JOBS.md](JOBS.md).
+
 ## Tool Calling
 
 The LLM can intelligently use tools when needed based on natural language.

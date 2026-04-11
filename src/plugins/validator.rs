@@ -40,12 +40,6 @@ impl SchemaValidator {
     }
 }
 
-/// Convenience function to validate data against a schema
-pub fn validate_against_schema(data: &Value, schema: &Value) -> Result<(), Vec<String>> {
-    let validator = SchemaValidator::new(schema).map_err(|e| vec![e])?;
-    validator.validate(data)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

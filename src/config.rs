@@ -176,6 +176,66 @@ impl Default for ServerConfig {
     }
 }
 
+/// Background jobs configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobsConfig {
+    /// Enable background job scheduler
+    #[serde(default = "default_jobs_enabled")]
+    pub enabled: bool,
+    /// Maximum number of concurrent job executions
+    #[serde(default = "default_max_concurrent_jobs")]
+    pub max_concurrent_jobs: usize,
+    /// Maximum CPU percentage a job can use
+    #[serde(default = "default_max_cpu_percent")]
+    pub max_cpu_percent: i32,
+    /// Default number of retries for failed jobs
+    #[serde(default = "default_job_retries")]
+    pub default_retries: i32,
+    /// Default timeout for jobs in seconds (0 = no timeout)
+    #[serde(default = "default_job_timeout_seconds")]
+    pub default_timeout_seconds: i64,
+    /// Job retention period in days (0 = keep forever)
+    #[serde(default = "default_job_retention_days")]
+    pub retention_days: i64,
+}
+
+fn default_jobs_enabled() -> bool {
+    false
+}
+
+fn default_max_concurrent_jobs() -> usize {
+    2
+}
+
+fn default_max_cpu_percent() -> i32 {
+    70
+}
+
+fn default_job_retries() -> i32 {
+    3
+}
+
+fn default_job_timeout_seconds() -> i64 {
+    3600 // 1 hour default timeout
+}
+
+fn default_job_retention_days() -> i64 {
+    30 // Keep completed/failed jobs for 30 days
+}
+
+impl Default for JobsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_jobs_enabled(),
+            max_concurrent_jobs: default_max_concurrent_jobs(),
+            max_cpu_percent: default_max_cpu_percent(),
+            default_retries: default_job_retries(),
+            default_timeout_seconds: default_job_timeout_seconds(),
+            retention_days: default_job_retention_days(),
+        }
+    }
+}
+
 /// Configuration for squid CLI
 ///
 /// This configuration is typically stored in `squid.config.json` in the project directory.
@@ -226,6 +286,8 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub web: WebConfig,
+    #[serde(default)]
+    pub jobs: JobsConfig,
     /// Default agent ID (agents are loaded from files, not from config)
     #[serde(default = "default_agent_id")]
     pub default_agent: String,
@@ -278,6 +340,7 @@ impl Default for Config {
             plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
             web: WebConfig::default(),
+            jobs: JobsConfig::default(),
             default_agent: default_agent_id(),
             agents: AgentsConfig::default(),
             config_dir: None,
@@ -443,6 +506,35 @@ impl Config {
         {
             debug!("Overriding SQUID_PLUGINS_LOAD_BUNDLED from environment");
             config.plugins.load_bundled = enabled;
+        }
+
+        // Background jobs configuration overrides
+        if let Ok(jobs_enabled) = std::env::var("SQUID_JOBS_ENABLED")
+            && let Ok(enabled) = jobs_enabled.parse()
+        {
+            debug!("Overriding SQUID_JOBS_ENABLED from environment");
+            config.jobs.enabled = enabled;
+        }
+
+        if let Ok(max_concurrent) = std::env::var("SQUID_MAX_CONCURRENT_JOBS")
+            && let Ok(count) = max_concurrent.parse()
+        {
+            debug!("Overriding SQUID_MAX_CONCURRENT_JOBS from environment");
+            config.jobs.max_concurrent_jobs = count;
+        }
+
+        if let Ok(max_cpu) = std::env::var("SQUID_JOBS_MAX_CPU_PERCENT")
+            && let Ok(cpu) = max_cpu.parse()
+        {
+            debug!("Overriding SQUID_JOBS_MAX_CPU_PERCENT from environment");
+            config.jobs.max_cpu_percent = cpu;
+        }
+
+        if let Ok(retries) = std::env::var("SQUID_JOBS_DEFAULT_RETRIES")
+            && let Ok(retry_count) = retries.parse()
+        {
+            debug!("Overriding SQUID_JOBS_DEFAULT_RETRIES from environment");
+            config.jobs.default_retries = retry_count;
         }
 
         // Store config directory for agents loading

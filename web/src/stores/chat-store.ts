@@ -534,11 +534,9 @@ export const useChatStore = create<ChatStore>()(
           return;
         }
 
-        const sessionStore = useSessionStore.getState();
         const agentStore = useAgentStore.getState();
 
-        // Update session ID
-        sessionStore.setActiveSession(sessionId);
+        // Note: activeSessionId is now managed by URL in App.tsx, no need to set it here
 
         // Convert session messages to UI format
         const uiMessages: MessageType[] = [];

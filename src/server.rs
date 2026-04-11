@@ -5,7 +5,7 @@ use rust_embed::RustEmbed;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::{api, config, db, rag, session, workspace};
+use crate::{api, config, db, jobs, jobs_api, rag, session, workspace};
 
 #[derive(RustEmbed)]
 #[folder = "static/"]
@@ -35,7 +35,20 @@ async fn serve_static(path: web::Path<String>) -> HttpResponse {
                 .content_type(mime_type.as_ref())
                 .body(content.data.into_owned())
         }
-        None => HttpResponse::NotFound().body("404 - Not Found"),
+        None => {
+            // For SPA routing: if the file doesn't exist and doesn't have an extension,
+            // serve index.html so React Router can handle client-side routing
+            if !path.contains('.') && path != "index.html" {
+                // This is likely a frontend route like /jobs/6, /agents/foo, etc.
+                // Serve index.html to let React Router handle it
+                if let Some(index) = Assets::get("index.html") {
+                    return HttpResponse::Ok()
+                        .content_type("text/html")
+                        .body(index.data.into_owned());
+                }
+            }
+            HttpResponse::NotFound().body("404 - Not Found")
+        }
     }
 }
 
@@ -239,6 +252,51 @@ pub async fn start_server(
         }
     });
 
+    // Initialize background job scheduler if enabled
+    let job_scheduler = if app_config.jobs.enabled {
+        // Initialize global DB path for jobs API
+        jobs_api::init_db_path(db_path);
+        // Initialize job update broadcaster for SSE
+        jobs_api::init_job_broadcaster();
+        // Initialize session update broadcaster for SSE
+        api::init_session_broadcaster();
+
+        info!("Initializing background job scheduler...");
+        info!("Job Configuration:");
+        info!(
+            "  Max Concurrent Jobs: {}",
+            app_config.jobs.max_concurrent_jobs
+        );
+        info!("  Max CPU Percent: {}", app_config.jobs.max_cpu_percent);
+        info!("  Default Retries: {}", app_config.jobs.default_retries);
+
+        // Create a broadcast channel for job status SSE events
+        let (job_sse_tx, _) = tokio::sync::broadcast::channel::<jobs::JobStatusEvent>(64);
+
+        match jobs::start_job_scheduler(
+            Arc::new(db::Database::new(db_path).expect("Failed to open database for jobs")),
+            app_config.clone(),
+            app_config.jobs.max_concurrent_jobs,
+            job_sse_tx.clone(),
+        )
+        .await
+        {
+            Ok(scheduler) => {
+                info!("Job scheduler initialized successfully");
+                println!("🦑: Background job scheduler active");
+                Some((scheduler, job_sse_tx))
+            }
+            Err(e) => {
+                warn!("Failed to initialize job scheduler: {}", e);
+                println!("🦑: Warning - Job scheduler initialization failed: {}", e);
+                None
+            }
+        }
+    } else {
+        info!("Background job scheduler is disabled");
+        None
+    };
+
     println!("🦑: Starting Squid Web UI...");
     if app_config.server.allow_network {
         println!(
@@ -262,7 +320,7 @@ pub async fn start_server(
             .allow_any_header()
             .max_age(3600);
 
-        App::new()
+        let mut app = App::new()
             .app_data(web::Data::new(app_config.clone()))
             .app_data(web::Data::new(session_manager.clone()))
             .app_data(web::Data::new(approval_map.clone()))
@@ -273,6 +331,7 @@ pub async fn start_server(
                 web::scope("/api")
                     .route("/chat", web::post().to(api::chat_stream))
                     .route("/sessions", web::get().to(api::list_sessions))
+                    .route("/sessions/events", web::get().to(api::session_events))
                     .route("/sessions/{session_id}", web::get().to(api::get_session))
                     .route(
                         "/sessions/{session_id}",
@@ -295,6 +354,24 @@ pub async fn start_server(
                     )
                     .route("/config", web::get().to(api::get_config))
                     .route("/tool-approval", web::post().to(api::handle_tool_approval))
+                    // Job management routes (must be before workspace catch-all)
+                    .route("/jobs", web::get().to(jobs_api::list_jobs))
+                    .route("/jobs", web::post().to(jobs_api::create_job))
+                    .route("/jobs/events", web::get().to(jobs_api::job_events))
+                    .route("/jobs/{id}", web::get().to(jobs_api::get_job))
+                    .route("/jobs/{id}", web::delete().to(jobs_api::delete_job))
+                    .route("/jobs/{id}/cancel", web::post().to(jobs_api::cancel_job))
+                    .route("/jobs/{id}/pause", web::post().to(jobs_api::pause_job))
+                    .route("/jobs/{id}/resume", web::post().to(jobs_api::resume_job))
+                    .route("/jobs/{id}/trigger", web::post().to(jobs_api::trigger_job))
+                    .route(
+                        "/jobs/{id}/executions",
+                        web::get().to(jobs_api::get_job_executions),
+                    )
+                    .route(
+                        "/executions/{id}",
+                        web::get().to(jobs_api::get_job_execution),
+                    )
                     .route(
                         "/workspace/files",
                         web::get().to(workspace::get_workspace_files),
@@ -313,7 +390,16 @@ pub async fn start_server(
                     .route("/rag/upload", web::post().to(api::rag_upload_document)),
             )
             .route("/", web::get().to(serve_index))
-            .route("/{filename:.*}", web::get().to(serve_static))
+            .route("/{filename:.*}", web::get().to(serve_static));
+
+        // Add job scheduler to app_data if available
+        if let Some((scheduler, _)) = &job_scheduler {
+            app = app.app_data(web::Data::new(
+                scheduler.clone() as Arc<tokio::sync::Mutex<jobs::JobScheduler>>
+            ));
+        }
+
+        app
     })
     .bind(&bind_address);
 

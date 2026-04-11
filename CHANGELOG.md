@@ -9,7 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Agent Viewer**: View agent prompt files in the web UI via new "Agents" sidebar section
+- **Agent Viewer**: View agent prompts and metadata in the web UI via new "Agents" sidebar section
+- **Background Jobs**: Schedule recurring AI tasks and manage one-off background jobs
+  - Cron scheduling with 6-field expressions (e.g., `0 0 9 * * Mon-Fri` for weekdays at 9 AM)
+  - Resource control: CPU monitoring, concurrency limits, configurable timeouts
+  - Job management: pause/resume, manual triggers, priority queue (0-10), retry logic
+  - Security: agent validation, file path validation, directory traversal protection
+  - Persistence: SQLite storage, automatic cleanup with configurable retention
+  - REST API: `/api/jobs` endpoints for create, list, get, delete, pause, resume, trigger
+  - CLI commands: `squid jobs list/show/create/delete/pause/resume/trigger` for local job management
+    - `squid jobs list` displays jobs in a clean table format with filtering options
+    - Fully interactive job creation: run `squid jobs create` without any flags to be guided through all options
+    - Interactive prompts for job name, agent selection, message, schedule type, and cron expression
+    - All parameters can be provided via flags for non-interactive/scripting use
+    - Agent validation ensures specified agent exists before job creation
+  - Real-time updates via SSE streaming
+  - Agent statistics tracking for job executions (visible in `/agent-stats`)
+  - Comprehensive unit tests (178 passing) covering security, validation, retry, and cleanup logic
+  - Documentation: `docs/JOBS.md`
+
+### Fixed
+
+- **Empty Reasoning Steps**: Fixed Chain of Thought UI appearing when job sessions had no actual reasoning content
+  - Empty or whitespace-only reasoning steps are now filtered when loading sessions from database
+  - Prevents unnecessary Chain of Thought blocks in the web UI
 
 ## [0.13.0] - 2026-04-07
 

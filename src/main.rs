@@ -3,14 +3,16 @@ use dotenvy::dotenv;
 use log::error;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tabled::{Table, Tabled};
 
 mod agent;
 mod api;
 mod config;
 mod db;
 mod doctor;
-mod envinfo;
 mod init;
+mod jobs;
+mod jobs_api;
 mod llm;
 mod logger;
 mod plugins;
@@ -117,6 +119,11 @@ enum Commands {
         #[command(subcommand)]
         command: RagCommands,
     },
+    /// Manage background jobs (cron schedules and one-off tasks)
+    Jobs {
+        #[command(subcommand)]
+        command: JobCommands,
+    },
     /// Run diagnostic checks to verify configuration and setup
     Doctor,
 }
@@ -163,6 +170,77 @@ enum RagCommands {
     },
     /// Show RAG statistics
     Stats,
+}
+
+#[derive(Subcommand)]
+enum JobCommands {
+    /// List all background jobs
+    List {
+        /// Filter by status (pending, running, completed, failed, cancelled)
+        #[arg(short, long)]
+        status: Option<String>,
+        /// Filter by schedule type (cron, once)
+        #[arg(short = 't', long)]
+        schedule_type: Option<String>,
+    },
+    /// Show details of a specific job
+    Show {
+        /// Job ID to display
+        id: i64,
+    },
+    /// Create a new background job (interactive mode if no flags provided)
+    Create {
+        /// Job name (interactive prompt if not provided)
+        #[arg(short, long)]
+        name: Option<String>,
+        /// Agent ID to use (interactive selection if not provided)
+        #[arg(short, long)]
+        agent: Option<String>,
+        /// Message/prompt for the agent (interactive prompt if not provided)
+        #[arg(short, long)]
+        message: Option<String>,
+        /// Schedule type: cron or once
+        #[arg(short = 't', long)]
+        schedule_type: Option<String>,
+        /// Cron expression (required for cron jobs, e.g., "0 0 9 * * Mon-Fri")
+        #[arg(short, long)]
+        cron: Option<String>,
+        /// Optional file path to provide as context
+        #[arg(short, long)]
+        file: Option<String>,
+        /// Job priority (0-10, higher = runs first)
+        #[arg(short, long)]
+        priority: Option<i32>,
+        /// Maximum CPU percent threshold
+        #[arg(long)]
+        max_cpu: Option<i32>,
+        /// Timeout in seconds (0 = no timeout)
+        #[arg(long)]
+        timeout: Option<i64>,
+    },
+    /// Delete a background job
+    Delete {
+        /// Job ID to delete
+        id: i64,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Pause a cron job (stops it from running on schedule)
+    Pause {
+        /// Job ID to pause
+        id: i64,
+    },
+    /// Resume a paused cron job
+    Resume {
+        /// Job ID to resume
+        id: i64,
+    },
+    /// Manually trigger a cron job (runs immediately, outside normal schedule)
+    Trigger {
+        /// Job ID to trigger
+        id: i64,
+    },
 }
 
 /// Check if configuration file exists and suggest running init
@@ -560,6 +638,505 @@ async fn main() {
                         println!("🦑: Failed to get statistics - {}", e);
                     }
                 },
+            }
+        }
+        Commands::Jobs { command } => {
+            if !check_config_or_suggest_init() {
+                return;
+            }
+
+            // Check if jobs are enabled
+            if !app_config.jobs.enabled {
+                println!("🦑: Background jobs are disabled in configuration");
+                println!("    Set 'jobs.enabled = true' in squid.config.json to enable jobs");
+                return;
+            }
+
+            let db_path = &app_config.database_path;
+            let db = match db::Database::new(db_path) {
+                Ok(db) => Arc::new(db),
+                Err(e) => {
+                    error!("Failed to open database: {}", e);
+                    println!("🦑: Failed to open database - {}", e);
+                    return;
+                }
+            };
+
+            match command {
+                JobCommands::List {
+                    status,
+                    schedule_type,
+                } => {
+                    println!("🦑: Fetching jobs from database...\n");
+
+                    match db.get_all_jobs() {
+                        Ok(jobs) => {
+                            if jobs.is_empty() {
+                                println!("No jobs found.");
+                                println!("\nCreate a job with: squid jobs create");
+                                return;
+                            }
+
+                            // Filter jobs
+                            let filtered_jobs: Vec<_> = jobs
+                                .into_iter()
+                                .filter(|job| {
+                                    let status_match = status
+                                        .as_ref()
+                                        .is_none_or(|s| job.status.eq_ignore_ascii_case(s));
+                                    let type_match = schedule_type
+                                        .as_ref()
+                                        .is_none_or(|t| job.schedule_type.eq_ignore_ascii_case(t));
+                                    status_match && type_match
+                                })
+                                .collect();
+
+                            if filtered_jobs.is_empty() {
+                                println!("No jobs match the specified filters.");
+                                return;
+                            }
+
+                            // Create table rows
+                            #[derive(Tabled)]
+                            struct JobRow {
+                                #[tabled(rename = "")]
+                                active: String,
+                                #[tabled(rename = "ID")]
+                                id: String,
+                                #[tabled(rename = "Name")]
+                                name: String,
+                                #[tabled(rename = "Type")]
+                                job_type: String,
+                                #[tabled(rename = "Status")]
+                                status: String,
+                                #[tabled(rename = "Schedule")]
+                                schedule: String,
+                                #[tabled(rename = "Priority")]
+                                priority: String,
+                                #[tabled(rename = "Retries")]
+                                retries: String,
+                            }
+
+                            let rows: Vec<JobRow> = filtered_jobs
+                                .iter()
+                                .map(|job| {
+                                    let id = job.id.unwrap_or(0);
+                                    let active = if job.is_active { "●" } else { "○" }.to_string();
+                                    let schedule = job
+                                        .cron_expression
+                                        .as_ref()
+                                        .map(|s| {
+                                            // Truncate long cron expressions
+                                            if s.len() > 20 {
+                                                format!("{}...", &s[..17])
+                                            } else {
+                                                s.clone()
+                                            }
+                                        })
+                                        .unwrap_or_else(|| "-".to_string());
+
+                                    JobRow {
+                                        active,
+                                        id: id.to_string(),
+                                        name: if job.name.len() > 30 {
+                                            format!("{}...", &job.name[..27])
+                                        } else {
+                                            job.name.clone()
+                                        },
+                                        job_type: job.schedule_type.clone(),
+                                        status: job.status.clone(),
+                                        schedule,
+                                        priority: job.priority.to_string(),
+                                        retries: format!("{}/{}", job.retries, job.max_retries),
+                                    }
+                                })
+                                .collect();
+
+                            let table = Table::new(rows).to_string();
+                            println!("{}", table);
+                            println!("\n{} job(s) found", filtered_jobs.len());
+                            println!("\nView details: squid jobs show <id>");
+                        }
+                        Err(e) => {
+                            error!("Failed to list jobs: {}", e);
+                            println!("🦑: Failed to list jobs - {}", e);
+                        }
+                    }
+                }
+                JobCommands::Show { id } => match db.get_job_by_id(*id) {
+                    Ok(Some(job)) => {
+                        println!("🦑: Job Details\n");
+                        println!("  ID: {}", job.id.unwrap_or(0));
+                        println!("  Name: {}", job.name);
+                        println!("  Status: {}", job.status);
+                        println!("  Type: {}", job.schedule_type);
+                        println!(
+                            "  Active: {}",
+                            if job.is_active { "Yes" } else { "No (Paused)" }
+                        );
+
+                        if let Some(cron) = &job.cron_expression {
+                            println!("  Cron expression: {}", cron);
+                        }
+
+                        println!("  Priority: {}", job.priority);
+                        println!("  Max CPU: {}%", job.max_cpu_percent);
+                        println!("  Timeout: {}s", job.timeout_seconds);
+                        println!("  Retries: {}/{}", job.retries, job.max_retries);
+
+                        if let Some(last_run) = &job.last_run {
+                            println!("  Last run: {}", last_run);
+                        }
+
+                        if let Some(next_run) = &job.next_run {
+                            println!("  Next run: {}", next_run);
+                        }
+
+                        println!("\n  Payload:");
+                        if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&job.payload)
+                        {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&payload)
+                                    .unwrap_or(job.payload.clone())
+                            );
+                        } else {
+                            println!("{}", job.payload);
+                        }
+
+                        if let Some(result) = &job.result {
+                            println!("\n  Result:");
+                            if let Ok(result_json) =
+                                serde_json::from_str::<serde_json::Value>(result)
+                            {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&result_json)
+                                        .unwrap_or(result.clone())
+                                );
+                            } else {
+                                println!("{}", result);
+                            }
+                        }
+
+                        if let Some(error) = &job.error_message {
+                            println!("\n  Error: {}", error);
+                        }
+                    }
+                    Ok(None) => {
+                        println!("🦑: Job {} not found", id);
+                    }
+                    Err(e) => {
+                        error!("Failed to get job: {}", e);
+                        println!("🦑: Failed to get job - {}", e);
+                    }
+                },
+                JobCommands::Create {
+                    name,
+                    agent,
+                    message,
+                    schedule_type,
+                    cron,
+                    file,
+                    priority,
+                    max_cpu,
+                    timeout,
+                } => {
+                    // Get available agents
+                    let available_agents: Vec<String> =
+                        app_config.agents.agents.keys().cloned().collect();
+
+                    if available_agents.is_empty() {
+                        println!("🦑: No agents found in configuration");
+                        println!("    Create agents in the agents/ directory");
+                        return;
+                    }
+
+                    // Interactive mode: prompt for job name if not provided
+                    let job_name = if let Some(n) = name {
+                        n.clone()
+                    } else {
+                        match inquire::Text::new("Job name:")
+                            .with_help_message("A descriptive name for this job")
+                            .prompt()
+                        {
+                            Ok(name) => name,
+                            Err(_) => {
+                                println!("Job creation cancelled.");
+                                return;
+                            }
+                        }
+                    };
+
+                    // Select or validate agent
+                    let selected_agent = if let Some(agent_id) = agent {
+                        // Validate provided agent exists
+                        if !available_agents.contains(agent_id) {
+                            println!("🦑: Agent '{}' not found", agent_id);
+                            println!("\nAvailable agents:");
+                            for id in &available_agents {
+                                if let Some(agent_config) = app_config.get_agent(id) {
+                                    println!("  - {} ({})", id, agent_config.name);
+                                } else {
+                                    println!("  - {}", id);
+                                }
+                            }
+                            return;
+                        }
+                        agent_id.clone()
+                    } else {
+                        // Interactive agent selection
+                        let agent_options: Vec<String> = available_agents
+                            .iter()
+                            .map(|id| {
+                                if let Some(agent_config) = app_config.get_agent(id) {
+                                    format!("{} - {}", id, agent_config.name)
+                                } else {
+                                    id.clone()
+                                }
+                            })
+                            .collect();
+
+                        let selected_idx =
+                            match inquire::Select::new("Select agent:", agent_options.clone())
+                                .with_help_message("Choose which agent will execute this job")
+                                .prompt()
+                            {
+                                Ok(selection) => agent_options
+                                    .iter()
+                                    .position(|opt| opt == &selection)
+                                    .unwrap(),
+                                Err(_) => {
+                                    println!("Job creation cancelled.");
+                                    return;
+                                }
+                            };
+
+                        available_agents[selected_idx].clone()
+                    };
+
+                    // Interactive mode: prompt for message if not provided
+                    let job_message = if let Some(m) = message {
+                        m.clone()
+                    } else {
+                        match inquire::Text::new("Message/prompt:")
+                            .with_help_message("The prompt or question for the agent to process")
+                            .prompt()
+                        {
+                            Ok(msg) => msg,
+                            Err(_) => {
+                                println!("Job creation cancelled.");
+                                return;
+                            }
+                        }
+                    };
+
+                    // Interactive mode: select schedule type if not provided
+                    let job_schedule_type = if let Some(st) = schedule_type {
+                        st.clone()
+                    } else {
+                        let schedule_options = vec!["once", "cron"];
+                        match inquire::Select::new("Schedule type:", schedule_options)
+                            .with_help_message("'once' runs immediately, 'cron' runs on a schedule")
+                            .prompt()
+                        {
+                            Ok(selection) => selection.to_string(),
+                            Err(_) => {
+                                println!("Job creation cancelled.");
+                                return;
+                            }
+                        }
+                    };
+
+                    // Validate schedule type and get cron expression
+                    let job_cron = if job_schedule_type == "cron" {
+                        if let Some(c) = cron {
+                            Some(c.clone())
+                        } else {
+                            match inquire::Text::new("Cron expression:")
+                                .with_help_message("6-field format: sec min hour day month dayofweek (e.g., \"0 0 9 * * Mon-Fri\")")
+                                .prompt()
+                            {
+                                Ok(expr) => Some(expr),
+                                Err(_) => {
+                                    println!("Job creation cancelled.");
+                                    return;
+                                }
+                            }
+                        }
+                    } else {
+                        cron.clone()
+                    };
+
+                    // Get optional parameters with defaults
+                    let job_priority = priority.unwrap_or(5);
+                    let job_max_cpu = max_cpu.unwrap_or(70);
+                    let job_timeout = timeout.unwrap_or(3600);
+
+                    // Create job payload
+                    let payload = db::JobPayload {
+                        agent_id: selected_agent.clone(),
+                        message: job_message.clone(),
+                        system_prompt: None,
+                        file_path: file.clone(),
+                        session_id: None,
+                    };
+
+                    let payload_json = serde_json::to_string(&payload).unwrap();
+
+                    let job = db::BackgroundJob {
+                        id: None,
+                        name: job_name.clone(),
+                        schedule_type: job_schedule_type.clone(),
+                        cron_expression: job_cron.clone(),
+                        priority: job_priority,
+                        max_cpu_percent: job_max_cpu,
+                        status: "pending".to_string(),
+                        last_run: None,
+                        next_run: None,
+                        retries: 0,
+                        max_retries: app_config.jobs.default_retries,
+                        payload: payload_json,
+                        result: None,
+                        error_message: None,
+                        is_active: true,
+                        timeout_seconds: job_timeout,
+                    };
+
+                    match db.create_job(&job) {
+                        Ok(job_id) => {
+                            println!("✓ Job created successfully!");
+                            println!("  Job ID: {}", job_id);
+                            println!("  Name: {}", job_name);
+                            println!("  Agent: {}", selected_agent);
+                            println!("  Type: {}", job_schedule_type);
+                            if let Some(cron_expr) = &job_cron {
+                                println!("  Schedule: {}", cron_expr);
+                            }
+                            println!("\nView details: squid jobs show {}", job_id);
+
+                            if job_schedule_type == "cron" {
+                                println!(
+                                    "\nNote: The job scheduler must be running for cron jobs to execute."
+                                );
+                                println!("      Start the server with: squid serve");
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to create job: {}", e);
+                            println!("🦑: Failed to create job - {}", e);
+                        }
+                    }
+                }
+                JobCommands::Delete { id, yes } => {
+                    // Get job first to show what will be deleted
+                    match db.get_job_by_id(*id) {
+                        Ok(Some(job)) => {
+                            if !yes {
+                                println!("🦑: About to delete job:");
+                                println!("  ID: {}", id);
+                                println!("  Name: {}", job.name);
+                                println!("  Type: {}", job.schedule_type);
+                                println!("  Status: {}", job.status);
+                                print!("\nAre you sure? (y/N): ");
+
+                                use std::io::{self, Write};
+                                io::stdout().flush().unwrap();
+
+                                let mut response = String::new();
+                                io::stdin().read_line(&mut response).unwrap();
+
+                                if !response.trim().eq_ignore_ascii_case("y") {
+                                    println!("Cancelled.");
+                                    return;
+                                }
+                            }
+
+                            match db.delete_job(*id) {
+                                Ok(_) => {
+                                    println!("✓ Job {} deleted successfully", id);
+                                }
+                                Err(e) => {
+                                    error!("Failed to delete job: {}", e);
+                                    println!("🦑: Failed to delete job - {}", e);
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            println!("🦑: Job {} not found", id);
+                        }
+                        Err(e) => {
+                            error!("Failed to get job: {}", e);
+                            println!("🦑: Failed to get job - {}", e);
+                        }
+                    }
+                }
+                JobCommands::Pause { id } => match db.pause_job(*id) {
+                    Ok(_) => {
+                        println!("✓ Job {} paused", id);
+                        println!("  The job will not run on its schedule until resumed.");
+                        println!("  Resume with: squid jobs resume {}", id);
+                    }
+                    Err(e) => {
+                        error!("Failed to pause job: {}", e);
+                        println!("🦑: Failed to pause job - {}", e);
+                        println!("    Note: Only cron jobs can be paused");
+                    }
+                },
+                JobCommands::Resume { id } => match db.resume_job(*id) {
+                    Ok(_) => {
+                        println!("✓ Job {} resumed", id);
+                        println!("  The job will run according to its schedule.");
+                    }
+                    Err(e) => {
+                        error!("Failed to resume job: {}", e);
+                        println!("🦑: Failed to resume job - {}", e);
+                        println!("    Note: Only cron jobs can be resumed");
+                    }
+                },
+                JobCommands::Trigger { id } => {
+                    // First check if job exists and is a cron job
+                    match db.get_job_by_id(*id) {
+                        Ok(Some(job)) => {
+                            if job.schedule_type != "cron" {
+                                println!(
+                                    "🦑: Job {} is not a cron job (type: {})",
+                                    id, job.schedule_type
+                                );
+                                println!("    Only cron jobs can be manually triggered");
+                                return;
+                            }
+
+                            println!("🦑: Triggering job {} manually...", id);
+                            println!("    Name: {}", job.name);
+                            println!(
+                                "\n    Note: The job scheduler must be running to execute this job."
+                            );
+                            println!("          Start the server with: squid serve");
+                            println!("\n    The job will be queued and executed by the scheduler.");
+                            println!("    Check status with: squid jobs show {}", id);
+
+                            // For now, just update the job to pending status
+                            // The actual trigger would need the job scheduler running
+                            match db.update_job_status(*id, "pending") {
+                                Ok(_) => {
+                                    println!("\n✓ Job queued for execution");
+                                }
+                                Err(e) => {
+                                    error!("Failed to queue job: {}", e);
+                                    println!("🦑: Failed to queue job - {}", e);
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            println!("🦑: Job {} not found", id);
+                        }
+                        Err(e) => {
+                            error!("Failed to get job: {}", e);
+                            println!("🦑: Failed to get job - {}", e);
+                        }
+                    }
+                }
             }
         }
         Commands::Doctor => {

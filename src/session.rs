@@ -115,6 +115,7 @@ pub struct ChatSession {
     pub agent_id: Option<String>,
     pub token_usage: TokenUsage,
     pub cost_usd: f64,
+    pub is_readonly: bool,
 }
 
 impl ChatSession {
@@ -130,6 +131,7 @@ impl ChatSession {
             agent_id: None,
             token_usage: TokenUsage::default(),
             cost_usd: 0.0,
+            is_readonly: false,
         }
     }
 

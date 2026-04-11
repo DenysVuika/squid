@@ -205,6 +205,13 @@ impl Database {
             include_str!("../migrations/013_agent_token_stats.sql"),
         )?;
 
+        // Migration 014: Background jobs system (jobs + execution history + readonly sessions)
+        run_migration(
+            14,
+            "Background jobs system",
+            include_str!("../migrations/014_background_jobs.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
@@ -215,7 +222,7 @@ impl Database {
 
         // Try to update existing session first
         let updated = conn.execute(
-            "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, agent_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12, context_window = ?13 WHERE id = ?1",
+            "UPDATE sessions SET created_at = ?2, updated_at = ?3, metadata = ?4, title = ?5, agent_id = ?6, total_tokens = ?7, input_tokens = ?8, output_tokens = ?9, reasoning_tokens = ?10, cache_tokens = ?11, cost_usd = ?12, context_window = ?13, is_readonly = ?14 WHERE id = ?1",
             params![
                 session.id,
                 session.created_at,
@@ -230,13 +237,14 @@ impl Database {
                 session.token_usage.cache_tokens,
                 session.cost_usd,
                 session.token_usage.context_window,
+                session.is_readonly as i32,
             ],
         )?;
 
         // If no rows were updated, insert new session
         if updated == 0 {
             conn.execute(
-                "INSERT INTO sessions (id, created_at, updated_at, metadata, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                "INSERT INTO sessions (id, created_at, updated_at, metadata, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window, is_readonly) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     session.id,
                     session.created_at,
@@ -251,6 +259,7 @@ impl Database {
                     session.token_usage.cache_tokens,
                     session.cost_usd,
                     session.token_usage.context_window,
+                    session.is_readonly as i32,
                 ],
             )?;
         }
@@ -263,8 +272,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         // Load session metadata
-        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window FROM sessions WHERE id = ?1")?;
+        let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title, agent_id, total_tokens, input_tokens, output_tokens, reasoning_tokens, cache_tokens, cost_usd, context_window, is_readonly FROM sessions WHERE id = ?1")?;
         let session_result = stmt.query_row(params![session_id], |row| {
+            let is_readonly_int: i32 = row.get(12)?;
             Ok(ChatSession {
                 id: row.get(0)?,
                 messages: Vec::new(), // Will be populated below
@@ -282,6 +292,7 @@ impl Database {
                     context_utilization: 0.0, // Will be calculated
                 },
                 cost_usd: row.get(10)?,
+                is_readonly: is_readonly_int != 0,
             })
         });
 
@@ -370,6 +381,21 @@ impl Database {
                     content_before_tool: row.get(7)?,
                 })
             })?.collect::<SqliteResult<Vec<crate::session::ThinkingStep>>>()?;
+
+            // Filter out thinking steps with no meaningful content
+            // (empty reasoning steps, tool steps without tool_name, etc.)
+            let thinking_steps: Vec<_> = thinking_steps.into_iter().filter(|step| {
+                // Reasoning steps must have non-empty content
+                if step.step_type == "reasoning" {
+                    step.content.as_ref().is_some_and(|c| !c.trim().is_empty())
+                } else if step.step_type == "tool" {
+                    // Tool steps must have a tool_name
+                    step.tool_name.is_some()
+                } else {
+                    // Keep other step types
+                    true
+                }
+            }).collect();
 
             let thinking_steps = if thinking_steps.is_empty() {
                 None
@@ -1256,5 +1282,1353 @@ mod tests {
             loaded_steps[1].tool_error.as_ref().unwrap(),
             "File not found"
         );
+    }
+
+    #[test]
+    fn test_empty_reasoning_steps_filtered() {
+        // Test that empty reasoning steps are filtered out when loading sessions
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        // Add user message
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with empty reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("".to_string()), // Empty content
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - empty reasoning should be filtered out
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+        assert_eq!(loaded.messages.len(), 2);
+
+        // Verify assistant message has NO thinking steps (empty one was filtered)
+        assert_eq!(loaded.messages[1].role, "assistant");
+        assert!(loaded.messages[1].thinking_steps.is_none());
+    }
+
+    #[test]
+    fn test_whitespace_reasoning_steps_filtered() {
+        // Test that reasoning steps with only whitespace are filtered out
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with whitespace-only reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("   \n\t  ".to_string()), // Only whitespace
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - whitespace-only reasoning should be filtered out
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+
+        // Verify assistant message has NO thinking steps (whitespace was filtered)
+        assert!(loaded.messages[1].thinking_steps.is_none());
+    }
+
+    #[test]
+    fn test_valid_reasoning_preserved() {
+        // Test that valid reasoning steps are preserved
+        let db = Database::new(":memory:").unwrap();
+        let mut session = ChatSession::new();
+        let session_id = session.id.clone();
+
+        db.save_session(&session).unwrap();
+
+        session.add_message("user".to_string(), "Hello".to_string(), vec![]);
+        let user_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, user_msg).unwrap();
+
+        // Add assistant message with valid reasoning step
+        let thinking_steps = vec![crate::session::ThinkingStep {
+            step_type: "reasoning".to_string(),
+            step_order: 0,
+            content: Some("This is valid reasoning content".to_string()),
+            tool_name: None,
+            tool_arguments: None,
+            tool_result: None,
+            tool_error: None,
+            content_before_tool: None,
+        }];
+
+        session.add_message("assistant".to_string(), "Response".to_string(), vec![]);
+        if let Some(message) = session.messages.last_mut() {
+            message.thinking_steps = Some(thinking_steps);
+        }
+
+        let assistant_msg = session.messages.last().unwrap();
+        db.save_message(&session_id, assistant_msg).unwrap();
+
+        // Load session - valid reasoning should be preserved
+        let loaded = db.load_session(&session_id).unwrap().unwrap();
+
+        // Verify assistant message has thinking steps with valid content
+        assert!(loaded.messages[1].thinking_steps.is_some());
+        let steps = loaded.messages[1].thinking_steps.as_ref().unwrap();
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].step_type, "reasoning");
+        assert_eq!(
+            steps[0].content.as_ref().unwrap(),
+            "This is valid reasoning content"
+        );
+    }
+
+    #[test]
+    fn test_background_job_crud_lifecycle() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a one-off job
+        let job = BackgroundJob {
+            id: None,
+            name: "Test Job".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{"agent_id":"test","message":"hello"}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        // Create
+        let job_id = db.create_job(&job).unwrap();
+        assert!(job_id > 0);
+
+        // Read
+        let fetched = db.get_job_by_id(job_id).unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.name, "Test Job");
+        assert_eq!(fetched.status, "pending");
+        assert!(fetched.is_active);
+
+        // Update status to running
+        db.update_job_status(job_id, "running").unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "running");
+
+        // Update result
+        db.update_job_result(job_id, "completed", Some("done"), None)
+            .unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert_eq!(fetched.result, Some("done".to_string()));
+
+        // Get all jobs
+        let all_jobs = db.get_all_jobs().unwrap();
+        assert_eq!(all_jobs.len(), 1);
+    }
+
+    #[test]
+    fn test_background_job_complete_deactivates_one_off() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "One-off".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job (should deactivate one-off jobs)
+        db.complete_job(job_id, "once", Some("result"), None)
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert!(!fetched.is_active); // One-off job deactivated
+    }
+
+    #[test]
+    fn test_background_job_complete_keeps_cron_active() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Cron Job".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 * * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "running".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job (should keep cron jobs active)
+        db.complete_job(job_id, "cron", Some("result"), None)
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "completed");
+        assert!(fetched.is_active); // Cron job stays active
+    }
+
+    #[test]
+    fn test_background_job_retries() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Increment retries twice
+        db.increment_job_retries(job_id).unwrap();
+        db.increment_job_retries(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.retries, 2);
+
+        // Update with error
+        db.update_job_result(job_id, "failed", None, Some("timeout"))
+            .unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "failed");
+        assert_eq!(fetched.error_message, Some("timeout".to_string()));
+    }
+
+    #[test]
+    fn test_background_job_cancel() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Cancel Me".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Cancel the job
+        db.cancel_job(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(fetched.status, "cancelled");
+        assert!(!fetched.is_active);
+    }
+
+    #[test]
+    fn test_background_job_delete() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Delete Me".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Delete the job
+        db.delete_job(job_id).unwrap();
+
+        // Verify it's gone
+        let fetched = db.get_job_by_id(job_id).unwrap();
+        assert!(fetched.is_none());
+
+        // Verify job list is empty
+        let all_jobs = db.get_all_jobs().unwrap();
+        assert!(all_jobs.is_empty());
+    }
+
+    #[test]
+    fn test_background_job_payload_parsing() {
+        let db = Database::new(":memory:").unwrap();
+
+        let payload = serde_json::json!({
+            "agent_id": "shakespeare",
+            "message": "Say hello",
+            "system_prompt": null,
+            "file_path": null,
+            "session_id": null
+        });
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Payload Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: payload.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+
+        // Parse the payload back
+        let parsed: serde_json::Value = serde_json::from_str(&fetched.payload).unwrap();
+        assert_eq!(parsed["agent_id"], "shakespeare");
+        assert_eq!(parsed["message"], "Say hello");
+    }
+
+    #[test]
+    fn test_background_job_priority_ordering() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create jobs with different priorities
+        let priorities = vec![3, 8, 1, 10, 5];
+        for priority in priorities {
+            let job = BackgroundJob {
+                id: None,
+                name: format!("Priority {}", priority),
+                schedule_type: "once".to_string(),
+                cron_expression: None,
+                priority,
+                max_cpu_percent: 50,
+                status: "pending".to_string(),
+                last_run: None,
+                next_run: None,
+                retries: 0,
+                max_retries: 3,
+                payload: r#"{}"#.to_string(),
+                result: None,
+                error_message: None,
+                is_active: true,
+                timeout_seconds: 3600,
+            };
+            db.create_job(&job).unwrap();
+        }
+
+        // Get pending jobs (should be ordered by priority DESC)
+        let pending = db.get_pending_jobs().unwrap();
+        assert_eq!(pending.len(), 5);
+
+        // Verify descending order
+        for i in 0..pending.len() - 1 {
+            assert!(pending[i].priority >= pending[i + 1].priority);
+        }
+    }
+
+    // Pause/Resume Tests
+    #[test]
+    fn test_pause_job_sets_inactive() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Pausable Cron".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Pause the job
+        db.pause_job(job_id).unwrap();
+
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert!(!fetched.is_active);
+    }
+
+    #[test]
+    fn test_resume_job_sets_active() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Resumable Cron".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Pause then resume
+        db.pause_job(job_id).unwrap();
+        assert!(!db.get_job_by_id(job_id).unwrap().unwrap().is_active);
+
+        db.resume_job(job_id).unwrap();
+        assert!(db.get_job_by_id(job_id).unwrap().unwrap().is_active);
+    }
+
+    #[test]
+    fn test_pause_only_affects_cron_jobs() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a one-off job
+        let job = BackgroundJob {
+            id: None,
+            name: "One-off".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Attempt to pause (should only work on cron jobs)
+        db.pause_job(job_id).unwrap();
+
+        // Should still be active because it's not a cron job
+        let fetched = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert!(fetched.is_active); // Pause SQL query filters by schedule_type = 'cron'
+    }
+
+    // Cleanup/Retention Tests
+    #[test]
+    fn test_cleanup_old_jobs() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create old completed job (simulate by manually setting timestamp)
+        let old_job = BackgroundJob {
+            id: None,
+            name: "Old Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let old_job_id = db.create_job(&old_job).unwrap();
+
+        // Manually set old timestamp (40 days ago)
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE background_jobs SET updated_at = datetime('now', '-40 days') WHERE id = ?1",
+            params![old_job_id],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Create recent completed job
+        let recent_job = BackgroundJob {
+            id: None,
+            name: "Recent Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let recent_job_id = db.create_job(&recent_job).unwrap();
+
+        // Cleanup jobs older than 30 days
+        let deleted = db.cleanup_old_jobs(30).unwrap();
+
+        // Should have deleted only the old job
+        assert_eq!(deleted, 1);
+        assert!(db.get_job_by_id(old_job_id).unwrap().is_none());
+        assert!(db.get_job_by_id(recent_job_id).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_cleanup_only_removes_completed_and_failed() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create old jobs with different statuses
+        let statuses = vec![
+            ("pending", true),    // Should NOT be deleted
+            ("running", true),    // Should NOT be deleted
+            ("completed", false), // Should be deleted
+            ("failed", false),    // Should be deleted
+        ];
+
+        let mut job_ids = vec![];
+        for (status, should_remain) in &statuses {
+            let job = BackgroundJob {
+                id: None,
+                name: format!("Job {}", status),
+                schedule_type: "once".to_string(),
+                cron_expression: None,
+                priority: 5,
+                max_cpu_percent: 50,
+                status: status.to_string(),
+                last_run: None,
+                next_run: None,
+                retries: 0,
+                max_retries: 3,
+                payload: r#"{}"#.to_string(),
+                result: None,
+                error_message: None,
+                is_active: !*should_remain,
+                timeout_seconds: 3600,
+            };
+
+            let job_id = db.create_job(&job).unwrap();
+            job_ids.push((job_id, *should_remain));
+
+            // Set old timestamp (40 days ago)
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE background_jobs SET updated_at = datetime('now', '-40 days') WHERE id = ?1",
+                params![job_id],
+            )
+            .unwrap();
+            drop(conn);
+        }
+
+        // Cleanup jobs older than 30 days
+        let deleted = db.cleanup_old_jobs(30).unwrap();
+
+        // Should have deleted only completed and failed
+        assert_eq!(deleted, 2);
+
+        // Verify which jobs remain
+        for (job_id, should_remain) in job_ids {
+            let exists = db.get_job_by_id(job_id).unwrap().is_some();
+            assert_eq!(exists, should_remain);
+        }
+    }
+
+    #[test]
+    fn test_cleanup_with_zero_retention_deletes_all_old() {
+        let db = Database::new(":memory:").unwrap();
+
+        // Create a just-completed job
+        let job = BackgroundJob {
+            id: None,
+            name: "Just Completed".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "completed".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: Some("done".to_string()),
+            error_message: None,
+            is_active: false,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Set timestamp to 1 day ago
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE background_jobs SET updated_at = datetime('now', '-1 days') WHERE id = ?1",
+            params![job_id],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Cleanup with 0 retention (delete everything older than now)
+        let deleted = db.cleanup_old_jobs(0).unwrap();
+
+        // Should delete the 1-day-old job
+        assert_eq!(deleted, 1);
+        assert!(db.get_job_by_id(job_id).unwrap().is_none());
+    }
+
+    // Retry Logic Tests
+    #[test]
+    fn test_job_retry_increments_correctly() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Test".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // First failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 1);
+
+        // Second failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 2);
+
+        // Third failure
+        db.increment_job_retries(job_id).unwrap();
+        assert_eq!(db.get_job_by_id(job_id).unwrap().unwrap().retries, 3);
+    }
+
+    #[test]
+    fn test_job_max_retries_check() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Max Retries".to_string(),
+            schedule_type: "once".to_string(),
+            cron_expression: None,
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "pending".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 0,
+            max_retries: 2,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Simulate failures up to max
+        db.increment_job_retries(job_id).unwrap();
+        db.increment_job_retries(job_id).unwrap();
+
+        let job_after = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(job_after.retries, 2);
+        assert!(job_after.retries >= job_after.max_retries); // Should not retry anymore
+    }
+
+    #[test]
+    fn test_job_retries_reset_on_completion() {
+        let db = Database::new(":memory:").unwrap();
+
+        let job = BackgroundJob {
+            id: None,
+            name: "Retry Reset".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 0 9 * * *".to_string()),
+            priority: 5,
+            max_cpu_percent: 50,
+            status: "running".to_string(),
+            last_run: None,
+            next_run: None,
+            retries: 2, // Had failures before
+            max_retries: 3,
+            payload: r#"{}"#.to_string(),
+            result: None,
+            error_message: None,
+            is_active: true,
+            timeout_seconds: 3600,
+        };
+
+        let job_id = db.create_job(&job).unwrap();
+
+        // Complete the job - retries stay as-is for historical record
+        db.complete_job(job_id, "cron", Some("success"), None)
+            .unwrap();
+
+        let completed = db.get_job_by_id(job_id).unwrap().unwrap();
+        assert_eq!(completed.status, "completed");
+        // Note: Retries are preserved for historical tracking
+        assert_eq!(completed.retries, 2);
+    }
+}
+
+// ============================================================================
+// Background Jobs
+// ============================================================================
+
+/// Represents a background job (cron or one-off task)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BackgroundJob {
+    pub id: Option<i64>,
+    pub name: String,
+    pub schedule_type: String, // "cron" or "once"
+    pub cron_expression: Option<String>,
+    pub priority: i32,
+    pub max_cpu_percent: i32,
+    pub status: String,
+    pub last_run: Option<String>,
+    pub next_run: Option<String>,
+    pub retries: i32,
+    pub max_retries: i32,
+    pub payload: String, // JSON
+    pub result: Option<String>,
+    pub error_message: Option<String>,
+    pub is_active: bool,
+    pub timeout_seconds: i64, // Job timeout in seconds (0 = no timeout)
+}
+
+/// Job Execution Record (tracks individual runs of a job)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobExecution {
+    pub id: Option<i64>,
+    pub job_id: i64,
+    pub session_id: Option<String>,
+    pub status: String,         // "completed", "failed", "cancelled"
+    pub result: Option<String>, // JSON
+    pub error_message: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub tokens_used: Option<i64>,
+    pub cost_usd: Option<f64>,
+}
+
+/// Payload for a background job
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobPayload {
+    pub agent_id: String,
+    pub message: String,
+    pub system_prompt: Option<String>,
+    pub file_path: Option<String>,
+    pub session_id: Option<String>,
+}
+
+impl Database {
+    /// Create a new background job
+    pub fn create_job(&self, job: &BackgroundJob) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "INSERT INTO background_jobs
+             (name, schedule_type, cron_expression, priority, max_cpu_percent, status, retries, max_retries, payload, result, error_message, is_active, timeout_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                job.name,
+                job.schedule_type,
+                job.cron_expression,
+                job.priority,
+                job.max_cpu_percent,
+                job.status,
+                job.retries,
+                job.max_retries,
+                job.payload,
+                job.result,
+                job.error_message,
+                job.is_active,
+                job.timeout_seconds,
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all pending jobs (for restoration on startup)
+    pub fn get_pending_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
+             FROM background_jobs
+             WHERE is_active = 1 AND status = 'pending'
+             ORDER BY priority DESC, created_at ASC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Get all active cron jobs (for scheduling)
+    pub fn get_active_cron_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
+             FROM background_jobs
+             WHERE is_active = 1 AND schedule_type = 'cron' AND status != 'cancelled'
+             ORDER BY priority DESC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Update job status
+    pub fn update_job_status(&self, id: i64, status: &str) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        if status == "running" {
+            conn.execute(
+                "UPDATE background_jobs 
+                 SET status = ?1, last_run = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2",
+                params![status, id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE background_jobs 
+                 SET status = ?1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?2",
+                params![status, id],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Update job result and error message
+    pub fn update_job_result(
+        &self,
+        id: i64,
+        status: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET status = ?1, result = ?2, error_message = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            params![status, result, error_message, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Complete a job (marks as completed, deactivates one-off jobs so they don't re-run)
+    pub fn complete_job(
+        &self,
+        id: i64,
+        schedule_type: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // One-off jobs should be deactivated so they don't get re-queued on restart
+        let is_active = if schedule_type == "cron" { 1 } else { 0 };
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET status = 'completed', result = ?1, error_message = ?2, is_active = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            params![result, error_message, is_active, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Increment job retries
+    pub fn increment_job_retries(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs 
+             SET retries = retries + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Cancel a job
+    pub fn cancel_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET status = 'cancelled', is_active = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Pause a background job (sets is_active = false)
+    pub fn pause_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND schedule_type = 'cron'",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Resume a background job (sets is_active = true)
+    pub fn resume_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET is_active = 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND schedule_type = 'cron'",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a job
+    pub fn delete_job(&self, id: i64) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute("DELETE FROM background_jobs WHERE id = ?1", params![id])?;
+
+        Ok(())
+    }
+
+    /// Get all jobs
+    pub fn get_all_jobs(&self) -> SqliteResult<Vec<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
+             FROM background_jobs
+             ORDER BY created_at DESC",
+        )?;
+
+        let jobs = stmt
+            .query_map([], |row| {
+                Ok(BackgroundJob {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    schedule_type: row.get(2)?,
+                    cron_expression: row.get(3)?,
+                    priority: row.get(4)?,
+                    max_cpu_percent: row.get(5)?,
+                    status: row.get(6)?,
+                    last_run: row.get(7)?,
+                    next_run: row.get(8)?,
+                    retries: row.get(9)?,
+                    max_retries: row.get(10)?,
+                    payload: row.get(11)?,
+                    result: row.get(12)?,
+                    error_message: row.get(13)?,
+                    is_active: row.get(14)?,
+                    timeout_seconds: row.get(15)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<BackgroundJob>>>()?;
+
+        Ok(jobs)
+    }
+
+    /// Get a single job by ID
+    pub fn get_job_by_id(&self, id: i64) -> SqliteResult<Option<BackgroundJob>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, name, schedule_type, cron_expression, priority, max_cpu_percent,
+                    status, last_run, next_run, retries, max_retries, payload,
+                    result, error_message, is_active, timeout_seconds
+             FROM background_jobs
+             WHERE id = ?1",
+        )?;
+
+        let job = stmt.query_row(params![id], |row| {
+            Ok(BackgroundJob {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                schedule_type: row.get(2)?,
+                cron_expression: row.get(3)?,
+                priority: row.get(4)?,
+                max_cpu_percent: row.get(5)?,
+                status: row.get(6)?,
+                last_run: row.get(7)?,
+                next_run: row.get(8)?,
+                retries: row.get(9)?,
+                max_retries: row.get(10)?,
+                payload: row.get(11)?,
+                result: row.get(12)?,
+                error_message: row.get(13)?,
+                is_active: row.get(14)?,
+                timeout_seconds: row.get(15)?,
+            })
+        });
+
+        match job {
+            Ok(j) => Ok(Some(j)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Delete old completed/failed jobs (retention policy)
+    /// Deletes jobs that are completed or failed and older than the specified days
+    pub fn cleanup_old_jobs(&self, retention_days: i64) -> SqliteResult<usize> {
+        let conn = self.conn.lock().unwrap();
+
+        let deleted = conn.execute(
+            "DELETE FROM background_jobs
+             WHERE status IN ('completed', 'failed')
+             AND updated_at < datetime('now', '-' || ?1 || ' days')",
+            params![retention_days],
+        )?;
+
+        Ok(deleted)
+    }
+
+    /// Update job's next_run timestamp
+    pub fn update_job_next_run(&self, id: i64, next_run: Option<&str>) -> SqliteResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE background_jobs
+             SET next_run = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?2",
+            params![next_run, id],
+        )?;
+
+        Ok(())
+    }
+
+    // ===== Job Executions (Execution History) =====
+
+    /// Create a new job execution record
+    pub fn create_job_execution(
+        &self,
+        job_id: i64,
+        session_id: Option<&str>,
+        status: &str,
+        result: Option<&str>,
+        error_message: Option<&str>,
+        started_at: &str,
+        completed_at: Option<&str>,
+        duration_ms: Option<i64>,
+        tokens_used: Option<i64>,
+        cost_usd: Option<f64>,
+    ) -> SqliteResult<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "INSERT INTO job_executions (job_id, session_id, status, result, error_message,
+                                         started_at, completed_at, duration_ms, tokens_used, cost_usd)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                job_id,
+                session_id,
+                status,
+                result,
+                error_message,
+                started_at,
+                completed_at,
+                duration_ms,
+                tokens_used,
+                cost_usd
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all executions for a specific job
+    pub fn get_job_executions(
+        &self,
+        job_id: i64,
+        limit: Option<i64>,
+    ) -> SqliteResult<Vec<JobExecution>> {
+        let conn = self.conn.lock().unwrap();
+
+        let query = if let Some(lim) = limit {
+            format!(
+                "SELECT id, job_id, session_id, status, result, error_message,
+                        started_at, completed_at, duration_ms, tokens_used, cost_usd
+                 FROM job_executions
+                 WHERE job_id = ?1
+                 ORDER BY started_at DESC
+                 LIMIT {}",
+                lim
+            )
+        } else {
+            "SELECT id, job_id, session_id, status, result, error_message,
+                    started_at, completed_at, duration_ms, tokens_used, cost_usd
+             FROM job_executions
+             WHERE job_id = ?1
+             ORDER BY started_at DESC"
+                .to_string()
+        };
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let executions = stmt
+            .query_map([job_id], |row| {
+                Ok(JobExecution {
+                    id: row.get(0)?,
+                    job_id: row.get(1)?,
+                    session_id: row.get(2)?,
+                    status: row.get(3)?,
+                    result: row.get(4)?,
+                    error_message: row.get(5)?,
+                    started_at: row.get(6)?,
+                    completed_at: row.get(7)?,
+                    duration_ms: row.get(8)?,
+                    tokens_used: row.get(9)?,
+                    cost_usd: row.get(10)?,
+                })
+            })?
+            .collect::<SqliteResult<Vec<JobExecution>>>()?;
+
+        Ok(executions)
+    }
+
+    /// Get a single job execution by ID
+    pub fn get_job_execution(&self, id: i64) -> SqliteResult<Option<JobExecution>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, job_id, session_id, status, result, error_message,
+                    started_at, completed_at, duration_ms, tokens_used, cost_usd
+             FROM job_executions
+             WHERE id = ?1",
+        )?;
+
+        let mut rows = stmt.query([id])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(JobExecution {
+                id: row.get(0)?,
+                job_id: row.get(1)?,
+                session_id: row.get(2)?,
+                status: row.get(3)?,
+                result: row.get(4)?,
+                error_message: row.get(5)?,
+                started_at: row.get(6)?,
+                completed_at: row.get(7)?,
+                duration_ms: row.get(8)?,
+                tokens_used: row.get(9)?,
+                cost_usd: row.get(10)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Delete old job executions (retention policy)
+    pub fn delete_old_job_executions(&self, max_age_days: i64) -> SqliteResult<usize> {
+        let conn = self.conn.lock().unwrap();
+
+        let rows_deleted = conn.execute(
+            "DELETE FROM job_executions
+             WHERE started_at < datetime('now', '-' || ?1 || ' days')",
+            params![max_age_days],
+        )?;
+
+        Ok(rows_deleted)
     }
 }

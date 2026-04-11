@@ -30,5 +30,11 @@
   "web": {
     "sounds": true
   },
+  "jobs": {
+    "enabled": true,
+    "max_concurrent_jobs": 2,
+    "max_cpu_percent": 70,
+    "default_retries": 3
+  },
   "default_agent": "general-assistant"
 }

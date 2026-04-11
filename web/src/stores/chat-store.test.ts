@@ -532,11 +532,7 @@ describe('useChatStore', () => {
       expect(useChatStore.getState().messages).toHaveLength(0);
     });
 
-    it('sets the active session via sessionStore', async () => {
-      vi.mocked(loadSession).mockResolvedValueOnce(makeSessionData({ session_id: 'sess-1' }));
-      await useChatStore.getState().loadSessionHistory('sess-1');
-      expect(mockSessionState.setActiveSession).toHaveBeenCalledWith('sess-1');
-    });
+    // Note: Active session is now managed by URL in App.tsx, not by loadSessionHistory
 
     it('maps session messages to UI messages preserving role and content', async () => {
       vi.mocked(loadSession).mockResolvedValueOnce(
