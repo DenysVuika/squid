@@ -77,6 +77,270 @@ fn get_tool_description(tool_name: &str) -> String {
     }
 }
 
+// ========================================
+// Helper Functions
+// ========================================
+
+/// Build a SessionListItem from a session
+fn build_session_list_item(session: &session::ChatSession) -> SessionListItem {
+    let preview = session
+        .messages
+        .iter()
+        .find(|msg| msg.role == "user")
+        .map(|msg| {
+            let content = &msg.content;
+            if content.len() > 100 {
+                format!("{}...", &content[..100])
+            } else {
+                content.clone()
+            }
+        });
+
+    SessionListItem {
+        session_id: session.id.clone(),
+        message_count: session.messages.len(),
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        preview,
+        title: session.title.clone(),
+        agent_id: session.agent_id.clone(),
+        token_usage: TokenUsageResponse {
+            total_tokens: session.token_usage.total_tokens,
+            input_tokens: session.token_usage.input_tokens,
+            output_tokens: session.token_usage.output_tokens,
+            reasoning_tokens: session.token_usage.reasoning_tokens,
+            cache_tokens: session.token_usage.cache_tokens,
+            context_window: session.token_usage.context_window,
+            context_utilization: session.token_usage.context_utilization,
+        },
+        cost_usd: session.cost_usd,
+        is_readonly: session.is_readonly,
+    }
+}
+
+/// Broadcast a session update with the given session
+fn broadcast_session_update_for_session(session_manager: &session::SessionManager, session_id: &str) {
+    if let Some(session) = session_manager.get_session(session_id) {
+        let session_item = build_session_list_item(&session);
+        broadcast_session_update(SessionUpdateEvent::Update {
+            session: session_item,
+        });
+    }
+}
+
+/// Remove <think>...</think> and <tool_call>...</tool_call> tags from content
+fn sanitize_assistant_content(content: &str) -> String {
+    let mut result = content.to_string();
+
+    // Remove all <think>...</think> tags
+    while let Some(think_start) = result.find("<think>") {
+        if let Some(think_end) = result.find("</think>") {
+            if think_end > think_start {
+                result = format!(
+                    "{}{}",
+                    &result[..think_start],
+                    &result[think_end + 8..]
+                );
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Remove all <tool_call>...</tool_call> tags
+    while let Some(tool_start) = result.find("<tool_call>") {
+        if let Some(tool_end) = result.find("</tool_call>") {
+            if tool_end > tool_start {
+                result = format!(
+                    "{}{}",
+                    &result[..tool_start],
+                    &result[tool_end + 12..]
+                );
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    result
+}
+
+/// Reconstruct chat messages from session history (excluding last message)
+fn build_messages_from_history(
+    session: &session::ChatSession,
+    system_message: String,
+) -> Vec<ChatCompletionRequestMessage> {
+    let mut messages: Vec<ChatCompletionRequestMessage> = vec![
+        ChatCompletionRequestSystemMessage {
+            content: system_message.into(),
+            ..Default::default()
+        }
+        .into(),
+    ];
+
+    // Add conversation history (excluding the last user message)
+    for (i, msg) in session.messages.iter().enumerate() {
+        if i == session.messages.len() - 1 {
+            break; // Skip the last message as it will be added with full context
+        }
+
+        if msg.role == "user" {
+            messages.push(
+                ChatCompletionRequestUserMessage {
+                    content: msg.content.clone().into(),
+                    ..Default::default()
+                }
+                .into(),
+            );
+        } else if msg.role == "assistant" {
+            // Check if this message has tool invocations in thinking steps
+            if let Some(thinking_steps) = &msg.thinking_steps {
+                let tool_steps: Vec<_> = thinking_steps
+                    .iter()
+                    .filter(|s| s.step_type == "tool")
+                    .collect();
+
+                if !tool_steps.is_empty() {
+                    // Reconstruct tool calls from thinking steps
+                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, step)| {
+                            let mut tool_call = ChatCompletionMessageToolCall {
+                                id: format!("call_{}", idx),
+                                function: Default::default(),
+                            };
+                            tool_call.function.name = step.tool_name.clone().unwrap_or_default();
+                            tool_call.function.arguments =
+                                serde_json::to_string(&step.tool_arguments).unwrap_or_default();
+                            ChatCompletionMessageToolCalls::Function(tool_call)
+                        })
+                        .collect();
+
+                    // Add assistant message with tool calls
+                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: if filtered_content.is_empty() {
+                                None
+                            } else {
+                                Some(filtered_content.into())
+                            },
+                            tool_calls: Some(assistant_tool_calls),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
+
+                    // Add tool result messages
+                    for (idx, step) in tool_steps.iter().enumerate() {
+                        let result_content = if let Some(error) = &step.tool_error {
+                            json!({"error": error}).to_string()
+                        } else if let Some(result) = &step.tool_result {
+                            result.clone()
+                        } else {
+                            json!({"message": "Tool executed"}).to_string()
+                        };
+
+                        messages.push(
+                            ChatCompletionRequestToolMessage {
+                                content: result_content.into(),
+                                tool_call_id: format!("call_{}", idx),
+                            }
+                            .into(),
+                        );
+                    }
+                } else {
+                    // No tools, just add normal assistant message
+                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
+                    messages.push(
+                        ChatCompletionRequestAssistantMessage {
+                            content: Some(filtered_content.into()),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
+                }
+            } else {
+                // No thinking steps, just add normal assistant message
+                let filtered_content = llm::strip_reasoning_blocks(&msg.content);
+                messages.push(
+                    ChatCompletionRequestAssistantMessage {
+                        content: Some(filtered_content.into()),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
+        }
+    }
+
+    messages
+}
+
+/// Estimate token usage for a session when provider doesn't report it
+async fn estimate_and_send_usage(
+    session_manager: &session::SessionManager,
+    session_id: &str,
+    model_id: &str,
+    system_prompt: Option<&str>,
+    accumulated_content: &str,
+) -> (i64, i64) {
+    let mut total_input_tokens = 0i64;
+    let mut total_output_tokens = 0i64;
+
+    if let Some(session) = session_manager.get_session(session_id) {
+        let mut estimate_messages = Vec::new();
+
+        // Add system message
+        let sys_msg_text = if let Some(prompt) = system_prompt {
+            prompt.to_string()
+        } else {
+            llm::combine_prompts(llm::get_ask_prompt())
+        };
+        let system_msg = ChatCompletionRequestSystemMessage {
+            content: sys_msg_text.into(),
+            ..Default::default()
+        };
+        estimate_messages.push(system_msg.into());
+
+        // Add all conversation history
+        for msg in &session.messages {
+            if msg.role == "user" {
+                estimate_messages.push(
+                    ChatCompletionRequestUserMessage {
+                        content: msg.content.clone().into(),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            } else if msg.role == "assistant" {
+                estimate_messages.push(
+                    ChatCompletionRequestAssistantMessage {
+                        content: Some(msg.content.clone().into()),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
+        }
+
+        let (estimated_input, _) = tokens::estimate_tokens(model_id, &estimate_messages);
+        total_input_tokens = estimated_input;
+
+        // Estimate output tokens from accumulated content
+        if !accumulated_content.is_empty() {
+            total_output_tokens = tokens::estimate_message_tokens(model_id, accumulated_content);
+        }
+    }
+
+    (total_input_tokens, total_output_tokens)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct FileAttachment {
     pub filename: String,
@@ -312,40 +576,7 @@ pub async fn list_sessions(
 
     for session_id in session_ids {
         if let Some(session) = session_manager.get_session(&session_id) {
-            // Get preview from first user message
-            let preview = session
-                .messages
-                .iter()
-                .find(|msg| msg.role == "user")
-                .map(|msg| {
-                    let content = &msg.content;
-                    if content.len() > 100 {
-                        format!("{}...", &content[..100])
-                    } else {
-                        content.clone()
-                    }
-                });
-
-            sessions.push(SessionListItem {
-                session_id: session.id.clone(),
-                message_count: session.messages.len(),
-                created_at: session.created_at,
-                updated_at: session.updated_at,
-                preview,
-                title: session.title.clone(),
-                agent_id: session.agent_id.clone(),
-                token_usage: TokenUsageResponse {
-                    total_tokens: session.token_usage.total_tokens,
-                    input_tokens: session.token_usage.input_tokens,
-                    output_tokens: session.token_usage.output_tokens,
-                    reasoning_tokens: session.token_usage.reasoning_tokens,
-                    cache_tokens: session.token_usage.cache_tokens,
-                    context_window: session.token_usage.context_window,
-                    context_utilization: session.token_usage.context_utilization,
-                },
-                cost_usd: session.cost_usd,
-                is_readonly: session.is_readonly,
-            });
+            sessions.push(build_session_list_item(&session));
         }
     }
 
@@ -397,45 +628,7 @@ pub async fn update_session(
     match session_manager.update_session_title(&session_id, title.to_string()) {
         Ok(_) => {
             // Broadcast session update
-            if let Some(session) = session_manager.get_session(&session_id) {
-                let preview = session
-                    .messages
-                    .iter()
-                    .find(|msg| msg.role == "user")
-                    .map(|msg| {
-                        let content = &msg.content;
-                        if content.len() > 100 {
-                            format!("{}...", &content[..100])
-                        } else {
-                            content.clone()
-                        }
-                    });
-
-                let session_item = SessionListItem {
-                    session_id: session.id.clone(),
-                    message_count: session.messages.len(),
-                    created_at: session.created_at,
-                    updated_at: session.updated_at,
-                    preview,
-                    title: session.title.clone(),
-                    agent_id: session.agent_id.clone(),
-                    token_usage: TokenUsageResponse {
-                        total_tokens: session.token_usage.total_tokens,
-                        input_tokens: session.token_usage.input_tokens,
-                        output_tokens: session.token_usage.output_tokens,
-                        reasoning_tokens: session.token_usage.reasoning_tokens,
-                        cache_tokens: session.token_usage.cache_tokens,
-                        context_window: session.token_usage.context_window,
-                        context_utilization: session.token_usage.context_utilization,
-                    },
-                    cost_usd: session.cost_usd,
-                    is_readonly: session.is_readonly,
-                };
-
-                broadcast_session_update(SessionUpdateEvent::Update {
-                    session: session_item,
-                });
-            }
+            broadcast_session_update_for_session(&session_manager, &session_id);
 
             Ok(HttpResponse::Ok().json(serde_json::json!({
                 "success": true,
@@ -758,50 +951,8 @@ pub async fn chat_stream(
                 }
 
                 // Add assistant message to session with sources
-                // Parse out ALL <think> tags from accumulated content for final display
-                let mut final_content = accumulated_content.clone();
-                let mut reasoning_parts = Vec::new();
-
-                // Remove all <think>...</think> tags
-                while let Some(think_start) = final_content.find("<think>") {
-                    if let Some(think_end) = final_content.find("</think>") {
-                        if think_end > think_start {
-                            // Extract reasoning between tags for backward compatibility
-                            let reasoning_text = final_content[think_start + 7..think_end].to_string();
-                            if !reasoning_text.trim().is_empty() {
-                                reasoning_parts.push(reasoning_text);
-                            }
-                            // Remove this <think>...</think> section from content
-                            final_content = format!(
-                                "{}{}",
-                                &final_content[..think_start],
-                                &final_content[think_end + 8..]
-                            );
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                // Remove all <tool_call>...</tool_call> tags (model's way of indicating tool calls)
-                while let Some(tool_start) = final_content.find("<tool_call>") {
-                    if let Some(tool_end) = final_content.find("</tool_call>") {
-                        if tool_end > tool_start {
-                            // Remove this <tool_call>...</tool_call> section from content
-                            final_content = format!(
-                                "{}{}",
-                                &final_content[..tool_start],
-                                &final_content[tool_end + 12..]
-                            );
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
+                // Parse out ALL <think> and <tool_call> tags from accumulated content for final display
+                let final_content = sanitize_assistant_content(&accumulated_content);
 
                 // Use the thinking steps we built during streaming
                 let thinking_steps_opt = if thinking_steps_ordered.is_empty() {
@@ -838,64 +989,28 @@ pub async fn chat_stream(
                 if !received_usage {
                     debug!("Provider didn't report token usage, estimating client-side for model: {}", model_id);
 
-                    // Estimate input tokens from the full conversation context
-                    if let Some(session) = session_manager_clone.get_session(&session_id) {
-                        // Build message list same way as the API call
-                        let mut estimate_messages = Vec::new();
+                    let (estimated_input, estimated_output) = estimate_and_send_usage(
+                        &session_manager_clone,
+                        &session_id,
+                        &model_id,
+                        system_prompt_for_stream.as_deref(),
+                        &accumulated_content,
+                    ).await;
 
-                        // Add system message (same logic as create_chat_stream)
-                        let sys_msg_text = if let Some(ref prompt) = system_prompt_for_stream {
-                            prompt.clone()
-                        } else {
-                            llm::combine_prompts(llm::get_ask_prompt())
-                        };
-                        let system_msg = ChatCompletionRequestSystemMessage {
-                            content: sys_msg_text.into(),
-                            ..Default::default()
-                        };
-                        estimate_messages.push(system_msg.into());
+                    total_input_tokens = estimated_input;
+                    total_output_tokens = estimated_output;
 
-                        // Add all conversation history
-                        for msg in &session.messages {
-                            if msg.role == "user" {
-                                estimate_messages.push(
-                                    ChatCompletionRequestUserMessage {
-                                        content: msg.content.clone().into(),
-                                        ..Default::default()
-                                    }
-                                    .into(),
-                                );
-                            } else if msg.role == "assistant" {
-                                estimate_messages.push(
-                                    ChatCompletionRequestAssistantMessage {
-                                        content: Some(msg.content.clone().into()),
-                                        ..Default::default()
-                                    }
-                                    .into(),
-                                );
-                            }
-                        }
-
-                        let (estimated_input, _) = tokens::estimate_tokens(&model_id, &estimate_messages);
-                        total_input_tokens = estimated_input;
-
-                        // Estimate output tokens from accumulated content
-                        if !accumulated_content.is_empty() {
-                            total_output_tokens = tokens::estimate_message_tokens(&model_id, accumulated_content.as_str());
-                        }
-
-                        // Send estimated usage to UI
-                        let usage_event = StreamEvent::Usage {
-                            input_tokens: total_input_tokens,
-                            output_tokens: total_output_tokens,
-                            reasoning_tokens: total_reasoning_tokens,
-                            cache_tokens: total_cache_tokens,
-                        };
-                        let json = serde_json::to_string(&usage_event).unwrap_or_default();
-                        yield Ok::<_, actix_web::Error>(
-                            web::Bytes::from(format!("data: {}\n\n", json))
-                        );
-                    }
+                    // Send estimated usage to UI
+                    let usage_event = StreamEvent::Usage {
+                        input_tokens: total_input_tokens,
+                        output_tokens: total_output_tokens,
+                        reasoning_tokens: total_reasoning_tokens,
+                        cache_tokens: total_cache_tokens,
+                    };
+                    let json = serde_json::to_string(&usage_event).unwrap_or_default();
+                    yield Ok::<_, actix_web::Error>(
+                        web::Bytes::from(format!("data: {}\n\n", json))
+                    );
                 }
 
                 // Update session with token usage and model info
@@ -923,45 +1038,7 @@ pub async fn chat_stream(
                 );
 
                 // Broadcast session update via SSE
-                if let Some(session) = session_manager_clone.get_session(&session_id) {
-                    let preview = session
-                        .messages
-                        .iter()
-                        .find(|msg| msg.role == "user")
-                        .map(|msg| {
-                            let content = &msg.content;
-                            if content.len() > 100 {
-                                format!("{}...", &content[..100])
-                            } else {
-                                content.clone()
-                            }
-                        });
-
-                    let session_item = SessionListItem {
-                        session_id: session.id.clone(),
-                        message_count: session.messages.len(),
-                        created_at: session.created_at,
-                        updated_at: session.updated_at,
-                        preview,
-                        title: session.title.clone(),
-                        agent_id: session.agent_id.clone(),
-                        token_usage: TokenUsageResponse {
-                            total_tokens: session.token_usage.total_tokens,
-                            input_tokens: session.token_usage.input_tokens,
-                            output_tokens: session.token_usage.output_tokens,
-                            reasoning_tokens: session.token_usage.reasoning_tokens,
-                            cache_tokens: session.token_usage.cache_tokens,
-                            context_window: session.token_usage.context_window,
-                            context_utilization: session.token_usage.context_utilization,
-                        },
-                        cost_usd: session.cost_usd,
-                        is_readonly: session.is_readonly,
-                    };
-
-                    broadcast_session_update(SessionUpdateEvent::Update {
-                        session: session_item,
-                    });
-                }
+                broadcast_session_update_for_session(&session_manager_clone, &session_id);
             }
             Err(e) => {
                 let error_event = StreamEvent::Error {
@@ -1073,113 +1150,8 @@ async fn create_chat_stream(
     // Capture agent_id for use in stream
     let agent_id_owned = agent_id.to_string();
 
-    let mut messages: Vec<ChatCompletionRequestMessage> = vec![
-        ChatCompletionRequestSystemMessage {
-            content: system_message.into(),
-            ..Default::default()
-        }
-        .into(),
-    ];
-
-    // Add conversation history (excluding the last user message we just added)
-    for (i, msg) in session.messages.iter().enumerate() {
-        if i == session.messages.len() - 1 {
-            break; // Skip the last message as we'll add it with full context
-        }
-
-        if msg.role == "user" {
-            messages.push(
-                ChatCompletionRequestUserMessage {
-                    content: msg.content.clone().into(),
-                    ..Default::default()
-                }
-                .into(),
-            );
-        } else if msg.role == "assistant" {
-            // Check if this message has tool invocations in thinking steps
-            if let Some(thinking_steps) = &msg.thinking_steps {
-                let tool_steps: Vec<_> = thinking_steps
-                    .iter()
-                    .filter(|s| s.step_type == "tool")
-                    .collect();
-
-                if !tool_steps.is_empty() {
-                    // Reconstruct tool calls from thinking steps
-                    let assistant_tool_calls: Vec<ChatCompletionMessageToolCalls> = tool_steps
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, step)| {
-                            let mut tool_call = ChatCompletionMessageToolCall {
-                                id: format!("call_{}", idx), // Generate synthetic ID
-                                function: Default::default(),
-                            };
-                            tool_call.function.name = step.tool_name.clone().unwrap_or_default();
-                            tool_call.function.arguments =
-                                serde_json::to_string(&step.tool_arguments).unwrap_or_default();
-                            ChatCompletionMessageToolCalls::Function(tool_call)
-                        })
-                        .collect();
-
-                    // Add assistant message with tool calls
-                    // Strip reasoning blocks when sending back to model
-                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
-                    messages.push(
-                        ChatCompletionRequestAssistantMessage {
-                            content: if filtered_content.is_empty() {
-                                None
-                            } else {
-                                Some(filtered_content.into())
-                            },
-                            tool_calls: Some(assistant_tool_calls),
-                            ..Default::default()
-                        }
-                        .into(),
-                    );
-
-                    // Add tool result messages
-                    for (idx, step) in tool_steps.iter().enumerate() {
-                        let result_content = if let Some(error) = &step.tool_error {
-                            json!({"error": error}).to_string()
-                        } else if let Some(result) = &step.tool_result {
-                            result.clone()
-                        } else {
-                            json!({"message": "Tool executed"}).to_string()
-                        };
-
-                        messages.push(
-                            ChatCompletionRequestToolMessage {
-                                content: result_content.into(),
-                                tool_call_id: format!("call_{}", idx),
-                            }
-                            .into(),
-                        );
-                    }
-                } else {
-                    // No tools, just add normal assistant message
-                    // Strip reasoning blocks when sending back to model
-                    let filtered_content = llm::strip_reasoning_blocks(&msg.content);
-                    messages.push(
-                        ChatCompletionRequestAssistantMessage {
-                            content: Some(filtered_content.into()),
-                            ..Default::default()
-                        }
-                        .into(),
-                    );
-                }
-            } else {
-                // No thinking steps, just add normal assistant message
-                // Strip reasoning blocks when sending back to model
-                let filtered_content = llm::strip_reasoning_blocks(&msg.content);
-                messages.push(
-                    ChatCompletionRequestAssistantMessage {
-                        content: Some(filtered_content.into()),
-                        ..Default::default()
-                    }
-                    .into(),
-                );
-            }
-        }
-    }
+    // Build conversation messages from session history
+    let mut messages = build_messages_from_history(&session, system_message);
 
     // Add the current user message with full context
     messages.push(
