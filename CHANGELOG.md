@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`cleanup` Command**: New CLI command to remove bundled assets extracted from the binary
+  - Cleans up `~/.local/share/squid/bundled/` directory (plugins and agents)
+  - Useful after `cargo uninstall squid-rs` to remove leftover cached files
+  - Usage: `squid cleanup`
+- **Bundled Assets Embedded in Binary**: Plugins and agents are now embedded via `rust-embed` and extracted at runtime instead of copied during build
+  - `cargo install squid-rs` now produces a single self-contained binary
+  - Assets extract to `~/.local/share/squid/bundled/` on first `squid serve` run
+  - Content-based comparison (SHA-256) ensures updates are detected correctly
+  - Works across all platforms using XDG-compliant data directories
 - **Agent Viewer**: View agent prompts and metadata in the web UI via new "Agents" sidebar section
 - **Background Jobs**: Schedule recurring AI tasks and manage one-off background jobs
   - Cron scheduling with 6-field expressions (e.g., `0 0 9 * * Mon-Fri` for weekdays at 9 AM)
@@ -27,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Agent statistics tracking for job executions (visible in `/agent-stats`)
   - Comprehensive unit tests (178 passing) covering security, validation, retry, and cleanup logic
   - Documentation: `docs/JOBS.md`
+
+### Changed
+
+- **Distribution Model**: Switched from build-time directory copying to runtime extraction of embedded assets
+  - Removed `build.rs` copy logic for `plugins/` and `agents/` directories
+  - Plugins and agents are now compiled into the binary and extracted on demand
+  - Development builds still work with existing `target/` directory fallback
 
 ### Fixed
 

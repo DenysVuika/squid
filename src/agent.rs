@@ -231,8 +231,8 @@ pub fn get_agents_dir(config_dir: Option<&Path>) -> PathBuf {
         return cwd_agents;
     }
 
-    // 4. Fallback to bundled agents next to the executable
-    if let Some(bundled) = get_bundled_agents_dir() {
+    // 4. Fallback to bundled agents next to the executable or extracted data dir
+    if let Some(bundled) = crate::bundled::get_bundled_agents_dir() {
         debug!("Using bundled agents dir: {:?}", bundled);
         return bundled;
     }
@@ -241,13 +241,11 @@ pub fn get_agents_dir(config_dir: Option<&Path>) -> PathBuf {
     PathBuf::from("agents")
 }
 
-/// Get the bundled agents directory path (relative to the executable).
+/// Get the bundled agents directory path (relative to the executable or extracted data dir).
 /// This is used when agents are shipped with the binary (e.g., from crates.io).
+#[allow(dead_code)]
 pub fn get_bundled_agents_dir() -> Option<PathBuf> {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe_path| exe_path.parent().map(|p| p.to_path_buf()))
-        .map(|exe_dir| exe_dir.join("agents"))
+    crate::bundled::get_bundled_agents_dir()
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ This document covers the command-line interface for Squid. For most users, we re
 - [RAG Commands](#rag-commands)
 - [Logs Command](#logs-command)
 - [Init Command](#init-command)
+- [Cleanup Command](#cleanup-command)
 - [Tool Calling](#tool-calling)
 
 ## Ask Commands
@@ -529,6 +530,30 @@ This runs the job once immediately, regardless of its schedule. The regular sche
 - Re-run a failed job
 
 For detailed information about the jobs system architecture and database schema, see [JOBS.md](JOBS.md).
+
+## Cleanup Command
+
+Remove bundled assets (plugins and agents) extracted from the binary.
+
+```bash
+# Clean up extracted bundled assets
+squid cleanup
+```
+
+This removes the `~/.local/share/squid/bundled/` directory containing plugins and agents that were extracted at runtime. Useful for:
+
+- Cleaning up after `cargo uninstall squid-rs`
+- Resetting bundled assets so they re-extract on next `squid serve`
+- Freeing disk space from cached embedded files
+
+**What it removes:**
+- Extracted bundled plugins (`~/.local/share/squid/bundled/plugins/`)
+- Extracted bundled agents (`~/.local/share/squid/bundled/agents/`)
+
+**What it does NOT remove:**
+- Your `agents/` directory in project directories
+- Your `plugins/` directory in workspace or `~/.squid/plugins/`
+- Configuration files, databases, or documents
 
 ## Tool Calling
 

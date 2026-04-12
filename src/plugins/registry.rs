@@ -204,14 +204,10 @@ pub fn get_workspace_plugins_dir() -> PathBuf {
     PathBuf::from("./plugins")
 }
 
-/// Get the bundled plugins directory path (relative to executable)
-/// This is used when plugins are bundled with the executable (e.g., from crates.io)
+/// Get the bundled plugins directory path (relative to executable or extracted data dir).
+/// This is used when plugins are bundled with the executable (e.g., from crates.io).
 pub fn get_bundled_plugins_dir() -> Option<PathBuf> {
-    // Get the directory of the current executable
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe_path| exe_path.parent().map(|p| p.to_path_buf()))
-        .map(|exe_dir| exe_dir.join("plugins"))
+    crate::bundled::get_bundled_plugins_dir()
 }
 
 #[cfg(test)]
@@ -240,9 +236,9 @@ mod tests {
     #[test]
     fn test_bundled_dir() {
         let dir = get_bundled_plugins_dir();
-        // Should be in the executable's directory
-        assert!(dir.is_some());
-        let dir = dir.unwrap();
-        assert!(dir.ends_with("plugins"));
+        // May be None if nothing has been extracted yet, or should end with "plugins"
+        if let Some(dir) = dir {
+            assert!(dir.ends_with("plugins"));
+        }
     }
 }

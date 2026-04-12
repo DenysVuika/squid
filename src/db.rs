@@ -212,6 +212,16 @@ impl Database {
             include_str!("../migrations/014_background_jobs.sql"),
         )?;
 
+        // Migration 015: Add timeout_seconds to background_jobs
+        // Fixes existing databases created before the column was added to migration 014.
+        // For new databases, the ALTER TABLE fails with "duplicate column name" which is
+        // caught and ignored by run_migration.
+        run_migration(
+            15,
+            "Add timeout_seconds to background_jobs",
+            include_str!("../migrations/015_job_timeout.sql"),
+        )?;
+
         info!("Database migrations completed successfully");
         Ok(())
     }
