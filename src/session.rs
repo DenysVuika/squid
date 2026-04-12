@@ -335,14 +335,8 @@ impl SessionManager {
             return Err(format!("Failed to save message: {}", e));
         }
 
-        // Update session in database (to save the title)
-        if let Err(e) = self.db.save_session(&session) {
-            log::error!("Failed to update session in database: {}", e);
-        }
-
-        // Update session in cache
-        let mut sessions = self.sessions.write().unwrap();
-        sessions.insert(session_id.to_string(), session);
+        // Update session (saves to DB and cache)
+        self.update_session(session);
 
         Ok(sources)
     }
@@ -396,9 +390,8 @@ impl SessionManager {
             return Err(format!("Failed to save message: {}", e));
         }
 
-        // Update session in cache
-        let mut sessions = self.sessions.write().unwrap();
-        sessions.insert(session_id.to_string(), session);
+        // Update session (saves to DB and cache)
+        self.update_session(session);
 
         Ok(())
     }
@@ -465,12 +458,6 @@ impl SessionManager {
             usage.cache_tokens,
         );
 
-        // Update session in database
-        if let Err(e) = self.db.save_session(&session) {
-            log::error!("Failed to update session token usage in database: {}", e);
-            return Err(format!("Failed to update token usage: {}", e));
-        }
-
         // Update agent token stats in database
         if let Err(e) = self.db.update_agent_token_stats(
             agent_id,
@@ -483,9 +470,8 @@ impl SessionManager {
             log::error!("Failed to update agent token stats: {}", e);
         }
 
-        // Update cache
-        let mut sessions = self.sessions.write().unwrap();
-        sessions.insert(session_id.to_string(), session);
+        // Update session (saves to DB and cache)
+        self.update_session(session);
 
         Ok(())
     }
@@ -704,5 +690,156 @@ mod tests {
         // Token usage accumulates: sum of (1+2+3+4+5) * 5 for each = 75
         assert_eq!(session.token_usage.input_tokens, 75);
         assert_eq!(session.token_usage.output_tokens, 75);
+    }
+
+    #[test]
+    fn test_session_metadata_persists_after_add_assistant_message() {
+        // Verify that session metadata (updated_at, title) persists to DB
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Get initial timestamps
+        let session_before = manager.get_session(&session_id).unwrap();
+        let created_at = session_before.created_at;
+        let initial_updated_at = session_before.updated_at;
+
+        // Add user message (this generates the title)
+        manager
+            .add_user_message(&session_id, "What is Rust?".to_string(), vec![])
+            .unwrap();
+
+        // Add assistant message
+        manager
+            .add_assistant_message(
+                &session_id,
+                "Rust is a systems programming language".to_string(),
+                vec![],
+                None,
+            )
+            .unwrap();
+
+        // Clear cache to force DB reload
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        // Verify session metadata was persisted
+        let session_after = manager.get_session(&session_id).unwrap();
+        assert_eq!(session_after.created_at, created_at); // created_at should not change
+        assert!(session_after.updated_at >= initial_updated_at); // updated_at should not decrease
+        assert_eq!(session_after.title, Some("What is Rust?".to_string())); // title should persist
+        assert_eq!(session_after.messages.len(), 2); // Both messages should be loaded
+    }
+
+    #[test]
+    fn test_updated_at_timestamp_persists() {
+        // Verify that updated_at persists correctly and doesn't go backwards
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        let initial_updated_at = manager.get_session(&session_id).unwrap().updated_at;
+
+        // Add messages
+        manager
+            .add_user_message(&session_id, "Question 1".to_string(), vec![])
+            .unwrap();
+
+        manager
+            .add_assistant_message(&session_id, "Answer 1".to_string(), vec![], None)
+            .unwrap();
+
+        // Get updated timestamp
+        let after_messages_updated_at = manager.get_session(&session_id).unwrap().updated_at;
+        assert!(after_messages_updated_at >= initial_updated_at);
+
+        // Clear cache and reload from database
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        // Verify timestamp persisted correctly
+        let reloaded_session = manager.get_session(&session_id).unwrap();
+        assert_eq!(reloaded_session.updated_at, after_messages_updated_at);
+    }
+
+    #[test]
+    fn test_update_session_method_directly() {
+        // Test the update_session method directly
+        // Note: update_session only saves session metadata (title, timestamps, token_usage)
+        // Messages must be saved separately via save_message
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Get the session and modify its metadata
+        let mut session = manager.get_session(&session_id).unwrap();
+        session.title = Some("Custom Title".to_string());
+        session.updated_at = chrono::Utc::now().timestamp() + 100; // Set future timestamp
+        session.token_usage.input_tokens = 1000;
+        session.token_usage.output_tokens = 500;
+
+        // Call update_session
+        manager.update_session(session.clone());
+
+        // Clear cache and reload from database
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        // Verify the session metadata was persisted
+        let reloaded_session = manager.get_session(&session_id).unwrap();
+        assert_eq!(reloaded_session.title, Some("Custom Title".to_string()));
+        assert_eq!(reloaded_session.updated_at, session.updated_at);
+        assert_eq!(reloaded_session.token_usage.input_tokens, 1000);
+        assert_eq!(reloaded_session.token_usage.output_tokens, 500);
+        assert_eq!(reloaded_session.messages.len(), 0); // Messages aren't saved by update_session
+    }
+
+    #[test]
+    fn test_title_generation_and_persistence() {
+        // Verify that auto-generated titles persist correctly
+        let db = crate::db::Database::new(":memory:").unwrap();
+        let manager = SessionManager::new(db);
+        let session_id = manager.create_session();
+
+        // Initially no title
+        let session = manager.get_session(&session_id).unwrap();
+        assert!(session.title.is_none());
+
+        // Add a short user message
+        manager
+            .add_user_message(&session_id, "Hello world".to_string(), vec![])
+            .unwrap();
+
+        // Clear cache and reload
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        let session = manager.get_session(&session_id).unwrap();
+        assert_eq!(session.title, Some("Hello world".to_string()));
+
+        // Add a long user message in a new session
+        let session_id2 = manager.create_session();
+        let long_message = "a".repeat(150);
+        manager
+            .add_user_message(&session_id2, long_message.clone(), vec![])
+            .unwrap();
+
+        // Clear cache and reload
+        {
+            let mut sessions = manager.sessions.write().unwrap();
+            sessions.clear();
+        }
+
+        let session2 = manager.get_session(&session_id2).unwrap();
+        // Title should be truncated to 100 chars
+        assert_eq!(session2.title, Some(format!("{}...", &long_message[..97])));
     }
 }
