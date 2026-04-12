@@ -222,7 +222,7 @@ You are a code reviewer. Focus on security, performance, and maintainability.
 1. `SQUID_AGENTS_DIR` env var (explicit override)
 2. `agents/` folder relative to `squid.config.json`
 3. `agents/` in the current working directory
-4. Bundled agents shipped with the executable
+4. Bundled agents extracted from the binary to `~/.local/share/squid/bundled/agents/`
 
 The `default_agent` field in `squid.config.json` specifies which agent is selected by default when starting a new session.
 
@@ -346,6 +346,7 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid rag`** - Manage RAG document indexing
 - **`squid logs`** - View, clear, and clean up application logs
 - **`squid init`** - Initialize project configuration
+- **`squid cleanup`** - Remove bundled assets extracted from the binary
 - **`squid doctor`** - Run diagnostic checks to verify setup
 
 **Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:

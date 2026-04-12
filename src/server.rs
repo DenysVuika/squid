@@ -15,6 +15,14 @@ pub struct Assets;
 #[folder = "documents/"]
 pub struct DemoDocuments;
 
+#[derive(RustEmbed)]
+#[folder = "plugins/"]
+pub struct BundledPlugins;
+
+#[derive(RustEmbed)]
+#[folder = "agents/"]
+pub struct BundledAgents;
+
 async fn serve_index() -> HttpResponse {
     serve_static(web::Path::from("index.html".to_string())).await
 }
@@ -142,6 +150,9 @@ pub async fn start_server(
     };
 
     let session_manager = Arc::new(session::SessionManager::new(database));
+
+    // Extract bundled plugins and agents (for cargo install distributions)
+    crate::bundled::init_bundled_assets();
 
     // Initialize plugin system
     info!("Initializing plugin system...");

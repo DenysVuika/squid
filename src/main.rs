@@ -7,6 +7,7 @@ use tabled::{Table, Tabled};
 
 mod agent;
 mod api;
+mod bundled;
 mod config;
 mod db;
 mod doctor;
@@ -124,6 +125,8 @@ enum Commands {
         #[command(subcommand)]
         command: JobCommands,
     },
+    /// Clean up bundled assets extracted from the binary
+    Cleanup,
     /// Run diagnostic checks to verify configuration and setup
     Doctor,
 }
@@ -1139,6 +1142,16 @@ async fn main() {
                 }
             }
         }
+        Commands::Cleanup => match bundled::cleanup_bundled_assets() {
+            Ok(()) => {
+                println!("✅ Bundled assets cleaned up successfully");
+                println!("✅ Removed extracted plugins and agents from data directory");
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to clean bundled assets: {e}");
+                std::process::exit(1);
+            }
+        },
         Commands::Doctor => {
             if !check_config_or_suggest_init() {
                 return;
