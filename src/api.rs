@@ -119,7 +119,10 @@ fn build_session_list_item(session: &session::ChatSession) -> SessionListItem {
 }
 
 /// Broadcast a session update with the given session
-fn broadcast_session_update_for_session(session_manager: &session::SessionManager, session_id: &str) {
+fn broadcast_session_update_for_session(
+    session_manager: &session::SessionManager,
+    session_id: &str,
+) {
     if let Some(session) = session_manager.get_session(session_id) {
         let session_item = build_session_list_item(&session);
         broadcast_session_update(SessionUpdateEvent::Update {
@@ -136,11 +139,7 @@ fn sanitize_assistant_content(content: &str) -> String {
     while let Some(think_start) = result.find("<think>") {
         if let Some(think_end) = result.find("</think>") {
             if think_end > think_start {
-                result = format!(
-                    "{}{}",
-                    &result[..think_start],
-                    &result[think_end + 8..]
-                );
+                result = format!("{}{}", &result[..think_start], &result[think_end + 8..]);
             } else {
                 break;
             }
@@ -153,11 +152,7 @@ fn sanitize_assistant_content(content: &str) -> String {
     while let Some(tool_start) = result.find("<tool_call>") {
         if let Some(tool_end) = result.find("</tool_call>") {
             if tool_end > tool_start {
-                result = format!(
-                    "{}{}",
-                    &result[..tool_start],
-                    &result[tool_end + 12..]
-                );
+                result = format!("{}{}", &result[..tool_start], &result[tool_end + 12..]);
             } else {
                 break;
             }
