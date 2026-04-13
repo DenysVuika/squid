@@ -22,6 +22,7 @@ const MOCK_CONFIG = {
   context_window: 8192,
   rag_enabled: true,
   web_sounds: true,
+  audio_enabled: false,
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

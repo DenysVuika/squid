@@ -693,6 +693,7 @@ export interface ConfigResponse {
   context_window: number;
   rag_enabled: boolean;
   web_sounds: boolean;
+  audio_enabled: boolean;
 }
 
 /**

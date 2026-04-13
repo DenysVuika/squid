@@ -7,6 +7,7 @@ use tabled::{Table, Tabled};
 
 mod agent;
 mod api;
+mod audio;
 mod bundled;
 mod config;
 mod db;

@@ -155,6 +155,50 @@ impl Default for WebConfig {
     }
 }
 
+/// Audio transcription configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    /// Enable audio transcription feature
+    #[serde(default = "default_audio_enabled")]
+    pub enabled: bool,
+    /// Docker image for Whisper transcription
+    #[serde(default = "default_audio_image")]
+    pub image: String,
+    /// Whisper model size (tiny, base, small, medium, large)
+    #[serde(default = "default_audio_model")]
+    pub model: String,
+    /// Language code for transcription (empty = auto-detect)
+    #[serde(default = "default_audio_language")]
+    pub language: String,
+}
+
+fn default_audio_enabled() -> bool {
+    false
+}
+
+fn default_audio_image() -> String {
+    "kesertki/whisper:latest".to_string()
+}
+
+fn default_audio_model() -> String {
+    "tiny".to_string()
+}
+
+fn default_audio_language() -> String {
+    String::new() // Auto-detect by default
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_audio_enabled(),
+            image: default_audio_image(),
+            model: default_audio_model(),
+            language: default_audio_language(),
+        }
+    }
+}
+
 /// Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -287,6 +331,8 @@ pub struct Config {
     #[serde(default)]
     pub web: WebConfig,
     #[serde(default)]
+    pub audio: AudioConfig,
+    #[serde(default)]
     pub jobs: JobsConfig,
     /// Default agent ID (agents are loaded from files, not from config)
     #[serde(default = "default_agent_id")]
@@ -340,6 +386,7 @@ impl Default for Config {
             plugins: PluginsConfig::default(),
             server: ServerConfig::default(),
             web: WebConfig::default(),
+            audio: AudioConfig::default(),
             jobs: JobsConfig::default(),
             default_agent: default_agent_id(),
             agents: AgentsConfig::default(),
@@ -498,6 +545,22 @@ impl Config {
         {
             debug!("Overriding SQUID_WEB_SOUNDS from environment");
             config.web.sounds = enabled;
+        }
+
+        // Audio transcription configuration overrides
+        if let Ok(audio_image) = std::env::var("SQUID_AUDIO_IMAGE") {
+            debug!("Overriding SQUID_AUDIO_IMAGE from environment");
+            config.audio.image = audio_image;
+        }
+
+        if let Ok(audio_model) = std::env::var("SQUID_AUDIO_MODEL") {
+            debug!("Overriding SQUID_AUDIO_MODEL from environment");
+            config.audio.model = audio_model;
+        }
+
+        if let Ok(audio_language) = std::env::var("SQUID_AUDIO_LANGUAGE") {
+            debug!("Overriding SQUID_AUDIO_LANGUAGE from environment");
+            config.audio.language = audio_language;
         }
 
         // Plugin configuration overrides
@@ -741,6 +804,9 @@ mod tests {
             "text-embedding-nomic-embed-text-v1.5"
         );
         assert_eq!(config.rag.chunk_size, 512);
+        assert_eq!(config.audio.image, "kesertki/whisper:latest");
+        assert_eq!(config.audio.model, "tiny");
+        assert_eq!(config.audio.language, "");
     }
 
     #[test]

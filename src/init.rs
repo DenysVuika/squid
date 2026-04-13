@@ -232,6 +232,7 @@ pub async fn run(
         plugins: crate::config::PluginsConfig::default(),
         server: crate::config::Config::default().server,
         web: crate::config::WebConfig::default(),
+        audio: crate::config::AudioConfig::default(),
         jobs: crate::config::JobsConfig::default(),
         default_agent: "general-assistant".to_string(),
         agents: crate::agent::AgentsConfig::default(),

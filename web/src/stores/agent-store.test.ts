@@ -44,6 +44,7 @@ const STUB_CONFIG = {
   context_window: 0,
   rag_enabled: false,
   web_sounds: true,
+  audio_enabled: false,
 };
 
 const makeAgent = (overrides: Partial<AgentInfo> = {}): AgentInfo => ({

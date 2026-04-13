@@ -5,6 +5,7 @@ interface ConfigState {
   // State
   ragEnabled: boolean;
   webSounds: boolean;
+  audioEnabled: boolean;
   apiUrl: string;
   contextWindow: number;
   isLoading: boolean;
@@ -18,6 +19,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
   // Initial state
   ragEnabled: false, // default to false to prevent flickering until loaded
   webSounds: true, // default to true
+  audioEnabled: false, // default to false (opt-in)
   apiUrl: '',
   contextWindow: 0,
   isLoading: false,
@@ -31,6 +33,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
       set({
         ragEnabled: config.rag_enabled,
         webSounds: config.web_sounds,
+        audioEnabled: config.audio_enabled,
         apiUrl: config.api_url,
         contextWindow: config.context_window,
         isLoading: false,
@@ -39,6 +42,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
       console.log('📋 Configuration loaded:', {
         ragEnabled: config.rag_enabled,
         webSounds: config.web_sounds,
+        audioEnabled: config.audio_enabled,
         contextWindow: config.context_window,
       });
     } catch (error) {
@@ -48,6 +52,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
         isLoaded: true,
         ragEnabled: false, // default to false on error
         webSounds: true, // default to true on error
+        audioEnabled: false, // default to false on error (opt-in)
       });
     }
   },
