@@ -84,17 +84,15 @@ async fn transcribe_with_docker_whisper(
     debug!("Using Docker Whisper for transcription");
 
     // Create temporary file for audio
-    let mut temp_audio_file = NamedTempFile::new()
-        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    let mut temp_audio_file =
+        NamedTempFile::new().map_err(|e| format!("Failed to create temp file: {}", e))?;
 
     temp_audio_file
         .write_all(&audio_bytes)
         .map_err(|e| format!("Failed to write audio to temp file: {}", e))?;
 
     let audio_path = temp_audio_file.path();
-    let audio_dir = audio_path
-        .parent()
-        .ok_or("Failed to get audio directory")?;
+    let audio_dir = audio_path.parent().ok_or("Failed to get audio directory")?;
     let audio_filename = audio_path
         .file_name()
         .ok_or("Failed to get audio filename")?
@@ -104,10 +102,10 @@ async fn transcribe_with_docker_whisper(
     debug!("Audio saved to: {:?}", audio_path);
 
     // Get audio configuration from app config (with environment variable fallback)
-    let docker_image = std::env::var("SQUID_AUDIO_IMAGE")
-        .unwrap_or_else(|_| app_config.audio.image.clone());
-    let whisper_model = std::env::var("SQUID_AUDIO_MODEL")
-        .unwrap_or_else(|_| app_config.audio.model.clone());
+    let docker_image =
+        std::env::var("SQUID_AUDIO_IMAGE").unwrap_or_else(|_| app_config.audio.image.clone());
+    let whisper_model =
+        std::env::var("SQUID_AUDIO_MODEL").unwrap_or_else(|_| app_config.audio.model.clone());
 
     // Build Docker command with owned strings
     let volume_mount = format!("{}:/app", audio_dir.display());
@@ -131,8 +129,8 @@ async fn transcribe_with_docker_whisper(
     ];
 
     // Add language if specified (auto-detect by default)
-    let language = std::env::var("SQUID_AUDIO_LANGUAGE")
-        .unwrap_or_else(|_| app_config.audio.language.clone());
+    let language =
+        std::env::var("SQUID_AUDIO_LANGUAGE").unwrap_or_else(|_| app_config.audio.language.clone());
 
     if !language.is_empty() {
         docker_args.push("--language".to_string());
