@@ -2,6 +2,8 @@
 
 The chatbot supports audio input for speech-to-text transcription using two methods.
 
+**Note**: Audio transcription is **disabled by default** (opt-in). You must explicitly enable it in your configuration.
+
 ## Methods (Auto-Selected)
 
 ### 1. **Browser Speech Recognition** (Chrome/Edge only)
@@ -20,12 +22,21 @@ The chatbot supports audio input for speech-to-text transcription using two meth
 
 ### Quick Start
 
-1. **Pull the Whisper Docker image:**
+1. **Enable audio transcription** in your `squid.config.json`:
+   ```json
+   {
+     "audio": {
+       "enabled": true
+     }
+   }
+   ```
+
+2. **Pull the Whisper Docker image:**
    ```bash
    docker pull kesertki/whisper:latest
    ```
 
-2. **That's it!** The system will automatically use Docker when available.
+3. **That's it!** The system will automatically use Docker when available.
 
 ### Configuration (Optional)
 
@@ -43,7 +54,7 @@ You can customize the Whisper Docker setup in your `squid.config.json`:
 ```
 
 **Options:**
-- `enabled`: Enable/disable audio transcription feature (default: `true`)
+- `enabled`: Enable/disable audio transcription feature (default: `false`, opt-in)
 - `image`: Docker image to use (default: `kesertki/whisper:latest`)
 - `model`: Whisper model size (default: `tiny`)
   - Options: `tiny`, `tiny.en`, `base`, `base.en`, `small`, `small.en`, `medium`, `medium.en`, `large`

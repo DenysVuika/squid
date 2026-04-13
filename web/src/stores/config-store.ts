@@ -19,7 +19,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
   // Initial state
   ragEnabled: false, // default to false to prevent flickering until loaded
   webSounds: true, // default to true
-  audioEnabled: true, // default to true
+  audioEnabled: false, // default to false (opt-in)
   apiUrl: '',
   contextWindow: 0,
   isLoading: false,
@@ -52,7 +52,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
         isLoaded: true,
         ragEnabled: false, // default to false on error
         webSounds: true, // default to true on error
-        audioEnabled: true, // default to true on error
+        audioEnabled: false, // default to false on error (opt-in)
       });
     }
   },

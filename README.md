@@ -168,7 +168,7 @@ See [CLI Reference - Init Command](docs/CLI.md#init-command) for full configurat
 | `SQUID_WORKING_DIR` | `./workspace` | Root directory for file operations and plugin access |
 | `server.allow_network` | `false` | Bind to `0.0.0.0` for LAN access (default: `127.0.0.1` only) |
 | `web.sounds` | `true` | Enable notification sounds in Web UI |
-| `audio.enabled` | `true` | Enable audio transcription feature (env: `SQUID_AUDIO_ENABLED`) |
+| `audio.enabled` | `false` | Enable audio transcription feature - opt-in (env: `SQUID_AUDIO_ENABLED`) |
 | `audio.image` | `kesertki/whisper:latest` | Docker image for Whisper transcription (env: `SQUID_AUDIO_IMAGE`) |
 | `audio.model` | `tiny` | Whisper model size: `tiny`, `base`, `small`, `medium`, `large` (env: `SQUID_AUDIO_MODEL`) |
 | `audio.language` | `""` (auto-detect) | Language code for transcription, e.g., `en`, `es`, `fr` (env: `SQUID_AUDIO_LANGUAGE`) |

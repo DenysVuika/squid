@@ -173,7 +173,7 @@ pub struct AudioConfig {
 }
 
 fn default_audio_enabled() -> bool {
-    true
+    false
 }
 
 fn default_audio_image() -> String {
