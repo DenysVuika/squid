@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-13
+
 ### Added
 
 - **Audio Transcription**: Voice input for chat messages with automatic transcription (opt-in, disabled by default)
@@ -188,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Nomic Embed Text v1.5 for RAG semantic search
   - Interactive setup script (`docker-setup.sh`) with automatic configuration
   - Optimized for Apple Silicon (M1/M2/M3/M4) with CPU inference
-  - Web UI and API accessible at http://localhost:3000
+  - Web UI and API accessible at <http://localhost:3000>
 - **Workspace Directory Configuration**: Bind specific project directories in Docker
   - Set `WORKSPACE_DIR` environment variable to work with any project
   - All file operations, code search, and bash commands operate within workspace
@@ -225,7 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: API endpoints now use `agent_id` parameter instead of `model`
   - POST `/api/chat` requires `agent_id` field in request body
   - Chat streaming retrieves agent configuration and uses agent's model
-- **BREAKING**: Frontend components renamed from Model* to Agent*
+- **BREAKING**: Frontend components renamed from Model*to Agent*
   - `model-store.ts` → `agent-store.ts` with agent terminology
   - `ModelItem` → `AgentItem` displaying agent name, description, and model
   - Zustand storage key changed to `'agent-storage'`
@@ -717,6 +719,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0]
 
 ### Added
+
 - **File Context Feature**: Pass files to the CLI for AI analysis
   - New `--file` / `-f` flag for the `ask` command
   - Works with both streaming and non-streaming modes
@@ -725,6 +728,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - Initial Release
 
 ### Added
+
 - Basic CLI with `ask` command
 - OpenAI-compatible API support
 - Streaming response support with `--stream` / `-s` flag
