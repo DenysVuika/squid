@@ -12,6 +12,7 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 ## Features
 
 - 🌐 **Web UI** - Modern chat interface with persistent sessions and conversation management
+- 🎤 **Audio Input** - Voice input for chat messages with automatic transcription using browser speech recognition or Docker Whisper
 - 🧠 **RAG (Retrieval-Augmented Generation)** - Semantic search over your documents for context-aware responses
 - ⏰ **Background Jobs** - Schedule recurring AI tasks with cron expressions and resource control
 - 🔧 **Tool Calling** - File operations, code search, and bash commands with built-in security
@@ -167,6 +168,10 @@ See [CLI Reference - Init Command](docs/CLI.md#init-command) for full configurat
 | `SQUID_WORKING_DIR` | `./workspace` | Root directory for file operations and plugin access |
 | `server.allow_network` | `false` | Bind to `0.0.0.0` for LAN access (default: `127.0.0.1` only) |
 | `web.sounds` | `true` | Enable notification sounds in Web UI |
+| `audio.enabled` | `true` | Enable audio transcription feature (env: `SQUID_AUDIO_ENABLED`) |
+| `audio.image` | `kesertki/whisper:latest` | Docker image for Whisper transcription (env: `SQUID_AUDIO_IMAGE`) |
+| `audio.model` | `tiny` | Whisper model size: `tiny`, `base`, `small`, `medium`, `large` (env: `SQUID_AUDIO_MODEL`) |
+| `audio.language` | `""` (auto-detect) | Language code for transcription, e.g., `en`, `es`, `fr` (env: `SQUID_AUDIO_LANGUAGE`) |
 | `jobs.enabled` | `false` | Enable background job scheduler |
 | `jobs.max_concurrent_jobs` | `2` | Maximum concurrent job executions |
 | `jobs.max_cpu_percent` | `70` | CPU threshold before jobs pause |
@@ -645,6 +650,7 @@ See [docs/PLUGINS.md](docs/PLUGINS.md) for complete plugin documentation.
 - **[Plugin Development Guide](docs/PLUGINS.md)** - Create custom JavaScript tools (NEW!)
 - **[RAG Guide](docs/RAG.md)** - Retrieval-Augmented Generation (semantic document search)
 - **[Background Jobs](docs/JOBS.md)** - Schedule recurring AI tasks with cron expressions (NEW!)
+- **[Audio Transcription](docs/AUDIO_TRANSCRIPTION.md)** - Voice input setup with browser or Docker Whisper (NEW!)
 - **[Security Features](docs/SECURITY.md)** - Tool approval and security safeguards
 - **[System Prompts Reference](docs/PROMPTS.md)** - Guide to all system prompts and customization
 - **[Examples](docs/EXAMPLES.md)** - Comprehensive usage examples and workflows

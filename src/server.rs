@@ -5,7 +5,7 @@ use rust_embed::RustEmbed;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::{api, config, db, jobs, jobs_api, rag, session, workspace};
+use crate::{api, audio, config, db, jobs, jobs_api, rag, session, workspace};
 
 #[derive(RustEmbed)]
 #[folder = "static/"]
@@ -365,6 +365,7 @@ pub async fn start_server(
                     )
                     .route("/config", web::get().to(api::get_config))
                     .route("/tool-approval", web::post().to(api::handle_tool_approval))
+                    .route("/transcribe", web::post().to(audio::transcribe_audio))
                     // Job management routes (must be before workspace catch-all)
                     .route("/jobs", web::get().to(jobs_api::list_jobs))
                     .route("/jobs", web::post().to(jobs_api::create_job))

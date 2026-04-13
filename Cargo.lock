@@ -3755,6 +3755,7 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
+ "base64",
  "chrono",
  "chrono-tz 0.10.4",
  "clap",

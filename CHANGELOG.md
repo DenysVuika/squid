@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Audio Transcription**: Voice input for chat messages with automatic transcription
+  - Click microphone button to record and transcribe audio to text
+  - Works in-browser (Chrome/Edge) or via Docker Whisper (Firefox/Safari)
+  - Configurable model size and language detection
+  - See [docs/AUDIO_TRANSCRIPTION.md](docs/AUDIO_TRANSCRIPTION.md) for setup
+
 - **`cleanup` Command**: New CLI command to remove bundled assets extracted from the binary
   - Cleans up `~/.local/share/squid/bundled/` directory (plugins and agents)
   - Useful after `cargo uninstall squid-rs` to remove leftover cached files

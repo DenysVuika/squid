@@ -30,6 +30,12 @@
   "web": {
     "sounds": true
   },
+  "audio": {
+    "enabled": true,
+    "image": "kesertki/whisper:latest",
+    "model": "tiny",
+    "language": ""
+  },
   "jobs": {
     "enabled": true,
     "max_concurrent_jobs": 2,

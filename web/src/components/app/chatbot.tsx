@@ -52,6 +52,7 @@ import {
   PromptInputTools,
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
+import { SpeechInput } from '@/components/ai-elements/speech-input';
 import { Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestions } from '@/components/ai-elements/suggestion';
 import {
@@ -156,7 +157,7 @@ const Chatbot = () => {
     toggleRag,
     toggleTools,
   } = useChatStore();
-  const { ragEnabled, isLoaded, webSounds } = useConfigStore();
+  const { ragEnabled, audioEnabled, isLoaded, webSounds } = useConfigStore();
 
   // Local UI state
   const [text, setText] = useState<string>('');
@@ -353,6 +354,60 @@ const Chatbot = () => {
         description: error.message,
       });
     }
+  }, []);
+
+  // Handle audio transcription
+  const handleAudioRecorded = useCallback(
+    async (audioBlob: Blob): Promise<string> => {
+      try {
+        // Convert audio blob to base64
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            // Extract base64 data (remove data URL prefix)
+            const base64Data = base64.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(audioBlob);
+
+        const base64Audio = await base64Promise;
+
+        // Send to transcription API
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            audio_base64: base64Audio,
+            mime_type: audioBlob.type,
+            agent_id: selectedAgent,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Transcription failed');
+        }
+
+        const data = await response.json();
+        return data.transcript;
+      } catch (error) {
+        toast.error('Transcription failed', {
+          description: error instanceof Error ? error.message : 'Failed to transcribe audio',
+        });
+        throw error;
+      }
+    },
+    [selectedAgent]
+  );
+
+  // Handle transcription from speech recognition (browser-based)
+  const handleTranscriptionChange = useCallback((transcript: string) => {
+    setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
   }, []);
 
   const isSubmitDisabled = useMemo(() => !(text.trim() || status), [text, status]);
@@ -898,6 +953,14 @@ const Chatbot = () => {
                     <PromptInputActionAddAttachments />
                   </PromptInputActionMenuContent>
                 </PromptInputActionMenu>
+                {isLoaded && audioEnabled && (
+                  <SpeechInput
+                    onTranscriptionChange={handleTranscriptionChange}
+                    onAudioRecorded={handleAudioRecorded}
+                    size="sm"
+                    variant="ghost"
+                  />
+                )}
                 {isLoaded && ragEnabled && (
                   <PromptInputButton
                     onClick={handleRagToggle}
