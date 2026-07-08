@@ -1,0 +1,18 @@
+[package]
+name = "squid-plugins"
+version = "0.1.0"
+edition = "2024"
+description = "Reusable JavaScript plugin runtime and discovery for squid-like hosts"
+license = "Apache-2.0"
+
+[dependencies]
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.51", features = ["rt", "time"] }
+rquickjs = { version = "0.11", features = ["full-async", "loader"] }
+jsonschema = "0.46"
+reqwest = { version = "0.13", features = ["json"] }
+dirs = "6.0"
+regex = "1.12"
+thiserror = "2.0"

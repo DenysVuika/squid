@@ -16,6 +16,7 @@ include = [
     "/migrations",
     "/documents",
     "/plugins",
+    "/crates/squid-plugins",
     "/agents",
     "/docs",
     "/.squidignore.template",
@@ -26,6 +27,10 @@ include = [
     "/CHANGELOG.md",
     "/LICENSE",
 ]
+
+[workspace]
+members = [".", "crates/squid-plugins"]
+resolver = "2"
 
 [[bin]]
 name = "squid"
@@ -77,5 +82,6 @@ dirs = "6.0"
 serde_yaml = "0.9"
 tabled = "0.20.0"
 tempfile = "3.0"
+squid-plugins = { path = "crates/squid-plugins" }
 
 [dev-dependencies]

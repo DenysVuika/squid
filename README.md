@@ -31,6 +31,7 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 - 🔐 **Secure by Default** — All file operations require explicit approval regardless of LLM service
 
 **Privacy Options:**
+
 | Approach | Examples | Data Sent Externally |
 |----------|----------|---------------------|
 | Maximum Privacy | LM Studio, Ollama, Docker AI | None |
@@ -41,6 +42,7 @@ An AI-powered assistant for code reviews and improvement suggestions. Privacy-fo
 **Docker (recommended):** Only Docker Desktop 4.34+ or Docker Engine with Docker Compose v2.38+. All AI models are automatically managed.
 
 **Manual installation:**
+
 1. **Rust toolchain:** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 2. **An OpenAI-compatible LLM service** — see [LLM Provider Reference](#llm-provider-reference) at the bottom of this page
 
@@ -60,11 +62,13 @@ cp .env.docker.example .env
 The setup script verifies Docker, checks disk space, builds the server image, pulls AI models, and starts services with health checks.
 
 **Services included:**
-- **Squid server** (web UI + API) on http://localhost:3000
+
+- **Squid server** (web UI + API) on <http://localhost:3000>
 - **Qwen2.5-Coder 7B** (~4GB) — Main LLM with Metal GPU acceleration on Apple Silicon
 - **Nomic Embed Text v1.5** (~270MB) — Embeddings for RAG
 
 **Useful commands:**
+
 ```bash
 ./docker-setup.sh status    # Check service status
 ./docker-setup.sh logs      # View logs
@@ -141,12 +145,14 @@ squid init --url http://127.0.0.1:1234/v1 --log-level info
 ```
 
 This creates a `squid.config.json` file with:
+
 - **API endpoint configuration**: Connection to your LLM service
 - **Default agents**: Pre-configured `general-assistant` (full access) and `code-reviewer` (read-only)
 - **Context window settings**: Applied to each agent (can be customized per-agent later)
 - **Optional RAG setup**: Document search and retrieval features
 
 **Note**: CLI commands (`squid ask`, `squid review`) work with either:
+
 - A `squid.config.json` file (recommended for agent configurations)
 - Environment variables in a `.env` file (minimum: `API_URL`)
 - A combination of both (environment variables override config file)
@@ -219,11 +225,13 @@ You are a code reviewer. Focus on security, performance, and maintainability.
 | `permissions` | Yes | Allow-only list of tools (everything else denied by default) |
 
 **Permissions:**
+
 - Supports granular bash permissions (e.g., `"bash:ls"`, `"bash:git status"`)
 - Wildcard `"plugin:*"` grants access to all plugins
 - ⚠️ Dangerous bash commands (`rm`, `sudo`, `chmod`, `dd`, `curl`, `wget`, `kill`) are **always blocked** regardless of permissions
 
 **Agents Directory Resolution:**
+
 1. `SQUID_AGENTS_DIR` env var (explicit override)
 2. `agents/` folder relative to `squid.config.json`
 3. `agents/` in the current working directory
@@ -259,12 +267,14 @@ The `default_agent` field in `squid.config.json` specifies which agent is select
 | **CodeLlama** | 16K tokens | `16384` |
 
 **How to find your model's context window:**
+
 1. Check your model's documentation on Hugging Face
 2. Look in the model card or `config.json`
 3. Check your LLM provider's documentation
 4. For LM Studio: Look at the model details in the UI
 
 **Why it matters:**
+
 - ✅ Real-time utilization percentage (e.g., "45% of 32K context used")
 - ✅ Prevents API errors from exceeding model capacity
 - ✅ Accurate token usage statistics displayed in web UI
@@ -306,18 +316,21 @@ Squid provides both a modern Web UI and a command-line interface. **We recommend
 #### Starting the Web UI
 
 **Docker:**
+
 ```bash
 docker compose up -d   # http://localhost:3000
 WORKSPACE_DIR=/path/to/project docker compose up -d  # custom workspace
 ```
 
 **Manual:**
+
 ```bash
 squid serve                          # http://127.0.0.1:8080
 squid serve --port 3000 --db=custom.db --dir=/path/to/project
 ```
 
 **Server Options:**
+
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--port` / `-p` | `8080` (`3000` in Docker) | Server port |
@@ -325,6 +338,7 @@ squid serve --port 3000 --db=custom.db --dir=/path/to/project
 | `--dir` | `./workspace` | Working directory override |
 
 **Web UI Features:**
+
 - 📊 **Token usage indicator** — Real-time context utilization (e.g., "5.6% • 7.1K / 128K")
 - 💰 **Cost tracking** — Estimates for both cloud and local models
 - 📈 **Lifetime agent statistics** — Accumulated token usage and cost savings
@@ -334,12 +348,14 @@ squid serve --port 3000 --db=custom.db --dir=/path/to/project
 - 🔍 **Logs page** — Filterable application logs with pagination and session tracking
 
 **Web UI Development (Hot Reload):**
+
 ```bash
 # Terminal 1 - Backend
 cargo run serve --port 8080
 # Terminal 2 - Frontend
 cd web && npm run dev
 ```
+
 Open `http://localhost:5173`. Changes appear instantly. Production build: `cd web && npm run build`.
 
 ### Command-Line Interface
@@ -355,6 +371,7 @@ For advanced users and automation, Squid provides a full CLI. See the [CLI Refer
 - **`squid doctor`** - Run diagnostic checks to verify setup
 
 **Configuration Requirement**: Most CLI commands (`ask`, `review`, `serve`) require either a `squid.config.json` file OR essential environment variables (at minimum `API_URL`). You can:
+
 - Run `squid init` to create a config file with agent configurations
 - Use a `.env` file with environment variables like `API_URL`, `API_KEY`, etc.
 - Mix both approaches (environment variables override config file settings)
@@ -414,6 +431,7 @@ squid serve
 ```
 
 **Features:**
+
 - 📚 **Semantic search** over your documentation
 - 🔍 **One-click toggle** in Web UI
 - 💾 **Persistent knowledge base** - index once, query many times
@@ -421,6 +439,7 @@ squid serve
 - 🔄 **Auto-indexing** - supports Markdown, code, configs, and more
 
 **Using RAG:**
+
 1. Add documents to `./documents` directory
 2. Run `squid rag init` to index them
 3. Toggle RAG in the Web UI to enable semantic search
@@ -462,6 +481,7 @@ curl -X POST http://localhost:8080/api/jobs \
 ```
 
 **Features:**
+
 - ⏰ **Cron scheduling** - Recurring tasks on custom schedules
 - 🚀 **One-off tasks** - Immediate background jobs
 - 🎯 **Priority queue** - Higher priority jobs execute first
@@ -492,9 +512,8 @@ squid jobs trigger <id>           # Manually trigger a cron job
 
 For complete documentation, see [docs/JOBS.md](docs/JOBS.md) and [docs/CLI.md](docs/CLI.md#jobs-commands).
 
-
-
 **Database & Persistence:**
+
 - All chat sessions, messages, and logs are automatically saved to `squid.db` (SQLite database)
 - Sessions persist across server restarts - your conversation history is always preserved
 - The database location is automatically detected based on config file location, existing databases in parent directories, or the current working directory. Override with `SQUID_DATABASE_PATH`.
@@ -522,12 +541,14 @@ The web server exposes REST API endpoints for programmatic access. See [docs/API
 Squid's LLM can intelligently use tools (read files, write files, search code, execute safe commands) when needed. All tool operations are protected by multiple security layers and require user approval.
 
 **Security Features:**
+
 - 🛡️ **Path Validation** - Blocks system directories automatically
 - 📂 **Ignore Patterns** - `.squidignore` file (like `.gitignore`)
 - 🔒 **User Approval** - Manual confirmation for each operation
 - 💻 **Safe Bash** - Dangerous commands always blocked
 
 **Available Tools:**
+
 - 📖 **read_file** - Read file contents
 - 📝 **write_file** - Write to files with preview
 - 🔍 **grep** - Search code with regex
@@ -615,6 +636,7 @@ globalThis.execute = execute;
 ### Example Plugins
 
 Three example plugins are included:
+
 - **markdown-linter** - Analyzes markdown files for style issues
 - **code-formatter** - Formats code with basic rules
 - **http-fetcher** - Fetches content from URLs
@@ -622,18 +644,21 @@ Three example plugins are included:
 ### Testing Plugins
 
 **Test code-formatter** (fully functional):
+
 ```bash
 squid chat
 > Format this JSON: {"name":"test","age":30}
 ```
 
 **Test markdown-linter** (fully functional, reads files):
+
 ```bash
 squid chat
 > Lint the README.md file
 ```
 
 **Test http-fetcher** (requires network permission):
+
 ```bash
 squid chat
 > Fetch content from https://api.github.com
@@ -642,6 +667,41 @@ squid chat
 **Note**: The http-fetcher plugin requires `network: true` permission in its `plugin.json`. All context APIs (`readFile`, `writeFile`, `httpGet`) are now fully implemented and functional.
 
 See [docs/PLUGINS.md](docs/PLUGINS.md) for complete plugin documentation.
+
+### Reusing the Plugin Runtime in Other Rust Projects
+
+The plugin engine is also available as a reusable workspace crate at `crates/squid-plugins`.
+
+Add it to your project:
+
+```toml
+[dependencies]
+squid-plugins = { path = "crates/squid-plugins" }
+```
+
+Minimal host setup:
+
+```rust
+use squid_plugins::{initialize, get_plugin_tools, PluginSystemConfig};
+use std::sync::Arc;
+
+let cfg = PluginSystemConfig {
+  enabled: true,
+  load_global: true,
+  load_workspace: true,
+  load_bundled: false,
+  working_dir: ".".into(),
+  default_timeout_seconds: 30,
+  max_memory_mb: 128,
+  bundled_plugins_dir: None,
+  ignore_file_name: ".squidignore".to_string(),
+};
+
+initialize(Arc::new(cfg))?;
+let tools = get_plugin_tools()?;
+```
+
+For a fuller guide, see `crates/squid-plugins/README.md`.
 
 ## Documentation
 
@@ -668,8 +728,6 @@ squid review sample-files/example.rs  # Test individual review
 ```
 
 See [tests/README.md](tests/README.md) and [sample-files/README.md](sample-files/README.md) for details.
-
-
 
 ## LLM Provider Reference
 

@@ -3786,6 +3786,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "squid-plugins"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "jsonschema",
+ "log",
+ "regex",
+ "reqwest 0.13.2",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "squid-rs"
 version = "0.14.0"
 dependencies = [
@@ -3823,6 +3839,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.11.0",
  "sqlite-vec",
+ "squid-plugins",
  "sysinfo",
  "tabled",
  "tempfile",
