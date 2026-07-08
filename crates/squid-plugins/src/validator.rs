@@ -9,8 +9,8 @@ pub struct SchemaValidator {
 impl SchemaValidator {
     /// Compiles a JSON schema into a reusable validator.
     pub fn new(schema: &Value) -> Result<Self, String> {
-        let compiled_schema =
-            jsonschema::validator_for(schema).map_err(|e| format!("Failed to compile JSON schema: {}", e))?;
+        let compiled_schema = jsonschema::validator_for(schema)
+            .map_err(|e| format!("Failed to compile JSON schema: {}", e))?;
 
         Ok(Self {
             schema: compiled_schema,
