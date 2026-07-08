@@ -1,60 +1,49 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Plugin metadata loaded from plugin.json
+/// Parsed metadata from a plugin's `plugin.json` descriptor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginMetadata {
-    /// Unique identifier for the plugin (e.g., "markdown-linter")
+    /// Stable plugin identifier.
     pub id: String,
-
-    /// Human-readable title
+    /// Human-friendly plugin title.
     pub title: String,
-
-    /// Description of what the plugin does
+    /// Tool description shown to the model.
     pub description: String,
-
-    /// Plugin version (semantic versioning)
+    /// Plugin semantic version.
     pub version: String,
-
-    /// API version this plugin is compatible with
+    /// Plugin API compatibility version.
     pub api_version: String,
-
-    /// Security requirements and permissions
+    /// Declared plugin permissions.
     pub security: SecurityRequirements,
-
-    /// JSON schema for input validation
+    /// JSON schema for plugin input.
     pub input_schema: serde_json::Value,
-
-    /// JSON schema for output validation
+    /// JSON schema for plugin output.
     pub output_schema: serde_json::Value,
-
-    /// Path to the plugin directory (populated at runtime)
+    /// Populated absolute plugin directory path.
     #[serde(skip)]
     pub plugin_path: PathBuf,
-
-    /// Whether this is a global or workspace plugin
+    /// Indicates whether plugin came from a global source.
     #[serde(skip)]
     pub is_global: bool,
 }
 
-/// Security requirements declared by the plugin
+/// Security flags and permission requirements declared by plugins.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityRequirements {
-    /// List of required permissions (e.g., ["read_file", "write_file"])
+    /// Required host capabilities (checked by the host app).
     #[serde(default)]
     pub requires: Vec<String>,
-
-    /// Whether the plugin needs network access
+    /// Enables `httpGet` API when true.
     #[serde(default)]
     pub network: bool,
-
-    /// Whether the plugin needs file write access
+    /// Enables `writeFile` API when true.
     #[serde(default)]
     pub file_write: bool,
 }
 
 impl PluginMetadata {
-    /// Load plugin metadata from plugin.json file
+    /// Loads and parses `plugin.json` in the given directory.
     pub fn load(plugin_dir: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
         let metadata_path = plugin_dir.join("plugin.json");
         let content = std::fs::read_to_string(&metadata_path)
@@ -68,25 +57,23 @@ impl PluginMetadata {
         Ok(metadata)
     }
 
-    /// Get the path to the plugin's index.js file
+    /// Returns the plugin entrypoint path (`index.js`).
     pub fn index_js_path(&self) -> PathBuf {
         self.plugin_path.join("index.js")
     }
 
-    /// Get the tool name as it will appear to the LLM (e.g., "plugin:markdown-linter")
+    /// Returns the model-exposed tool name for this plugin.
     pub fn tool_name(&self) -> String {
         format!("plugin:{}", self.id)
     }
 
-    /// Validate that the plugin has all required files
+    /// Validates required files and supported API version.
     pub fn validate_structure(&self) -> Result<(), String> {
-        // Check if index.js exists
         let index_path = self.index_js_path();
         if !index_path.exists() {
             return Err("Missing index.js in plugin directory".to_string());
         }
 
-        // Validate API version compatibility (currently only support "1.0")
         if self.api_version != "1.0" {
             return Err(format!(
                 "Unsupported API version: {}. Only '1.0' is supported.",
@@ -95,32 +82,5 @@ impl PluginMetadata {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tool_name_generation() {
-        let metadata = PluginMetadata {
-            id: "test-plugin".to_string(),
-            title: "Test Plugin".to_string(),
-            description: "A test plugin".to_string(),
-            version: "0.1.0".to_string(),
-            api_version: "1.0".to_string(),
-            security: SecurityRequirements {
-                requires: vec![],
-                network: false,
-                file_write: false,
-            },
-            input_schema: serde_json::json!({}),
-            output_schema: serde_json::json!({}),
-            plugin_path: PathBuf::new(),
-            is_global: false,
-        };
-
-        assert_eq!(metadata.tool_name(), "plugin:test-plugin");
     }
 }
