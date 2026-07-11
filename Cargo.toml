@@ -66,7 +66,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 chrono-tz = "0.10"
 uuid = { version = "1.23", features = ["v4", "serde"] }
 walkdir = "2.5"
-rusqlite = { version = "0.39.0", features = ["bundled", "load_extension"] }
+rusqlite = { version = "0.40.1", features = ["bundled", "load_extension"] }
 tiktoken-rs = "0.11.0"
 flate2 = "1.0"
 sha2 = "0.11"
