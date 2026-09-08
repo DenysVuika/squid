@@ -14,7 +14,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.81",
+    "@ai-sdk/react": "^3.0.280",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.26.2",
     "@streamdown/cjk": "^1.0.3",
@@ -23,7 +23,7 @@
     "@streamdown/mermaid": "^1.0.2",
     "@tailwindcss/vite": "^4.2.2",
     "@xyflow/react": "^12.10.0",
-    "ai": "^6.0.79",
+    "ai": "^6.0.277",
     "ansi-to-react": "^6.2.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
